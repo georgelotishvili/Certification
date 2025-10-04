@@ -190,14 +190,19 @@ body.menu-open .burger span:nth-child(3) { transform: translateY(-9px) rotate(-4
 
 .login-btn {
   width: 100px;
-  height: 40px;
+  height: 34px;
   position: absolute;
   right: 10%;
-  top: 20px;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
   background: #ffffff;
   color: #000000;
   border: none;
-  padding: 8px 16px;
+  outline: 1px solid #ffffff;
+  outline-offset: 2px;
   cursor: pointer;
   transition: background 0.2s ease;
 }
