@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>exam</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+
+      <div class="logo"></div>
+        
+      <nav class="nav">
+        <a href="#">მთავარი</a>
+        <a href="#">რეესტრი</a>
+        <a href="#">განცხადებები</a>
+        <a href="#">გამოცდა</a>
+        <a href="#">კონტაქტი</a>
+      </nav>
+
+      <button class="login-btn">შესვლა</button>
+      <!-- Login Modal -->
+      <div class="login-modal" id="loginModal" aria-hidden="true" role="dialog" aria-modal="true">
+        <div class="modal-content" role="document">
+          <button class="modal-close" id="modalClose" aria-label="დახურვა">&times;</button>
+          <h3>შესვლა / რეგისტრაცია</h3>
+          <div class="modal-buttons">
+            <button class="modal-btn login-option">შესვლა</button>
+            <button class="modal-btn register-option">რეგისტრაცია</button>
+          </div>
+          <form class="login-form" id="loginForm" novalidate>
+            <div class="field">
+              <input type="email" name="email" placeholder="ელფოსტა" required />
+            </div>
+            <div class="field">
+              <input type="password" name="password" placeholder="პაროლი" required />
+            </div>
+            <div class="forgot-password-link">
+              <a href="#" id="forgotPasswordLink">დაგავიწყდათ პაროლი?</a>
+            </div>
+            <div class="modal-buttons">
+              <button type="submit" class="modal-btn submit">შესვლა</button>
+            </div>
+          </form>
+
+          <form class="register-form" id="registerForm" novalidate>
+            <div class="field">
+              <input type="text" name="personalId" inputmode="numeric" maxlength="11" placeholder="პირადი ნომერი" required />
+            </div>
+            <div class="field">
+              <input type="text" name="firstName" placeholder="სახელი" required />
+            </div>
+            <div class="field">
+              <input type="text" name="lastName" placeholder="გვარი" required />
+            </div>
+            <div class="field">
+              <input type="tel" name="phone" placeholder="ტელეფონი" required />
+            </div>
+            <div class="field">
+              <input type="email" name="email" placeholder="ელფოსტა" required />
+            </div>
+            <div class="field">
+              <input type="password" name="password" placeholder="პაროლი" required />
+            </div>
+            <div class="field">
+              <input type="password" name="confirmPassword" placeholder="გაიმეორეთ პაროლი" required />
+            </div>
+            <div class="modal-buttons">
+              <button type="submit" class="modal-btn submit">რეგისტრაცია</button>
+            </div>
+          </form>
+
+          <form class="forgot-password-form" id="forgotPasswordForm" novalidate>
+            <div class="field">
+              <input type="email" name="email" placeholder="ელფოსტა" required />
+            </div>
+            <div class="modal-buttons">
+              <button type="submit" class="modal-btn submit">პაროლის აღდგენა</button>
+              <button type="button" class="modal-btn back-to-login">უკან დაბრუნება</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Burger toggle for <=1050px (JS-driven) -->
+      <button class="burger" aria-controls="mobile-drawer" aria-label="მენიუს გახსნა" aria-expanded="false" type="button">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="overlay" aria-hidden="true"></div>
+      <aside id="mobile-drawer" class="drawer" aria-label="მობილური მენიუ">
+        <button class="drawer-close" aria-label="დახურვა" type="button"></button>
+        <nav class="drawer-nav">
+          <a href="#">მთავარი</a>
+          <a href="#">რეესტრი</a>
+          <a href="#">განცხადებები</a>
+          <a href="#">გამოცდა</a>
+          <a href="#">კონტაქტი</a>
+        </nav>
+        <button class="drawer-login">შესვლა</button>
+      </aside>
+
+    </header>
+
+    <main></main>
+
+    <footer></footer>
+    <script src="script.js" defer></script>
+  </body>
+</html>
+
