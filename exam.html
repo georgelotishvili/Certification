@@ -2,7 +2,7 @@
 <html lang="ka">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>Exam</title>
     <link rel="stylesheet" href="exam.css" />
   </head>
@@ -35,10 +35,25 @@
         </form>
       </div>
       <div class="exam-container" role="dialog" aria-modal="true" aria-label="Exam screen">
-        <div class="exam-bottom-actions">
-          <button class="btn primary" id="examStart" type="button">გამოცდის დაწყება</button>
-          <button class="btn finish" id="examFinish" type="button">გამოცდის დასრულება</button>
+        <div class="exam-layout">
+          <aside class="pane left" id="examPaneLeft"></aside>
+          <main class="pane center" id="examPaneCenter">
+            <div class="center-top">
+              <div class="ct-section ct-title">თეორიული ნაწილი</div>
+              <div class="ct-section ct-warning">მიმდინარეობს აუდიო-ვიდეო ჩაწერა. გთხოვთ გამოცდის მსვლელობისას არ გახვიდეთ ვიდეოთვალის ხედვის არეალიდან</div>
+              <div class="ct-section ct-countdown"><span id="examCountdown">00:30:00</span></div>
+            </div>
+            <div class="center-middle"></div>
+            <div class="center-bottom">
+              <div class="exam-bottom-actions in-center">
+                <button class="btn primary" id="examStart" type="button">გამოცდის დაწყება</button>
+                <button class="btn finish" id="examFinish" type="button">გამოცდის დასრულება</button>
+              </div>
+            </div>
+          </main>
+          <aside class="pane right" id="examPaneRight"></aside>
         </div>
+        
 
         <div class="exam-dialog" id="examConfirm" hidden>
           <p class="exam-text">ნამდვილად გსურთ გამოცდის დასრულება?</p>

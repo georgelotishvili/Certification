@@ -1,4 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // Prevent zooming with Ctrl/+/-, Ctrl+mousewheel, and mousewheel-only zoom on some browsers
+  document.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) { e.preventDefault(); }
+  }, { passive: false });
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=')) {
+      e.preventDefault();
+    }
+  }, { passive: false });
   const rootEl = document.documentElement;
   const gateOverlay = document.getElementById('examGateOverlay');
   const gateForm = document.getElementById('examGateForm');
