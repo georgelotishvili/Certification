@@ -130,7 +130,10 @@
     <!-- Fullscreen white overlay (Exam screen) -->
     <div class="fullscreen-blank" id="fullscreenBlank" aria-hidden="true" role="dialog" aria-modal="true">
       <div class="exam-container" role="document">
-        <button class="blank-close" id="blankClose" type="button">გამოცდის დასრულება</button>
+        <div class="exam-bottom-actions">
+          <button class="btn primary" id="examStart" type="button">გამოცდის დაწყება</button>
+          <button class="blank-close" id="blankClose" type="button">გამოცდის დასრულება</button>
+        </div>
 
         <!-- Step 1: Confirm leave exam -->
         <div class="exam-dialog" id="examConfirm" hidden>

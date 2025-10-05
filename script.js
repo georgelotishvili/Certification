@@ -22,6 +22,12 @@ document.addEventListener('DOMContentLoaded', () => {
   drawerLinks.forEach(link => on(link, 'click', closeMenu));
 
   document.addEventListener('keydown', (e) => {
+    // Intercept Alt+F4 when possible
+    if ((e.key === 'F4' && e.altKey) && fullscreenBlank && fullscreenBlank.classList.contains('show')) {
+      try { e.preventDefault(); } catch {}
+      if (typeof showConfirmStep1 === 'function') showConfirmStep1();
+      return;
+    }
     if (e.key !== 'Escape') return;
     if (fullscreenBlank && fullscreenBlank.classList.contains('show')) {
       // Prevent default to avoid side effects; keyboard lock will also help
@@ -70,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let trapFocusHandler = null;
   let mustStayFullscreen = false;
   const lockKeys = async () => {
-    try { await navigator.keyboard?.lock?.(['Escape','F11']); } catch {}
+    try { await navigator.keyboard?.lock?.(['Escape','F11','F4']); } catch {}
   };
   const unlockKeys = async () => {
     try { await navigator.keyboard?.unlock?.(); } catch {}
@@ -157,6 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
         lockKeys();
       }
     } catch {}
+    // Enable beforeunload native confirm dialog for hard closes (Alt+F4/tab close)
+    enableBeforeUnload();
     // Focus trap across visible controls
     setTimeout(() => { if (blankClose) blankClose.focus(); }, 0);
     trapFocusHandler = (e) => {
@@ -182,6 +190,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     setIsolated(false);
     mustStayFullscreen = false;
+    // Disable beforeunload prompt
+    disableBeforeUnload();
     // Release keyboard lock
     unlockKeys();
     // Exit fullscreen if active
@@ -242,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Exit button opens confirmation step 1
   const examConfirm = document.getElementById('examConfirm');
   const examFinal = document.getElementById('examFinal');
+  const examStart = document.getElementById('examStart');
   const confirmLeaveYes = document.getElementById('confirmLeaveYes');
   const confirmLeaveNo = document.getElementById('confirmLeaveNo');
   const agreeExit = document.getElementById('agreeExit');
@@ -270,6 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
   on(confirmLeaveYes, 'click', showConfirmStep2);
   on(returnToExam, 'click', hideAllConfirm);
   on(agreeExit, 'click', closeBlank);
+  on(examStart, 'click', hideAllConfirm);
 
   // Open fullscreen blank when clicking "გამოცდა" (Exam) links
   const examLinks = Array.from(document.querySelectorAll('.nav a, .drawer-nav a'))
@@ -301,6 +313,23 @@ document.addEventListener('DOMContentLoaded', () => {
       lockKeys();
     }
   });
+
+  // Native beforeunload confirm when trying to close the tab/window (e.g., Alt+F4)
+  let beforeUnloadHandler = null;
+  const enableBeforeUnload = () => {
+    if (beforeUnloadHandler) return;
+    beforeUnloadHandler = (e) => {
+      if (!(fullscreenBlank && fullscreenBlank.classList.contains('show'))) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnloadHandler);
+  };
+  const disableBeforeUnload = () => {
+    if (!beforeUnloadHandler) return;
+    window.removeEventListener('beforeunload', beforeUnloadHandler);
+    beforeUnloadHandler = null;
+  };
 
   // Login form submission
   on(loginForm, 'submit', (e) => {

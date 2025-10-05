@@ -505,12 +505,13 @@ footer {
   justify-content: center;
 }
 .fullscreen-blank.show { display: flex; }
-.exam-container { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.exam-container { display: flex; flex-direction: column; align-items: center; gap: 16px; position: relative; width: 100%; height: 100%; }
+.exam-bottom-actions { position: absolute; left: 50%; transform: translateX(-50%); bottom: 40px; display: flex; gap: 8px; align-items: center; }
 .blank-close {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 40px;
+  position: relative;
+  left: 0;
+  transform: none;
+  bottom: 0;
   min-width: 220px;
   height: 44px;
   border: 1px solid #111827;
@@ -526,6 +527,10 @@ footer {
   border: 1px solid #111827;
   padding: 20px;
   text-align: center;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 .exam-text { margin-bottom: 16px; }
 .exam-actions { display: flex; gap: 8px; justify-content: center; }
@@ -543,6 +548,22 @@ footer {
 .btn.primary:hover { background: #1f2937; }
 .btn.danger { background: #b91c1c; border-color: #b91c1c; color: #ffffff; }
 .btn.danger:hover { background: #991b1b; border-color: #991b1b; }
+
+/* Ensure Start/Finish buttons are identical size and text fits */
+.exam-bottom-actions .btn,
+.exam-bottom-actions .blank-close {
+  width: 260px;
+  height: 48px;
+  font-size: 16px;
+  padding: 0 16px;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .exam-bottom-actions { flex-direction: column; gap: 10px; bottom: 24px; }
+  .exam-bottom-actions .btn,
+  .exam-bottom-actions .blank-close { width: min(90vw, 320px); height: 48px; }
+}
 
 /* inert fallback: block interactions when [inert] isn't fully supported */
 [inert] { pointer-events: none; user-select: none; }
