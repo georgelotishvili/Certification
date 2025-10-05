@@ -11,22 +11,16 @@
 
       <div class="logo"></div>
         
-      <nav class="nav">
-        <a href="#">მთავარი</a>
-        <a href="#">რეესტრი</a>
-        <a href="#">განცხადებები</a>
-        <a href="#">გამოცდა</a>
-        <a href="#">კონტაქტი</a>
-      </nav>
+      <div class="auth-banner">გთხოვთ გაიაროთ ავტორიზაცია</div>
 
-      <button class="login-btn">შესვლა</button>
+      <button class="login-btn">ავტორიზაცია</button>
       <!-- Login Modal -->
       <div class="login-modal" id="loginModal" aria-hidden="true" role="dialog" aria-modal="true">
         <div class="modal-content" role="document">
           <button class="modal-close" id="modalClose" aria-label="დახურვა">&times;</button>
-          <h3>შესვლა / რეგისტრაცია</h3>
+          <h3>ავტორიზაცია / რეგისტრაცია</h3>
           <div class="modal-buttons">
-            <button class="modal-btn login-option">შესვლა</button>
+            <button class="modal-btn login-option">ავტორიზაცია</button>
             <button class="modal-btn register-option">რეგისტრაცია</button>
           </div>
           <form class="login-form" id="loginForm" novalidate>
@@ -40,7 +34,7 @@
               <a href="#" id="forgotPasswordLink">დაგავიწყდათ პაროლი?</a>
             </div>
             <div class="modal-buttons">
-              <button type="submit" class="modal-btn submit">შესვლა</button>
+              <button type="submit" class="modal-btn submit">ავტორიზაცია</button>
             </div>
           </form>
 
@@ -92,6 +86,7 @@
       <div class="overlay" aria-hidden="true"></div>
       <aside id="mobile-drawer" class="drawer" aria-label="მობილური მენიუ">
         <button class="drawer-close" aria-label="დახურვა" type="button"></button>
+        <div class="drawer-auth-banner">გთხოვთ გაიაროთ ავტორიზაცია</div>
         <nav class="drawer-nav">
           <a href="#">მთავარი</a>
           <a href="#">რეესტრი</a>
@@ -99,10 +94,19 @@
           <a href="#">გამოცდა</a>
           <a href="#">კონტაქტი</a>
         </nav>
-        <button class="drawer-login">შესვლა</button>
+        <button class="drawer-login">ავტორიზაცია</button>
       </aside>
 
     </header>
+    <div class="nav-bar">
+      <nav class="nav">
+        <a href="#">მთავარი</a>
+        <a href="#">რეესტრი</a>
+        <a href="#">განცხადებები</a>
+        <a href="#">გამოცდა</a>
+        <a href="#">კონტაქტი</a>
+      </nav>
+    </div>
 
     <main></main>
 

@@ -39,11 +39,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const forgotPasswordForm = document.getElementById('forgotPasswordForm');
   const forgotPasswordLink = document.getElementById('forgotPasswordLink');
   const modalButtons = document.querySelector('.modal-buttons');
+  const authBanner = document.querySelector('.auth-banner');
+  const drawerAuthBanner = document.querySelector('.drawer-auth-banner');
   const AUTH_KEY = 'authLoggedIn';
+  const CURRENT_USER_KEY = 'currentUser';
+  const USED_CODES_KEY = 'usedCodes';
+  const DEFAULT_BANNER_TEXT = 'გთხოვთ გაიაროთ ავტორიზაცია';
   const isLoggedIn = () => localStorage.getItem(AUTH_KEY) === 'true';
   const setLoggedIn = (value) => { localStorage.setItem(AUTH_KEY, value ? 'true' : 'false'); };
   const getTrimmed = (fd, name) => (fd.get(name) || '').toString().trim();
   const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const getUsedCodes = () => new Set(JSON.parse(localStorage.getItem(USED_CODES_KEY) || '[]'));
+  const saveUsedCodes = (codesSet) => localStorage.setItem(USED_CODES_KEY, JSON.stringify(Array.from(codesSet)));
+  const getCurrentUser = () => {
+    try { const raw = localStorage.getItem(CURRENT_USER_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+  };
+  const saveCurrentUser = (user) => localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  const generateUniqueCode = () => {
+    const used = getUsedCodes();
+    for (let i = 0; i < 10000; i++) {
+      const code = String(Math.floor(1e9 + Math.random() * 9e9));
+      if (!used.has(code)) return code;
+    }
+    // Fallback (extremely unlikely)
+    return String(Date.now()).slice(-10);
+  };
+  const updateBanner = () => {
+    const user = getCurrentUser();
+    const text = user ? `${user.firstName} ${user.lastName} — ${user.code}` : DEFAULT_BANNER_TEXT;
+    if (authBanner) authBanner.textContent = text;
+    if (drawerAuthBanner) drawerAuthBanner.textContent = text;
+  };
 
   const openLoginModal = () => {
     if (!loginModal) return;
@@ -62,8 +88,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const updateAuthUI = () => {
     const logged = isLoggedIn();
-    if (loginBtn) loginBtn.textContent = logged ? 'გასვლა' : 'შესვლა';
-    if (drawerLoginBtn) drawerLoginBtn.textContent = logged ? 'გასვლა' : 'შესვლა';
+    if (loginBtn) loginBtn.textContent = logged ? 'გასვლა' : 'ავტორიზაცია';
+    if (drawerLoginBtn) drawerLoginBtn.textContent = logged ? 'გასვლა' : 'ავტორიზაცია';
   };
   const performLogout = () => {
     if (!isLoggedIn()) return;
@@ -155,6 +181,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!isValidEmail(email)) return alert('ელფოსტა არასწორია');
     if (password.length < 6) return alert('პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო');
     if (password !== confirmPassword) return alert('პაროლები არ ემთხვევა');
+    const code = generateUniqueCode();
+    const used = getUsedCodes();
+    used.add(code);
+    saveUsedCodes(used);
+    saveCurrentUser({ firstName, lastName, code });
+    updateBanner();
     alert('რეგისტრაცია მიღებულია!');
     closeLoginModal();
     registerForm.reset();
@@ -162,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   // Initialize auth UI state on load
   updateAuthUI();
+  updateBanner();
   // (Escape handled above for both menu and modal)
 });
 
