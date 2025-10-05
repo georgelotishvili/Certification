@@ -12,12 +12,26 @@
       <div class="gate-overlay" id="examGateOverlay">
         <form class="exam-dialog gate" id="examGateForm" autocomplete="off">
           <button class="gate-close" id="examGateClose" type="button" aria-label="დახურვა">×</button>
-          <p class="exam-text">გთხოვთ შეიყვანოთ პაროლი</p>
+          <p class="exam-text">ადმინისტრატორის ავტორიზაცია</p>
           <div class="field"><input type="password" id="examPassword" placeholder="პაროლი" required /></div>
           <div class="exam-actions">
             <button class="btn primary" type="submit">შესვლა</button>
           </div>
           <div class="gate-error" id="examGateError" hidden>პაროლი არასწორია</div>
+          <div class="dev-tools"><button type="button" id="devBypass" class="dev-bypass">დროებითი შესვლა</button></div>
+        </form>
+      </div>
+      <!-- Second auth: unique code overlay -->
+      <div class="code-overlay" id="examCodeOverlay" style="display:none;">
+        <form class="exam-dialog gate" id="examCodeForm" autocomplete="off">
+          <button class="gate-close" id="codeGateClose" type="button" aria-label="დახურვა">×</button>
+          <p class="exam-text">შეიყვანეთ უნიკალური კოდი</p>
+          <div class="field"><input type="text" id="examCodeInput" placeholder="უნიკალური კოდი" inputmode="numeric" /></div>
+          <div class="exam-actions">
+            <button class="btn primary" type="submit">დადასტურება</button>
+          </div>
+          <div class="gate-error" id="examCodeError" hidden>კოდი არასწორია</div>
+          <div class="dev-tools"><button type="button" id="devBypassCode" class="dev-bypass">დროებითი შესვლა</button></div>
         </form>
       </div>
       <div class="exam-container" role="dialog" aria-modal="true" aria-label="Exam screen">

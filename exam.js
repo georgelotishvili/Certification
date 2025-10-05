@@ -5,6 +5,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const gateInput = document.getElementById('examPassword');
   const gateError = document.getElementById('examGateError');
   const gateClose = document.getElementById('examGateClose');
+  const devBypass = document.getElementById('devBypass');
+  const codeOverlay = document.getElementById('examCodeOverlay');
+  const codeForm = document.getElementById('examCodeForm');
+  const codeInput = document.getElementById('examCodeInput');
+  const codeError = document.getElementById('examCodeError');
+  const devBypassCode = document.getElementById('devBypassCode');
+  const codeGateClose = document.getElementById('codeGateClose');
   const examStart = document.getElementById('examStart');
   const examFinish = document.getElementById('examFinish');
   const examConfirm = document.getElementById('examConfirm');
@@ -86,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.fullscreenElement && mustStayFullscreen) { showStep1(); enterFullscreen(); }
   });
 
-  // Gate logic
+  // Gate logic (password)
   gateForm?.addEventListener('submit', (e) => {
     e.preventDefault();
     const value = (gateInput?.value || '').trim();
@@ -98,12 +105,61 @@ document.addEventListener('DOMContentLoaded', () => {
     if (gateError) gateError.hidden = true;
     // Hide gate and enter fullscreen
     if (gateOverlay) gateOverlay.style.display = 'none';
-    enterFullscreen();
-    examStart?.focus();
+    // Show second auth for unique code and disable Start until correct
+    if (examStart) examStart.disabled = true;
+    if (codeOverlay) codeOverlay.style.display = 'flex';
+    (codeInput || examStart)?.focus();
   });
 
   // Close button on gate: return to index without entering exam
   gateClose?.addEventListener('click', () => {
+    window.location.href = 'index.html';
+  });
+
+  // Dev bypasses
+  // 1) Password gate bypass: fill correct password and proceed
+  devBypass?.addEventListener('click', () => {
+    if (gateInput) gateInput.value = 'cpig';
+    gateForm?.dispatchEvent(new Event('submit', { cancelable: true }));
+  });
+
+  // Code gate logic
+  codeForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    try {
+      const raw = localStorage.getItem('currentUser');
+      const current = raw ? JSON.parse(raw) : null;
+      const expected = current?.code || '';
+      const entered = (codeInput?.value || '').trim();
+      if (!entered || entered !== expected) {
+        if (codeError) codeError.hidden = false;
+        codeInput?.focus();
+        return;
+      }
+      if (codeError) codeError.hidden = true;
+      if (codeOverlay) codeOverlay.style.display = 'none';
+      enterFullscreen();
+      if (examStart) examStart.disabled = false;
+      examStart?.focus();
+    } catch {
+      // If no current user, bounce to home
+      window.location.href = 'index.html';
+    }
+  });
+
+  // 2) Code gate bypass: fill current user's unique code and proceed
+  devBypassCode?.addEventListener('click', () => {
+    try {
+      const raw = localStorage.getItem('currentUser');
+      const current = raw ? JSON.parse(raw) : null;
+      if (!current?.code) { window.location.href = 'index.html'; return; }
+      if (codeInput) codeInput.value = current.code;
+      codeForm?.dispatchEvent(new Event('submit', { cancelable: true }));
+    } catch { window.location.href = 'index.html'; }
+  });
+
+  // Close button on code gate: return to index
+  codeGateClose?.addEventListener('click', () => {
     window.location.href = 'index.html';
   });
 
