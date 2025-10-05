@@ -66,7 +66,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const updateBanner = () => {
     const user = getCurrentUser();
-    const text = user ? `${user.firstName} ${user.lastName} — ${user.code}` : DEFAULT_BANNER_TEXT;
+    const text = (isLoggedIn() && user)
+      ? `${user.firstName} ${user.lastName} — ${user.code}`
+      : DEFAULT_BANNER_TEXT;
     if (authBanner) authBanner.textContent = text;
     if (drawerAuthBanner) drawerAuthBanner.textContent = text;
   };
@@ -95,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!isLoggedIn()) return;
     setLoggedIn(false);
     updateAuthUI();
+    updateBanner();
     alert('გასვლა შესრულებულია');
     closeLoginModal();
   };
@@ -143,6 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     alert('შესვლა წარმატებულია!');
     setLoggedIn(true);
     updateAuthUI();
+    updateBanner();
     closeLoginModal();
     loginForm.reset();
     showOptions();
