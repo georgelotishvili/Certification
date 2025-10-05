@@ -1,0 +1,33 @@
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: #ffffff; font-family: 'DejaVu Sans', sans-serif; color: #0f172a; }
+
+.exam-root { position: fixed; inset: 0; background: #ffffff; display: flex; align-items: center; justify-content: center; }
+.exam-container { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.gate-overlay { position: absolute; inset: 0; background: #ffffff; display: flex; align-items: center; justify-content: center; z-index: 10; }
+.gate .field { margin: 12px 0; }
+.gate input { width: 100%; height: 40px; padding: 0 12px; border: 1px solid #111827; }
+.gate-error { margin-top: 8px; color: #b91c1c; }
+.exam-dialog { width: min(90vw, 520px); background: #ffffff; border: 1px solid #111827; padding: 20px; text-align: center; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.gate-close { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border: 1px solid #111827; background: #ffffff; cursor: pointer; font-size: 20px; line-height: 1; }
+.gate-close:hover { background: #f3f4f6; }
+.exam-text { margin-bottom: 16px; }
+.exam-actions { display: flex; gap: 8px; justify-content: center; }
+.btn { min-width: 140px; height: 40px; border: 1px solid #111827; background: #ffffff; color: #111827; cursor: pointer; padding: 0 12px; }
+.btn:hover { background: #f3f4f6; }
+.btn.primary { background: #111827; color: #ffffff; }
+.btn.primary:hover { background: #1f2937; }
+.btn.danger { background: #b91c1c; border-color: #b91c1c; color: #ffffff; }
+.btn.danger:hover { background: #991b1b; border-color: #991b1b; }
+
+.exam-bottom-actions { position: absolute; left: 50%; transform: translateX(-50%); bottom: 40px; display: flex; gap: 8px; align-items: center; }
+.exam-bottom-actions .btn,
+.exam-bottom-actions .finish { width: 260px; height: 48px; font-size: 16px; padding: 0 16px; white-space: nowrap; }
+
+@media (max-width: 560px) {
+  .exam-bottom-actions { flex-direction: column; gap: 10px; bottom: 24px; }
+  .exam-bottom-actions .btn,
+  .exam-bottom-actions .finish { width: min(90vw, 320px); height: 48px; }
+}
+
+

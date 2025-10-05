@@ -22,28 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   drawerLinks.forEach(link => on(link, 'click', closeMenu));
 
   document.addEventListener('keydown', (e) => {
-    // Intercept Alt+F4 when possible
-    if ((e.key === 'F4' && e.altKey) && fullscreenBlank && fullscreenBlank.classList.contains('show')) {
-      try { e.preventDefault(); } catch {}
-      if (typeof showConfirmStep1 === 'function') showConfirmStep1();
-      return;
-    }
     if (e.key !== 'Escape') return;
-    if (fullscreenBlank && fullscreenBlank.classList.contains('show')) {
-      // Prevent default to avoid side effects; keyboard lock will also help
-      try { e.preventDefault(); } catch {}
-      // If exam is open, show confirmation instead of closing immediately
-      if (typeof showConfirmStep1 === 'function') {
-        showConfirmStep1();
-      } else {
-        try {
-          if (examFinal) examFinal.hidden = true;
-          if (examConfirm) examConfirm.hidden = false;
-          confirmLeaveYes && confirmLeaveYes.focus && confirmLeaveYes.focus();
-        } catch {}
-      }
-      return;
-    }
     if (loginModal && loginModal.classList.contains('show')) closeLoginModal();
     else closeMenu();
   });
@@ -249,70 +228,18 @@ document.addEventListener('DOMContentLoaded', () => {
   on(loginOption, 'click', showLogin);
   on(registerOption, 'click', showRegister);
   on(forgotPasswordLink, 'click', (e) => { e.preventDefault(); showForgotPassword(); });
-  // Exit button opens confirmation step 1
-  const examConfirm = document.getElementById('examConfirm');
-  const examFinal = document.getElementById('examFinal');
-  const examStart = document.getElementById('examStart');
-  const confirmLeaveYes = document.getElementById('confirmLeaveYes');
-  const confirmLeaveNo = document.getElementById('confirmLeaveNo');
-  const agreeExit = document.getElementById('agreeExit');
-  const returnToExam = document.getElementById('returnToExam');
-
-  const showConfirmStep1 = () => {
-    if (!examConfirm || !examFinal) return;
-    examFinal.hidden = true;
-    examConfirm.hidden = false;
-    confirmLeaveYes?.focus();
-  };
-  const showConfirmStep2 = () => {
-    if (!examConfirm || !examFinal) return;
-    examConfirm.hidden = true;
-    examFinal.hidden = false;
-    agreeExit?.focus();
-  };
-  const hideAllConfirm = () => {
-    if (examConfirm) examConfirm.hidden = true;
-    if (examFinal) examFinal.hidden = true;
-    blankClose?.focus();
-  };
-
-  on(blankClose, 'click', showConfirmStep1);
-  on(confirmLeaveNo, 'click', hideAllConfirm);
-  on(confirmLeaveYes, 'click', showConfirmStep2);
-  on(returnToExam, 'click', hideAllConfirm);
-  on(agreeExit, 'click', closeBlank);
-  on(examStart, 'click', hideAllConfirm);
-
-  // Open fullscreen blank when clicking "გამოცდა" (Exam) links
+  // Open exam: navigate to dedicated page
   const examLinks = Array.from(document.querySelectorAll('.nav a, .drawer-nav a'))
     .filter(a => (a.textContent || '').trim() === 'გამოცდა');
   examLinks.forEach(link => on(link, 'click', (e) => {
+    const href = link.getAttribute('href');
+    if (href && href !== '#') return; // already points to exam.html
     e.preventDefault();
     if (link.closest('.drawer-nav')) closeMenu();
-    openBlank();
+    window.location.href = 'exam.html';
   }));
 
-  // If the user exits fullscreen manually (e.g., Esc), close the exam overlay too
-  document.addEventListener('fullscreenchange', () => {
-    if (!fullscreenBlank || !fullscreenBlank.classList.contains('show')) return;
-    if (!document.fullscreenElement) {
-      // User attempted to exit fullscreen. Keep exam visible and ask for confirmation.
-      showConfirmStep1();
-      // Try to immediately re-lock or restore fullscreen if possible (may be blocked without user gesture)
-      if (mustStayFullscreen) {
-        try {
-          const req = rootEl.requestFullscreen || rootEl.webkitRequestFullscreen || rootEl.msRequestFullscreen;
-          if (req) {
-            const p = req.call(rootEl, { navigationUI: 'hide' });
-            if (p && typeof p.then === 'function') p.then(lockKeys).catch(() => {});
-          }
-        } catch {}
-      }
-    } else {
-      // Regained fullscreen; ensure keys are locked
-      lockKeys();
-    }
-  });
+  // (Removed) inline overlay fullscreen listeners
 
   // Native beforeunload confirm when trying to close the tab/window (e.g., Alt+F4)
   let beforeUnloadHandler = null;
