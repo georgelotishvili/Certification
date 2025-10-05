@@ -493,3 +493,61 @@ footer {
   .login-btn { display: none; }
   .burger { display: flex; }
 }
+
+/* Fullscreen blank overlay */
+.fullscreen-blank {
+  position: fixed;
+  inset: 0;
+  background: #ffffff;
+  z-index: 9999; /* above header (100) and login modal (1100)? ensure topmost */
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.fullscreen-blank.show { display: flex; }
+.exam-container { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.blank-close {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 40px;
+  min-width: 220px;
+  height: 44px;
+  border: 1px solid #111827;
+  background: #ffffff;
+  color: #111827;
+  font-size: 16px;
+  cursor: pointer;
+}
+.blank-close:hover { background: #f3f4f6; }
+.exam-dialog { 
+  width: min(90vw, 520px);
+  background: #ffffff;
+  border: 1px solid #111827;
+  padding: 20px;
+  text-align: center;
+}
+.exam-text { margin-bottom: 16px; }
+.exam-actions { display: flex; gap: 8px; justify-content: center; }
+.btn { 
+  min-width: 140px; 
+  height: 40px; 
+  border: 1px solid #111827; 
+  background: #ffffff; 
+  color: #111827; 
+  cursor: pointer; 
+  padding: 0 12px;
+}
+.btn:hover { background: #f3f4f6; }
+.btn.primary { background: #111827; color: #ffffff; }
+.btn.primary:hover { background: #1f2937; }
+.btn.danger { background: #b91c1c; border-color: #b91c1c; color: #ffffff; }
+.btn.danger:hover { background: #991b1b; border-color: #991b1b; }
+
+/* inert fallback: block interactions when [inert] isn't fully supported */
+[inert] { pointer-events: none; user-select: none; }
+[inert] a,
+[inert] button,
+[inert] input,
+[inert] textarea,
+[inert] select { pointer-events: none; }

@@ -23,6 +23,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (fullscreenBlank && fullscreenBlank.classList.contains('show')) {
+      // Prevent default to avoid side effects; keyboard lock will also help
+      try { e.preventDefault(); } catch {}
+      // If exam is open, show confirmation instead of closing immediately
+      if (typeof showConfirmStep1 === 'function') {
+        showConfirmStep1();
+      } else {
+        try {
+          if (examFinal) examFinal.hidden = true;
+          if (examConfirm) examConfirm.hidden = false;
+          confirmLeaveYes && confirmLeaveYes.focus && confirmLeaveYes.focus();
+        } catch {}
+      }
+      return;
+    }
     if (loginModal && loginModal.classList.contains('show')) closeLoginModal();
     else closeMenu();
   });
@@ -41,6 +56,33 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalButtons = document.querySelector('.modal-buttons');
   const authBanner = document.querySelector('.auth-banner');
   const drawerAuthBanner = document.querySelector('.drawer-auth-banner');
+  // Fullscreen/isolation helpers
+  const rootEl = document.documentElement;
+  const appRegions = Array.from(document.querySelectorAll('header, .nav-bar, main, footer, .overlay, .drawer, #loginModal'));
+  let previouslyFocused = null;
+  const setIsolated = (on) => {
+    appRegions.forEach(el => {
+      if (!el) return;
+      if (on) { el.setAttribute('inert', ''); el.setAttribute('aria-hidden', 'true'); }
+      else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden'); }
+    });
+  };
+  let trapFocusHandler = null;
+  let mustStayFullscreen = false;
+  const lockKeys = async () => {
+    try { await navigator.keyboard?.lock?.(['Escape','F11']); } catch {}
+  };
+  const unlockKeys = async () => {
+    try { await navigator.keyboard?.unlock?.(); } catch {}
+  };
+  const getVisibleFocusable = () => {
+    if (!fullscreenBlank) return [];
+    const nodes = fullscreenBlank.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    return Array.from(nodes).filter(el => !el.hasAttribute('disabled') && el.offsetParent !== null && !el.closest('[hidden]'));
+  };
+  // Fullscreen blank overlay
+  const fullscreenBlank = document.getElementById('fullscreenBlank');
+  const blankClose = document.getElementById('blankClose');
   const AUTH_KEY = 'authLoggedIn';
   const CURRENT_USER_KEY = 'currentUser';
   const USED_CODES_KEY = 'usedCodes';
@@ -88,6 +130,70 @@ document.addEventListener('DOMContentLoaded', () => {
     if (forgotPasswordForm) forgotPasswordForm.reset();
     showOptions(); // Show options when closing
   };
+  const openBlank = () => {
+    if (!fullscreenBlank) return;
+    fullscreenBlank.classList.add('show');
+    fullscreenBlank.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    // Ensure mobile drawer is closed under the blank screen
+    setMenu(false);
+    // Isolate rest of the UI
+    setIsolated(true);
+    previouslyFocused = document.activeElement;
+    // Reset any prior confirmation dialogs
+    if (typeof hideAllConfirm === 'function') hideAllConfirm();
+    mustStayFullscreen = true;
+    // Enter browser fullscreen to hide chrome/taskbar
+    try {
+      const req = rootEl.requestFullscreen || rootEl.webkitRequestFullscreen || rootEl.msRequestFullscreen;
+      if (req) {
+        const p = req.call(rootEl, { navigationUI: 'hide' });
+        if (p && typeof p.then === 'function') {
+          p.then(lockKeys).catch(() => {});
+        } else {
+          lockKeys();
+        }
+      } else {
+        lockKeys();
+      }
+    } catch {}
+    // Focus trap across visible controls
+    setTimeout(() => { if (blankClose) blankClose.focus(); }, 0);
+    trapFocusHandler = (e) => {
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+      const items = getVisibleFocusable();
+      if (!items.length) return;
+      const index = items.indexOf(document.activeElement);
+      let nextIndex = e.shiftKey ? (index <= 0 ? items.length - 1 : index - 1) : (index === items.length - 1 ? 0 : index + 1);
+      items[nextIndex].focus();
+    };
+    fullscreenBlank.addEventListener('keydown', trapFocusHandler);
+  };
+  const closeBlank = () => {
+    if (!fullscreenBlank) return;
+    fullscreenBlank.classList.remove('show');
+    fullscreenBlank.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    // Remove focus trap and restore UI
+    if (trapFocusHandler) {
+      fullscreenBlank.removeEventListener('keydown', trapFocusHandler);
+      trapFocusHandler = null;
+    }
+    setIsolated(false);
+    mustStayFullscreen = false;
+    // Release keyboard lock
+    unlockKeys();
+    // Exit fullscreen if active
+    try {
+      if (document.fullscreenElement) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+        if (exit) exit.call(document);
+      }
+    } catch {}
+    // Restore focus
+    try { previouslyFocused && previouslyFocused.focus && previouslyFocused.focus(); } catch {}
+  };
   const updateAuthUI = () => {
     const logged = isLoggedIn();
     if (loginBtn) loginBtn.textContent = logged ? 'გასვლა' : 'ავტორიზაცია';
@@ -133,6 +239,68 @@ document.addEventListener('DOMContentLoaded', () => {
   on(loginOption, 'click', showLogin);
   on(registerOption, 'click', showRegister);
   on(forgotPasswordLink, 'click', (e) => { e.preventDefault(); showForgotPassword(); });
+  // Exit button opens confirmation step 1
+  const examConfirm = document.getElementById('examConfirm');
+  const examFinal = document.getElementById('examFinal');
+  const confirmLeaveYes = document.getElementById('confirmLeaveYes');
+  const confirmLeaveNo = document.getElementById('confirmLeaveNo');
+  const agreeExit = document.getElementById('agreeExit');
+  const returnToExam = document.getElementById('returnToExam');
+
+  const showConfirmStep1 = () => {
+    if (!examConfirm || !examFinal) return;
+    examFinal.hidden = true;
+    examConfirm.hidden = false;
+    confirmLeaveYes?.focus();
+  };
+  const showConfirmStep2 = () => {
+    if (!examConfirm || !examFinal) return;
+    examConfirm.hidden = true;
+    examFinal.hidden = false;
+    agreeExit?.focus();
+  };
+  const hideAllConfirm = () => {
+    if (examConfirm) examConfirm.hidden = true;
+    if (examFinal) examFinal.hidden = true;
+    blankClose?.focus();
+  };
+
+  on(blankClose, 'click', showConfirmStep1);
+  on(confirmLeaveNo, 'click', hideAllConfirm);
+  on(confirmLeaveYes, 'click', showConfirmStep2);
+  on(returnToExam, 'click', hideAllConfirm);
+  on(agreeExit, 'click', closeBlank);
+
+  // Open fullscreen blank when clicking "გამოცდა" (Exam) links
+  const examLinks = Array.from(document.querySelectorAll('.nav a, .drawer-nav a'))
+    .filter(a => (a.textContent || '').trim() === 'გამოცდა');
+  examLinks.forEach(link => on(link, 'click', (e) => {
+    e.preventDefault();
+    if (link.closest('.drawer-nav')) closeMenu();
+    openBlank();
+  }));
+
+  // If the user exits fullscreen manually (e.g., Esc), close the exam overlay too
+  document.addEventListener('fullscreenchange', () => {
+    if (!fullscreenBlank || !fullscreenBlank.classList.contains('show')) return;
+    if (!document.fullscreenElement) {
+      // User attempted to exit fullscreen. Keep exam visible and ask for confirmation.
+      showConfirmStep1();
+      // Try to immediately re-lock or restore fullscreen if possible (may be blocked without user gesture)
+      if (mustStayFullscreen) {
+        try {
+          const req = rootEl.requestFullscreen || rootEl.webkitRequestFullscreen || rootEl.msRequestFullscreen;
+          if (req) {
+            const p = req.call(rootEl, { navigationUI: 'hide' });
+            if (p && typeof p.then === 'function') p.then(lockKeys).catch(() => {});
+          }
+        } catch {}
+      }
+    } else {
+      // Regained fullscreen; ensure keys are locked
+      lockKeys();
+    }
+  });
 
   // Login form submission
   on(loginForm, 'submit', (e) => {

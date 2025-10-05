@@ -127,6 +127,31 @@
 
     <main></main>
 
+    <!-- Fullscreen white overlay (Exam screen) -->
+    <div class="fullscreen-blank" id="fullscreenBlank" aria-hidden="true" role="dialog" aria-modal="true">
+      <div class="exam-container" role="document">
+        <button class="blank-close" id="blankClose" type="button">გამოცდის დასრულება</button>
+
+        <!-- Step 1: Confirm leave exam -->
+        <div class="exam-dialog" id="examConfirm" hidden>
+          <p class="exam-text">ნამდვილად გსურთ გამოცდის დასრულება?</p>
+          <div class="exam-actions">
+            <button class="btn danger" id="confirmLeaveYes" type="button">დიახ</button>
+            <button class="btn" id="confirmLeaveNo" type="button">არა</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Warning irreversible -->
+        <div class="exam-dialog" id="examFinal" hidden>
+          <p class="exam-text">თქვენი გამოცდის პროცესი დასრულდება და მას ვეღარ აღადგენთ. გამოცდის შედეგები შეინახება ბაზაში</p>
+          <div class="exam-actions">
+            <button class="btn primary" id="agreeExit" type="button">ვეთანხმები</button>
+            <button class="btn" id="returnToExam" type="button">გამოცდაზე დაბრუნება</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <footer></footer>
     <script src="script.js" defer></script>
   </body>
