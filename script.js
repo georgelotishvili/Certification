@@ -270,6 +270,17 @@ document.addEventListener('DOMContentLoaded', () => {
     alert('შესვლა წარმატებულია!');
     setLoggedIn(true);
     updateAuthUI();
+    const user = getCurrentUser();
+    if (!user) {
+      updateBanner();
+      showRegister();
+      try {
+        const regEmailInput = registerForm?.querySelector('input[name="email"]');
+        if (regEmailInput) regEmailInput.value = email;
+      } catch {}
+      alert('თქვენ ჯერ არ გაქვთ დასრულებული რეგისტრაცია. გთხოვთ შეავსოთ ველები, რათა გამოჩნდეს თქვენი სახელი/გვარი და უნიკალური კოდი.');
+      return;
+    }
     updateBanner();
     closeLoginModal();
     loginForm.reset();
@@ -314,6 +325,8 @@ document.addEventListener('DOMContentLoaded', () => {
     used.add(code);
     saveUsedCodes(used);
     saveCurrentUser({ firstName, lastName, code });
+    setLoggedIn(true);
+    updateAuthUI();
     updateBanner();
     alert('რეგისტრაცია მიღებულია!');
     closeLoginModal();

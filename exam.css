@@ -6,12 +6,13 @@ body { background: #ffffff; font-family: 'DejaVu Sans', sans-serif; color: #0f17
 .exam-container { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .exam-layout { position: absolute; inset: 0; display: grid; grid-template-columns: 20% 60% 20%; grid-template-rows: 100%; }
 .pane { border: 1px solid #e5e7eb; }
-.pane.left { background: #e0f2fe; /* light blue */ }
+.pane.left { background: #e0f2fe; /* light blue */ display: grid; grid-template-rows: 30% 40% 30%; }
 .pane.center { background: #ecfdf5; /* light green */ display: grid; grid-template-rows: 15% 70% 15%; }
+.pane.right { background: #fef3c7; /* light amber */ display: grid; grid-template-rows: 30% 40% 30%; }
 .center-top { display: grid; grid-template-rows: 1fr 1fr 1fr; }
 .ct-section { display: flex; align-items: center; justify-content: center; padding: 4px 8px; text-align: center; }
 .ct-title { background: #ffffff; /* light purple */ font-size: 24px; line-height: 1.2; font-weight: 700; }
-.ct-warning { background: #ffffff; /* light red */ font-size: 18px; line-height: 1.2; }
+.ct-subtitle { background: #ffffff; /* light red */ font-size: 18px; line-height: 1.2; }
 .ct-countdown { background: #ffffff; /* gray */ font-family: monospace; font-size: 24px; color: #b91c1c; }
 
 .center-top { 
@@ -20,7 +21,16 @@ body { background: #ffffff; font-family: 'DejaVu Sans', sans-serif; color: #0f17
 
 .center-middle { background: #d1fae5; /* lighter green */ }
 .center-bottom { background: #bae6fd; /* lighter blue */ }
-.pane.right { background: #fef3c7; /* light amber */ }
+.pane-section { width: 100%; }
+
+/* Visual colors for newly added pane sections */
+.pane.left .pane-section.top { background: #bfdbfe; }
+.pane.left .pane-section.middle { background: #93c5fd; }
+.pane.left .pane-section.bottom { background: #60a5fa; }
+
+.pane.right .pane-section.top { background: #fde68a; }
+.pane.right .pane-section.middle { background: #fcd34d; }
+.pane.right .pane-section.bottom { background: #fbbf24; }
 .gate-overlay { position: absolute; inset: 0; background: #ffffff; display: flex; align-items: center; justify-content: center; z-index: 10; }
 .gate .field { margin: 12px 0; }
 .gate input { width: 100%; height: 40px; padding: 0 12px; border: 1px solid #111827; }

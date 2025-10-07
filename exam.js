@@ -29,6 +29,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const confirmLeaveNo = document.getElementById('confirmLeaveNo');
   const agreeExit = document.getElementById('agreeExit');
   const returnToExam = document.getElementById('returnToExam');
+  const ctTitle = document.querySelector('.ct-section.ct-title');
+
+  const DEFAULT_TITLE_TEXT = 'თეორიული ნაწილი';
+  const getCurrentUser = () => {
+    try {
+      const raw = localStorage.getItem('currentUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+  const updateUserHeader = () => {
+    if (!ctTitle) return;
+    const user = getCurrentUser();
+    if (user?.firstName && user?.lastName && user?.code) {
+      ctTitle.textContent = `${user.firstName} ${user.lastName} — ${user.code}`;
+    } else {
+      ctTitle.textContent = DEFAULT_TITLE_TEXT;
+    }
+  };
 
   let trapFocusHandler = null;
   let mustStayFullscreen = true;
@@ -85,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
   hideAll();
   focusTrapOn();
   enableBeforeUnload();
+  updateUserHeader();
   // Gate visible initially
   if (gateInput) gateInput.focus();
 
@@ -150,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
       enterFullscreen();
       if (examStart) examStart.disabled = false;
       examStart?.focus();
+      updateUserHeader();
     } catch {
       // If no current user, bounce to home
       window.location.href = 'index.html';
