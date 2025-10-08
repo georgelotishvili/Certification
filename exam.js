@@ -25,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const examFinish = document.getElementById('examFinish');
   const examConfirm = document.getElementById('examConfirm');
   const examFinal = document.getElementById('examFinal');
+  const confirmOverlay = document.getElementById('confirmOverlay');
+  const finalOverlay = document.getElementById('finalOverlay');
   const confirmLeaveYes = document.getElementById('confirmLeaveYes');
   const confirmLeaveNo = document.getElementById('confirmLeaveNo');
   const agreeExit = document.getElementById('agreeExit');
@@ -101,9 +103,27 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const focusTrapOff = () => { if (trapFocusHandler) document.removeEventListener('keydown', trapFocusHandler); trapFocusHandler = null; };
 
-  const showStep1 = () => { examFinal.hidden = true; examConfirm.hidden = false; confirmLeaveYes?.focus(); };
-  const showStep2 = () => { examConfirm.hidden = true; examFinal.hidden = false; agreeExit?.focus(); };
-  const hideAll = () => { examConfirm.hidden = true; examFinal.hidden = true; examStart?.focus(); };
+  const showStep1 = () => { 
+    examFinal.hidden = true; 
+    if (finalOverlay) finalOverlay.style.display = 'none';
+    examConfirm.hidden = false;
+    if (confirmOverlay) confirmOverlay.style.display = 'block';
+    confirmLeaveYes?.focus(); 
+  };
+  const showStep2 = () => { 
+    examConfirm.hidden = true;
+    if (confirmOverlay) confirmOverlay.style.display = 'none';
+    examFinal.hidden = false;
+    if (finalOverlay) finalOverlay.style.display = 'block';
+    agreeExit?.focus(); 
+  };
+  const hideAll = () => { 
+    examConfirm.hidden = true;
+    examFinal.hidden = true;
+    if (confirmOverlay) confirmOverlay.style.display = 'none';
+    if (finalOverlay) finalOverlay.style.display = 'none';
+    examStart?.focus(); 
+  };
 
   const enterFullscreen = () => {
     try {
