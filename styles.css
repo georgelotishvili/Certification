@@ -28,9 +28,8 @@ html, body {
 body {
   color: var(--brand-dark);
   background: #fafafa;
+  padding-top: 140px;
 }
-
-body { padding-top: 140px; }
 
 header {
   width: 100%;
