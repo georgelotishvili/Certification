@@ -37,17 +37,69 @@
       <div class="exam-container" role="dialog" aria-modal="true" aria-label="Exam screen">
         <div class="exam-layout">
           <aside class="pane left" id="examPaneLeft">
-            <div class="pane-section top"></div>
+            <div class="pane-section top">
+              <div class="camera-slot" role="img" aria-label="კამერის ადგილი"></div>
+              <div class="camera-note">მიმდინარეობს აუდიო/ვიდეო ჩაწერა. გთხოვთ გამოცდის მსვლელობისას არ გახვიდეთ ვიდეოთვალის ხედვის არედან</div>
+            </div>
             <div class="pane-section middle"></div>
             <div class="pane-section bottom"></div>
           </aside>
           <main class="pane center" id="examPaneCenter">
             <div class="center-top">
-              <div class="ct-section ct-title">თეორიული ნაწილი</div>
-              <div class="ct-section ct-subtitle">თეორიული ნაწილი</div>
+              <div class="ct-section ct-title"></div>
+              <div class="ct-section ct-subtitle">არქიტექტორთა სასერტიფიკაციო გამოცდა - თეორიული ნაწილი</div>
               <div class="ct-section ct-countdown"><span id="examCountdown">00:30:00</span></div>
             </div>
-            <div class="center-middle"></div>
+            <div class="center-middle">
+              <div class="cm-header">შეარჩიეთ და მონიშნეთ სწორი პასუხი</div>
+              <div class="cm-content">
+
+                <div class="question">
+                  <div class="question-text"></div>
+                </div>
+
+                <div class="answerA">
+                  <div class="mark"><div class="bullet"></div></div>
+                  <div class="code">A</div>
+                  <div class="text"></div>
+                </div>
+
+                <div class="answerb">
+                  <div class="mark"><div class="bullet"></div></div>
+                  <div class="code">B</div>
+                  <div class="text"></div>
+                </div>
+
+                <div class="answerc">
+                  <div class="mark"><div class="bullet"></div></div>
+                  <div class="code">C</div>
+                  <div class="text"></div>
+                </div>
+
+                <div class="answerd">
+                  <div class="mark"><div class="bullet"></div></div>
+                  <div class="code">D</div>
+                  <div class="text"></div>
+                </div>
+
+              </div>
+              <div class="cm-footer">
+                <button class="cm-nav prev" type="button" aria-label="წინა კითხვა"></button>
+                <div class="cm-dots">
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </div>
+                <button class="cm-nav next" type="button" aria-label="შემდეგი კითხვა"></button>
+              </div>
+            </div>
             <div class="center-bottom">
               <div class="exam-bottom-actions in-center">
                 <button class="btn primary" id="examStart" type="button">გამოცდის დაწყება</button>
@@ -56,7 +108,7 @@
             </div>
           </main>
           <aside class="pane right" id="examPaneRight">
-            <div class="pane-section top"></div>
+            <div class="pane-section top"><div class="right-datetime" id="rightDateTime"></div></div>
             <div class="pane-section middle"></div>
             <div class="pane-section bottom"></div>
           </aside>

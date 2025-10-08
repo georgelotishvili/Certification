@@ -30,8 +30,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const agreeExit = document.getElementById('agreeExit');
   const returnToExam = document.getElementById('returnToExam');
   const ctTitle = document.querySelector('.ct-section.ct-title');
+  const rightDateTime = document.getElementById('rightDateTime');
 
-  const DEFAULT_TITLE_TEXT = 'თეორიული ნაწილი';
+  const DEFAULT_TITLE_TEXT = '';
   const getCurrentUser = () => {
     try {
       const raw = localStorage.getItem('currentUser');
@@ -48,6 +49,24 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       ctTitle.textContent = DEFAULT_TITLE_TEXT;
     }
+  };
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const formatDate = (d) => {
+    const day = pad2(d.getDate());
+    const m = pad2(d.getMonth() + 1);
+    const y = d.getFullYear();
+    return `${day}-${m}-${y}`;
+  };
+  const formatTime = (d) => {
+    const hh = pad2(d.getHours());
+    const mm = pad2(d.getMinutes());
+    return `${hh}:${mm}`;
+  };
+  const updateRightDateTime = () => {
+    if (!rightDateTime) return;
+    const now = new Date();
+    rightDateTime.innerHTML = `<div class="rd-date">${formatDate(now)}</div><div class="rd-time">${formatTime(now)}</div>`;
   };
 
   let trapFocusHandler = null;
@@ -106,6 +125,8 @@ document.addEventListener('DOMContentLoaded', () => {
   focusTrapOn();
   enableBeforeUnload();
   updateUserHeader();
+  updateRightDateTime();
+  setInterval(updateRightDateTime, 1000 * 30);
   // Gate visible initially
   if (gateInput) gateInput.focus();
 
