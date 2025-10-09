@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>certification</title>
-    <link rel="stylesheet" href="styles.css" />
+    <title>ადმინისტრატორის პანელი - Certification</title>
+    <link rel="stylesheet" href="admin.css" />
   </head>
   <body>
     <header>
@@ -28,71 +28,9 @@
           </svg>     
       </div>
         
-      <div class="auth-banner">გთხოვთ გაიაროთ ავტორიზაცია</div>
+      <div class="auth-banner">ადმინისტრატორის გვერდი</div>
 
-      <button class="login-btn">ავტორიზაცია</button>
-      <!-- Login Modal -->
-      <div class="login-modal" id="loginModal" aria-hidden="true" role="dialog" aria-modal="true">
-        <div class="modal-content" role="document">
-          <button class="modal-close" id="modalClose" aria-label="დახურვა">&times;</button>
-          <h3>ავტორიზაცია / რეგისტრაცია</h3>
-          <div class="modal-buttons">
-            <button class="modal-btn login-option">ავტორიზაცია</button>
-            <button class="modal-btn register-option">რეგისტრაცია</button>
-          </div>
-          <form class="login-form" id="loginForm" novalidate>
-            <div class="field">
-              <input type="email" name="email" placeholder="ელფოსტა" required />
-            </div>
-            <div class="field">
-              <input type="password" name="password" placeholder="პაროლი" required />
-            </div>
-            <div class="forgot-password-link">
-              <a href="#" id="forgotPasswordLink">დაგავიწყდათ პაროლი?</a>
-            </div>
-            <div class="modal-buttons">
-              <button type="submit" class="modal-btn submit">ავტორიზაცია</button>
-            </div>
-          </form>
-
-          <form class="register-form" id="registerForm" novalidate>
-            <div class="field">
-              <input type="text" name="personalId" inputmode="numeric" maxlength="11" placeholder="პირადი ნომერი" required />
-            </div>
-            <div class="field">
-              <input type="text" name="firstName" placeholder="სახელი" required />
-            </div>
-            <div class="field">
-              <input type="text" name="lastName" placeholder="გვარი" required />
-            </div>
-            <div class="field">
-              <input type="tel" name="phone" placeholder="ტელეფონი" required />
-            </div>
-            <div class="field">
-              <input type="email" name="email" placeholder="ელფოსტა" required />
-            </div>
-            <div class="field">
-              <input type="password" name="password" placeholder="პაროლი" required />
-            </div>
-            <div class="field">
-              <input type="password" name="confirmPassword" placeholder="გაიმეორეთ პაროლი" required />
-            </div>
-            <div class="modal-buttons">
-              <button type="submit" class="modal-btn submit">რეგისტრაცია</button>
-            </div>
-          </form>
-
-          <form class="forgot-password-form" id="forgotPasswordForm" novalidate>
-            <div class="field">
-              <input type="email" name="email" placeholder="ელფოსტა" required />
-            </div>
-            <div class="modal-buttons">
-              <button type="submit" class="modal-btn submit">პაროლის აღდგენა</button>
-              <button type="button" class="modal-btn back-to-login">უკან დაბრუნება</button>
-            </div>
-          </form>
-        </div>
-      </div>
+      <button class="login-btn">მთავარი გვერდი</button>
 
       <!-- Burger toggle for <=1050px (JS-driven) -->
       <button class="burger" aria-controls="mobile-drawer" aria-label="მენიუს გახსნა" aria-expanded="false" type="button">
@@ -103,75 +41,34 @@
       <div class="overlay" aria-hidden="true"></div>
       <aside id="mobile-drawer" class="drawer" aria-label="მობილური მენიუ">
         <button class="drawer-close" aria-label="დახურვა" type="button"></button>
-        <div class="drawer-auth-banner">გთხოვთ გაიაროთ ავტორიზაცია</div>
+        <div class="drawer-auth-banner">ადმინისტრატორის გვერდი</div>
         <nav class="drawer-nav">
-          <a href="#">მთავარი</a>
           <a href="#">რეესტრი</a>
           <a href="#">განცხადებები</a>
           <a href="#">გამოცდა</a>
-          <a href="#">კონტაქტი</a>
         </nav>
-        <button class="drawer-login">ავტორიზაცია</button>
+        <button class="drawer-login">მთავარი გვერდი</button>
       </aside>
 
     </header>
     <div class="nav-bar">
       <nav class="nav">
-        <a href="#">მთავარი</a>
         <a href="#">რეესტრი</a>
         <a href="#">განცხადებები</a>
         <a href="#">გამოცდა</a>
-        <a href="#">კონტაქტი</a>
       </nav>
     </div>
 
-    <main></main>
-
-    <!-- (Removed) inline exam overlay; exam now lives in exam.html -->
+    <main>
+      
+    </main>
 
     <footer>
-      <div class="footer-content">
-        <div class="footer-section">
-          <h4>საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი</h4>
-          <p>ჩვენ ვამზადებთ და ვასერტიფიცირებთ პროფესიონალებს სხვადასხვა დარგში, რათა უზრუნველვყოთ მაღალი ხარისხის სტანდარტები.</p>
-        </div>
-        
-        <div class="footer-section">
-          <h4>სწრაფი ბმულები</h4>
-          <ul>
-            <li><a href="#">მთავარი</a></li>
-            <li><a href="#">რეესტრი</a></li>
-            <li><a href="#">განცხადებები</a></li>
-            <li><a href="#">გამოცდა</a></li>
-            <li><a href="#">კონტაქტი</a></li>
-          </ul>
-        </div>
-        
-        <div class="footer-section">
-          <h4>კონტაქტი</h4>
-          <ul>
-            <li>📧 info@certification.ge</li>
-            <li>📞 +995 555 123 456</li>
-            <li>📍 თბილისი, საქართველო</li>
-          </ul>
-        </div>
-        
-        <div class="footer-section">
-          <h4>საკონტაქტო ფორმა</h4>
-          <form class="footer-form">
-            <input type="text" name="name" placeholder="თქვენი სახელი" required />
-            <input type="email" name="email" placeholder="ელფოსტა" required />
-            <textarea name="message" placeholder="შეტყობინება" rows="3" required></textarea>
-            <button type="submit">გაგზავნა</button>
-          </form>
-        </div>
-      </div>
-      
       <div class="footer-bottom">
-        <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია / <a href="admin.html" class="admin-link">ადმინ გვერდი</a></p>
+        <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია</p>
       </div>
     </footer>
-    <script src="script.js" defer></script>
+
+    <script src="admin.js"></script>
   </body>
 </html>
-

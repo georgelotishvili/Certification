@@ -337,5 +337,25 @@ document.addEventListener('DOMContentLoaded', () => {
   updateAuthUI();
   updateBanner();
   // (Escape handled above for both menu and modal)
+
+  // Footer form submission
+  const footerForm = document.querySelector('.footer-form');
+  if (footerForm) {
+    on(footerForm, 'submit', (e) => {
+      e.preventDefault();
+      const formData = new FormData(footerForm);
+      const name = (formData.get('name') || '').toString().trim();
+      const email = (formData.get('email') || '').toString().trim();
+      const message = (formData.get('message') || '').toString().trim();
+      
+      if (!name) return alert('გთხოვთ შეიყვანოთ სახელი');
+      if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
+      if (!isValidEmail(email)) return alert('ელფოსტა არასწორია');
+      if (!message) return alert('გთხოვთ შეიყვანოთ შეტყობინება');
+      
+      alert('თქვენი შეტყობინება გაგზავნილია! ჩვენ მალე დაგიკავშირდებით.');
+      footerForm.reset();
+    });
+  }
 });
 
