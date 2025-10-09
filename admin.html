@@ -71,7 +71,18 @@
         </div>
 
         <div class="exam-content">
-          <!-- აქ შემდეგ დავამატებთ სხვა მარეგულირებელ ელემენტებს -->
+          <div class="exam-blocks-header" aria-label="საგამოცდო ბლოკები">
+            <h2 class="exam-blocks-title">საგამოცდო ბლოკები</h2>
+            <input id="examBlocksSearch" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="საგამოცდო ბლოკების ძებნა" />
+          </div>
+
+          <div class="exam-blocks-grid">
+            <button id="addBlockTile" class="block-tile add-tile" type="button" aria-label="ბლოკის დამატება">
+              <span class="add-icon" aria-hidden="true">+</span>
+              <span class="add-text">ბლოკის დამატება</span>
+            </button>
+            <!-- აქ შემდგომ დაემატება ინდივიდუალური ბლოკების ბარათები -->
+          </div>
         </div>
       </section>
     </main>
