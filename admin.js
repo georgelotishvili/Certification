@@ -37,4 +37,43 @@ document.addEventListener('DOMContentLoaded', () => {
   on(drawerLoginBtn, 'click', () => {
     window.location.href = 'index.html';
   });
+
+  // Exam settings logic
+  const examSection = document.getElementById('exam-settings');
+  const durationInput = document.getElementById('examDuration');
+  const saveBtn = document.getElementById('saveExamDuration');
+  const flash = document.getElementById('durationFlash');
+  const EXAM_DURATION_KEY = 'examDuration';
+
+  const navLinks = document.querySelectorAll('.nav a, .drawer-nav a');
+  navLinks.forEach(link => {
+    on(link, 'click', (e) => {
+      const text = (link.textContent || '').trim();
+      if (text === 'გამოცდა') {
+        e.preventDefault();
+        if (examSection) examSection.style.display = 'block';
+      }
+    });
+  });
+
+  // Load saved exam duration
+  try {
+    const saved = localStorage.getItem(EXAM_DURATION_KEY);
+    if (saved && durationInput) durationInput.value = saved;
+  } catch {}
+
+  // Save duration
+  on(saveBtn, 'click', () => {
+    const value = Number(durationInput?.value || 0);
+    if (!value || value < 1) {
+      alert('გთხოვთ შეიყვანოთ სწორი დრო (მინიმუმ 1 წუთი)');
+      return;
+    }
+    try { localStorage.setItem(EXAM_DURATION_KEY, String(value)); } catch {}
+    if (flash) {
+      flash.textContent = `ხანგრძლივობა შეიცვალა: ${value} წუთი`;
+      flash.style.display = 'block';
+      setTimeout(() => { if (flash) flash.style.display = 'none'; }, 3000);
+    }
+  });
 });

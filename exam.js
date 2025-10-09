@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const agreeExit = document.getElementById('agreeExit');
   const returnToExam = document.getElementById('returnToExam');
   const ctTitle = document.querySelector('.ct-section.ct-title');
+  const countdownEl = document.getElementById('examCountdown');
   const rightDateTime = document.getElementById('rightDateTime');
 
   const DEFAULT_TITLE_TEXT = '';
@@ -242,6 +243,52 @@ document.addEventListener('DOMContentLoaded', () => {
   confirmLeaveYes?.addEventListener('click', showStep2);
   returnToExam?.addEventListener('click', hideAll);
   agreeExit?.addEventListener('click', () => { exitFullscreen(); window.location.href = 'index.html'; });
+  
+  // Countdown wiring - uses admin-set duration from localStorage (key: 'examDuration')
+  const EXAM_DURATION_KEY = 'examDuration';
+  let countdownTimer = null;
+  let remainingMs = 0;
+  
+  const readDurationMinutes = () => {
+    try { const v = Number(localStorage.getItem(EXAM_DURATION_KEY) || 0); return v > 0 ? v : 60; } catch { return 60; }
+  };
+  const formatHMS = (ms) => {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const hh = Math.floor(total / 3600);
+    const mm = Math.floor((total % 3600) / 60);
+    const ss = total % 60;
+    const p2 = (n) => String(n).padStart(2, '0');
+    return `${p2(hh)}:${p2(mm)}:${p2(ss)}`;
+  };
+  const updateCountdownView = () => {
+    if (countdownEl) countdownEl.textContent = formatHMS(remainingMs);
+  };
+  const stopCountdown = () => { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } };
+  const startCountdown = () => {
+    stopCountdown();
+    const minutes = readDurationMinutes();
+    remainingMs = minutes * 60 * 1000;
+    updateCountdownView();
+    countdownTimer = setInterval(() => {
+      remainingMs -= 1000;
+      if (remainingMs <= 0) {
+        remainingMs = 0;
+        updateCountdownView();
+        stopCountdown();
+        // Auto-finish the exam
+        showStep1();
+        return;
+      }
+      updateCountdownView();
+    }, 1000);
+  };
+  // Initialize countdown display from saved duration on load
+  (function initCountdown() {
+    remainingMs = readDurationMinutes() * 60 * 1000;
+    updateCountdownView();
+  })();
+  // Start countdown when exam actually starts (after overlays hidden)
+  examStart?.addEventListener('click', startCountdown);
 });
 
 

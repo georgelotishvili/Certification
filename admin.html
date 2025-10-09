@@ -60,7 +60,20 @@
     </div>
 
     <main>
-      
+      <section id="exam-settings" class="exam-settings" style="display:none;">
+        <div class="exam-topbar">
+          <div class="duration-group">
+            <label for="examDuration" class="duration-label">ხანგრძლივობა (წუთი)</label>
+            <input id="examDuration" class="duration-input" type="number" min="1" max="300" value="60" />
+            <button id="saveExamDuration" class="duration-save">შენახვა</button>
+          </div>
+          <div id="durationFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
+        </div>
+
+        <div class="exam-content">
+          <!-- აქ შემდეგ დავამატებთ სხვა მარეგულირებელ ელემენტებს -->
+        </div>
+      </section>
     </main>
 
     <footer>

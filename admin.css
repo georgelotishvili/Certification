@@ -370,6 +370,103 @@ main {
   border: 2px solid #e5e5e5;
 }
 
+/* Exam settings */
+.exam-settings { 
+  width: 100%;
+  max-width: 1200px;
+}
+
+.exam-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.7);
+  margin: 20px;
+}
+
+.duration-group {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.duration-label {
+  font-weight: 600;
+  color: var(--brand-dark);
+}
+
+.duration-input {
+  height: 40px;
+  width: 120px;
+  padding: 0 12px;
+  border: 2px solid #e5e5e5;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--brand-dark);
+  font-weight: 600;
+  transition: all .2s ease;
+}
+
+.duration-input:focus {
+  outline: none;
+  border-color: #9500FF;
+  box-shadow: 0 0 0 3px rgba(149,0,255,0.1);
+}
+
+.duration-save {
+  height: 40px;
+  padding: 0 18px;
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  color: #fff;
+  border: 2px solid #166534;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .2s ease;
+  box-shadow: 0 2px 6px rgba(22,163,74,0.3);
+}
+
+.duration-save:hover {
+  background: linear-gradient(135deg, #15803d 0%, #14532d 100%);
+  border-color: #14532d;
+  transform: translateY(-2px);
+}
+
+.duration-flash {
+  margin-left: auto;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  border: 2px solid #86efac;
+  border-radius: 6px;
+  color: #166534;
+  font-weight: 600;
+}
+
+.exam-content {
+  margin: 20px;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  min-height: 200px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+@media (max-width: 768px) {
+  .exam-topbar { 
+    flex-direction: column; 
+    align-items: stretch; 
+  }
+  .duration-flash { 
+    margin-left: 0; 
+  }
+}
+
 footer {
   background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
   color: #e5e7eb;
