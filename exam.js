@@ -34,6 +34,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const ctTitle = document.querySelector('.ct-section.ct-title');
   const countdownEl = document.getElementById('examCountdown');
   const rightDateTime = document.getElementById('rightDateTime');
+  const cmHeader = document.querySelector('.cm-header');
+  const cmContent = document.querySelector('.cm-content');
+  const cmDotsWrap = document.querySelector('.cm-dots');
+  const prevBtn = document.querySelector('.cm-nav.prev');
+  const nextBtn = document.querySelector('.cm-nav.next');
+  const qNumEl = document.querySelector('.question-number-num');
+  const blockNumEl = document.querySelector('.block-number-num');
 
   const DEFAULT_TITLE_TEXT = '';
   const getCurrentUser = () => {
@@ -87,6 +94,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!beforeUnloadHandler) return;
     window.removeEventListener('beforeunload', beforeUnloadHandler);
     beforeUnloadHandler = null;
+  };
+
+  // Navigate out safely without triggering native leave-confirm
+  const safeNavigateHome = () => {
+    mustStayFullscreen = false;
+    disableBeforeUnload();
+    focusTrapOff();
+    unlockKeys();
+    try {
+      if (document.fullscreenElement) {
+        (document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen)?.call(document);
+      }
+    } catch {}
+    window.location.href = 'index.html';
   };
 
   const getVisibleFocusable = () => Array.from(document.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])')).filter(el => !el.hasAttribute('disabled') && el.offsetParent !== null && !el.closest('[hidden]'));
@@ -184,9 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Close button on gate: return to index without entering exam
-  gateClose?.addEventListener('click', () => {
-    window.location.href = 'index.html';
-  });
+  gateClose?.addEventListener('click', safeNavigateHome);
 
   // Dev bypasses
   // 1) Password gate bypass: fill correct password and proceed
@@ -212,11 +231,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (codeOverlay) codeOverlay.style.display = 'none';
       enterFullscreen();
       if (examStart) examStart.disabled = false;
+      // Auto-start the exam to avoid any intermediate state issues
+      setTimeout(() => { try { examStart?.click(); } catch {} }, 0);
       examStart?.focus();
       updateUserHeader();
     } catch {
-      // If no current user, bounce to home
-      window.location.href = 'index.html';
+      // Stay on the code gate and show error instead of navigating away
+      if (codeError) codeError.hidden = false;
+      codeInput?.focus();
     }
   });
 
@@ -225,16 +247,14 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const raw = localStorage.getItem('currentUser');
       const current = raw ? JSON.parse(raw) : null;
-      if (!current?.code) { window.location.href = 'index.html'; return; }
+      if (!current?.code) { safeNavigateHome(); return; }
       if (codeInput) codeInput.value = current.code;
       codeForm?.dispatchEvent(new Event('submit', { cancelable: true }));
-    } catch { window.location.href = 'index.html'; }
+    } catch { safeNavigateHome(); }
   });
 
   // Close button on code gate: return to index
-  codeGateClose?.addEventListener('click', () => {
-    window.location.href = 'index.html';
-  });
+  codeGateClose?.addEventListener('click', safeNavigateHome);
 
   // Actions
   examStart?.addEventListener('click', hideAll);
@@ -242,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
   confirmLeaveNo?.addEventListener('click', hideAll);
   confirmLeaveYes?.addEventListener('click', showStep2);
   returnToExam?.addEventListener('click', hideAll);
-  agreeExit?.addEventListener('click', () => { exitFullscreen(); window.location.href = 'index.html'; });
+  agreeExit?.addEventListener('click', () => { exitFullscreen(); safeNavigateHome(); });
   
   // Countdown wiring - uses admin-set duration from localStorage (key: 'examDuration')
   const EXAM_DURATION_KEY = 'examDuration';
@@ -282,6 +302,231 @@ document.addEventListener('DOMContentLoaded', () => {
       updateCountdownView();
     }, 1000);
   };
+
+  // ===================== Exam Data Loading & Selection =====================
+  const BLOCKS_KEY = 'examBlocks_v1';
+  // Runtime state for exam
+  let blocks = [];
+  let selectedByBlock = []; // array of arrays of question indices chosen (in admin order)
+  let flatQuestions = []; // flattened questions with blockIndex, localIndex
+  let currentFlatIndex = 0; // global question index X (0-based)
+  let currentBlockIndex = 0; // A (0-based)
+  let answersState = new Map(); // key: questionId -> { chosenAnswerId, correct }
+  let autoNextTimer = null;
+
+  const loadBlocks = () => {
+    try {
+      const raw = localStorage.getItem(BLOCKS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  };
+
+  // Pick exactly qty questions per block randomly, but keep admin order among selected
+  const pickPerBlock = (b) => {
+    const allQs = Array.isArray(b.questions) ? b.questions : [];
+    const qty = Math.max(0, Math.min(Number(b.qty) || 0, allQs.length));
+    if (qty === 0) return [];
+    // random unique indices
+    const indices = Array.from({length: allQs.length}, (_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = indices[i]; indices[i] = indices[j]; indices[j] = t;
+    }
+    const pickedSet = new Set(indices.slice(0, qty));
+    // keep admin order among selected
+    const ordered = [];
+    for (let i = 0; i < allQs.length; i++) {
+      if (pickedSet.has(i)) ordered.push(i);
+      if (ordered.length === qty) break;
+    }
+    return ordered;
+  };
+
+  const rebuildFlat = () => {
+    flatQuestions = [];
+    selectedByBlock.forEach((idxs, bi) => {
+      const b = blocks[bi];
+      const allQs = Array.isArray(b.questions) ? b.questions : [];
+      idxs.forEach((qi) => {
+        const q = allQs[qi];
+        if (q) flatQuestions.push({ blockIndex: bi, localIndex: qi, question: q });
+      });
+    });
+  };
+
+  const updateIndicators = () => {
+    // Left: question X/Y
+    const X = flatQuestions.length ? (currentFlatIndex + 1) : 0;
+    const Y = flatQuestions.length;
+    if (qNumEl) qNumEl.textContent = `${X}/${Y}`;
+    // Right: block A/B (visible blocks = all blocks with at least 1 selected question)
+    const visibleBlocks = selectedByBlock.filter(arr => (arr||[]).length > 0).length || 0;
+    const A = (currentBlockIndex + 1);
+    if (blockNumEl) blockNumEl.textContent = `${A}/${visibleBlocks}`;
+  };
+
+  const setHeaderText = () => {
+    const fq = flatQuestions[currentFlatIndex];
+    const bNum = currentBlockIndex + 1;
+    const code = fq?.question?.code ? String(fq.question.code) : '';
+    if (cmHeader) cmHeader.textContent = '';
+    // Build: left block number, center text, right code
+    const left = document.createElement('div'); left.textContent = `ბლოკი ${bNum}`;
+    const center = document.createElement('div'); center.textContent = 'შეარჩიეთ და მონიშნეთ სწორი პასუხი';
+    const right = document.createElement('div'); right.textContent = code;
+    left.style.justifySelf = 'start';
+    center.style.justifySelf = 'center';
+    right.style.justifySelf = 'end';
+    const wrap = document.createElement('div');
+    wrap.style.display = 'grid';
+    wrap.style.gridTemplateColumns = '1fr 1fr 1fr';
+    wrap.append(left, center, right);
+    if (cmHeader) { cmHeader.innerHTML = ''; cmHeader.appendChild(wrap); }
+  };
+
+  const escapeHtml = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const clearAutoNext = () => { if (autoNextTimer) { clearTimeout(autoNextTimer); autoNextTimer = null; } };
+
+  const applyAnswerStateStyles = () => {
+    const fq = flatQuestions[currentFlatIndex];
+    const q = fq?.question; if (!q) return;
+    const state = answersState.get(q.id);
+    if (!state) return;
+    const isCorrect = state.correct;
+    cmContent?.querySelectorAll('.bullet').forEach(b => {
+      b.style.pointerEvents = 'none';
+      const id = b.getAttribute('data-answer-id');
+      if (id === state.chosenAnswerId) {
+        b.style.borderColor = isCorrect ? '#16a34a' : '#dc2626';
+        b.style.background = isCorrect ? '#16a34a' : '#dc2626';
+      }
+    });
+    renderDotsForCurrentBlock();
+  };
+
+  const selectAnswer = (answerId) => {
+    clearAutoNext();
+    const fq = flatQuestions[currentFlatIndex];
+    const q = fq?.question; if (!q) return;
+    // only first selection allowed
+    if (answersState.has(q.id)) return;
+    const correct = String(q.correctAnswerId || '') === String(answerId || '');
+    answersState.set(q.id, { chosenAnswerId: String(answerId || ''), correct });
+    applyAnswerStateStyles();
+    // Auto move disabled: navigation only via arrows or dots
+  };
+
+  const renderCurrentQuestion = () => {
+    if (!cmContent) return;
+    const fq = flatQuestions[currentFlatIndex];
+    cmContent.innerHTML = '';
+    if (!fq) return;
+    setHeaderText();
+    const q = fq.question;
+    const answers = Array.isArray(q.answers) ? q.answers : [];
+    // Question
+    const qEl = document.createElement('div');
+    qEl.className = 'question';
+    qEl.innerHTML = `<div class="question-text">${escapeHtml(String(q.text || ''))}</div>`;
+    cmContent.appendChild(qEl);
+    // Answers A-D, keep admin order
+    const labels = ['A','B','C','D'];
+    answers.slice(0,4).forEach((a, idx) => {
+      const row = document.createElement('div');
+      row.className = ['answerA','answerb','answerc','answerd'][idx] || 'answerA';
+      row.innerHTML = `
+        <div class="mark"><div class="bullet" data-answer-id="${String(a.id)}"></div></div>
+        <div class="code">${labels[idx] || ''}</div>
+        <div class="text">${escapeHtml(String(a.text || ''))}</div>
+      `;
+      cmContent.appendChild(row);
+    });
+    // Wire clicks
+    cmContent.querySelectorAll('.bullet').forEach(b => {
+      b.addEventListener('click', () => {
+        const answerId = b.getAttribute('data-answer-id');
+        selectAnswer(answerId);
+      });
+    });
+    applyAnswerStateStyles();
+    updateIndicators();
+  };
+
+  const gotoQuestionIndex = (idx) => {
+    clearAutoNext();
+    if (idx < 0 || idx >= flatQuestions.length) return;
+    const nextBlock = flatQuestions[idx].blockIndex;
+    if (nextBlock !== currentBlockIndex && !areAllQuestionsAnsweredInBlock(currentBlockIndex)) {
+      alert('გთხოვთ უპასუხოთ ყველა კითხვას');
+      return;
+    }
+    currentFlatIndex = idx;
+    currentBlockIndex = nextBlock;
+    renderCurrentQuestion();
+    renderDotsForCurrentBlock();
+    updateNavButtons();
+  };
+
+  const gotoPrevQuestion = () => gotoQuestionIndex(currentFlatIndex - 1);
+  const gotoNextQuestion = () => gotoQuestionIndex(currentFlatIndex + 1);
+
+  const areAllQuestionsAnsweredInBlock = (bi) => {
+    const idxs = selectedByBlock[bi] || [];
+    const b = blocks[bi];
+    const allQs = Array.isArray(b?.questions) ? b.questions : [];
+    return idxs.every(qi => !!answersState.get(allQs[qi]?.id));
+  };
+
+  const renderDotsForCurrentBlock = () => {
+    if (!cmDotsWrap) return;
+    cmDotsWrap.innerHTML = '';
+    const bi = currentBlockIndex;
+    const idxs = selectedByBlock[bi] || [];
+    const b = blocks[bi];
+    const allQs = Array.isArray(b?.questions) ? b.questions : [];
+    idxs.forEach((qi) => {
+      const span = document.createElement('span');
+      span.className = 'cm-dot';
+      const globalIdx = flatQuestions.findIndex(f => f.blockIndex === bi && f.localIndex === qi);
+      if (globalIdx === currentFlatIndex) span.classList.add('active');
+      const st = answersState.get(allQs[qi]?.id);
+      if (st) {
+        if (st.correct) { span.style.background = '#16a34a'; span.style.borderColor = '#15803d'; }
+        else { span.style.background = '#dc2626'; span.style.borderColor = '#991b1b'; }
+      }
+      span.addEventListener('click', () => { gotoQuestionIndex(globalIdx); });
+      cmDotsWrap.appendChild(span);
+    });
+  };
+
+  const updateNavButtons = () => {
+    if (prevBtn) prevBtn.disabled = currentFlatIndex <= 0;
+    if (nextBtn) nextBtn.disabled = currentFlatIndex >= flatQuestions.length - 1;
+  };
+
+  const initExamData = () => {
+    blocks = loadBlocks();
+    selectedByBlock = blocks.map(pickPerBlock);
+    flatQuestions = [];
+    answersState = new Map();
+    rebuildFlat();
+    currentFlatIndex = 0;
+    currentBlockIndex = flatQuestions.length ? flatQuestions[0].blockIndex : 0;
+    renderCurrentQuestion();
+    renderDotsForCurrentBlock();
+    updateNavButtons();
+    updateIndicators();
+  };
+
+  // Register nav handlers and start exam data
+  prevBtn?.addEventListener('click', gotoPrevQuestion);
+  nextBtn?.addEventListener('click', gotoNextQuestion);
+  examStart?.addEventListener('click', initExamData);
   // Initialize countdown display from saved duration on load
   (function initCountdown() {
     remainingMs = readDurationMinutes() * 60 * 1000;

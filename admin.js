@@ -80,6 +80,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Blocks grid data + rendering
   const blocksGrid = document.querySelector('.exam-blocks-grid');
   const BLOCKS_KEY = 'examBlocks_v1';
+  const blocksCountEl = document.getElementById('adminBlocksCount');
+  const questionsCountEl = document.getElementById('adminQuestionsCount');
   const generateId = () => `${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
   const createDefaultAnswers = () => Array.from({ length: 4 }, () => ({ id: generateId(), text: '' }));
   const generateQuestionCode = () => String(Math.floor(10000 + Math.random() * 90000));
@@ -120,6 +122,19 @@ document.addEventListener('DOMContentLoaded', () => {
     return (isFinite(max) ? max : 0) + 1;
   };
 
+  const updateStats = () => {
+    if (!blocksCountEl || !questionsCountEl) return;
+    const blocksCount = Array.isArray(blocksData) ? blocksData.length : 0;
+    // Sum of questions that will be used in exam: sum(min(qty, availableQuestions)) per block
+    const questionsCount = (Array.isArray(blocksData) ? blocksData : []).reduce((sum, b) => {
+      const available = Array.isArray(b?.questions) ? b.questions.length : 0;
+      const qty = Math.max(0, Number(b?.qty) || 0);
+      return sum + Math.min(qty, available);
+    }, 0);
+    blocksCountEl.textContent = String(blocksCount);
+    questionsCountEl.textContent = String(questionsCount);
+  };
+
   const renderBlocks = () => {
     if (!blocksGrid) return;
     // Capture currently open blocks/questions to preserve UI state after re-render
@@ -142,6 +157,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="head-label">ბლოკი</span>
           <input class="head-number" type="number" inputmode="numeric" min="1" step="1" value="${b.number ?? ''}" aria-label="ბლოკის ნომერი" />
           <input class="head-name" type="text" placeholder="ბლოკის სახელი" value="${(b.name || '').replace(/"/g,'&quot;')}" aria-label="ბლოკის სახელი" />
+          <span class="head-qty-label">რაოდენობა</span>
+          <input class="head-qty" type="number" inputmode="numeric" min="0" step="1" value="${typeof b.qty === 'number' ? b.qty : ''}" aria-label="რაოდენობა" />
           <button class="head-delete" type="button" aria-label="ბლოკის წაშლა" title="წაშლა">×</button>
           <button class="head-toggle" type="button" aria-expanded="false">▾</button>
           <span class="head-count" title="კითხვების რაოდენობა">${Array.isArray(b.questions) ? b.questions.length : 0}</span>
@@ -191,9 +208,8 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
       blocksGrid.appendChild(card);
-      // Restore open state or auto-open if block has no questions
-      const hasQuestions = Array.isArray(b.questions) && b.questions.length > 0;
-      if (prevOpenBlockIds.includes(b.id) || !hasQuestions) setCardOpen(card, true);
+      // Restore previously open blocks only (do not auto-open empty ones)
+      if (prevOpenBlockIds.includes(b.id)) setCardOpen(card, true);
       // Restore open questions within this block
       const qCards = card.querySelectorAll('.question-card');
       qCards.forEach(qc => { const qid = qc.dataset.questionId; if (prevOpenQuestionIds.includes(qid)) setQuestionOpen(qc, true); });
@@ -206,6 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
     addTile.setAttribute('aria-label', 'ბლოკის დამატება');
     addTile.innerHTML = '<span class="add-icon" aria-hidden="true">+</span><span class="add-text">ბლოკის დამატება</span>';
     blocksGrid.appendChild(addTile);
+    updateStats();
   };
 
   const setCardOpen = (card, open) => {
@@ -216,6 +233,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (q) {
       q.setAttribute('aria-hidden', open ? 'false' : 'true');
       // display სტილს აღარ ვცვლით, CSS transition-ს მივენდობით
+    }
+    // When closing a block, reset any manually resized textarea heights inside
+    if (!open) {
+      const textareas = card.querySelectorAll('.q-text, .a-text');
+      textareas.forEach(t => { try { t.style.height = ''; } catch {} });
     }
     if (btn) {
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -231,6 +253,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (details) {
       details.setAttribute('aria-hidden', open ? 'false' : 'true');
       // CSS transition მართავს გახსნა/დაკეცვას
+    }
+    // When closing a question, reset textarea heights back to default (min-height)
+    if (!open) {
+      const textareas = qCard.querySelectorAll('.q-text, .a-text');
+      textareas.forEach(t => { try { t.style.height = ''; } catch {} });
     }
     if (btn) {
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -249,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
     saveBlocks(blocksData);
     renderBlocks();
     const card = blocksGrid?.querySelector?.(`.block-card[data-block-id="${id}"]`);
-    if (card) { setCardOpen(card, true); card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   };
 
   // Delegated events
@@ -425,6 +452,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    if (target.classList.contains('head-qty')) {
+      const val = parseInt(String(target.value || '').trim(), 10);
+      blocksData[idx].qty = (!isNaN(val) && val >= 0) ? val : 0;
+      saveBlocks(blocksData);
+      renderBlocks();
+      return;
+    }
+
     if (target.classList.contains('q-text') && target.tagName !== 'TEXTAREA') {
       const qEl = target.closest?.('.question-card');
       const qid = qEl?.dataset.questionId;
@@ -464,6 +499,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const id = card.dataset.blockId;
     const idx = blocksData.findIndex(b => b.id === id);
     if (idx === -1) return;
+    if (target.classList.contains('head-number')) {
+      const val = parseInt(String(target.value || '').trim(), 10);
+      if (!isNaN(val) && val > 0) {
+        blocksData[idx].number = val;
+        saveBlocks(blocksData);
+        renderBlocks();
+      }
+    }
+    if (target.classList.contains('head-name')) {
+      const val = String(target.value || '').trim();
+      blocksData[idx].name = val;
+      saveBlocks(blocksData);
+      // name change doesn't affect stats, no rerender required
+    }
+    if (target.classList.contains('head-qty')) {
+      const val = parseInt(String(target.value || '').trim(), 10);
+      blocksData[idx].qty = (!isNaN(val) && val >= 0) ? val : 0;
+      saveBlocks(blocksData);
+      // Update header counters immediately
+      updateStats();
+    }
     if (target.classList.contains('q-text')) {
       const qEl = target.closest?.('.question-card');
       const qid = qEl?.dataset.questionId;

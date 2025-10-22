@@ -111,6 +111,44 @@ header {
         transform: translateY(-1px);
       }
 
+  /* Exam dropdown (desktop) */
+  .nav-item { position: relative; }
+  .nav-item .exam-trigger { display: inline-flex; align-items: center; gap: 6px; }
+  .nav-item .exam-trigger::after { content: '▾'; font-size: 12px; opacity: .8; }
+
+  .dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    min-width: 220px;
+    background: linear-gradient(180deg, #111827 0%, #1f2937 100%);
+    border: 2px solid #334155;
+    border-radius: 6px;
+    box-shadow: 0 10px 24px rgba(0,0,0,.25);
+    padding: 6px;
+    display: none;
+    z-index: 150;
+  }
+  .dropdown.show { display: block; }
+
+  .dropdown-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 10px 12px;
+    color: #e5e7eb;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .dropdown-item:hover {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+  }
+
   .burger {
     position: absolute;
     right: 10%;
@@ -289,6 +327,42 @@ header {
       padding-left: 24px;
       color: #ffffff;
     }
+
+  /* Drawer submenu (mobile) */
+  .drawer-item { display: block; }
+  .drawer-item > a {
+    display: block;
+    color: #e5e7eb;
+    padding: 14px 16px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+  .drawer-item > a:hover {
+    background: rgba(255, 255, 255, 0.1);
+    padding-left: 24px;
+    color: #ffffff;
+  }
+  .drawer-submenu {
+    padding: 6px 0 8px;
+    background: rgba(255,255,255,0.05);
+  }
+  .drawer-submenu-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    color: #e5e7eb;
+    padding: 10px 22px 10px 28px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .drawer-submenu-item:hover {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+  }
+  /* კონსისტენტური ზოლი drawer-ში, რადგან ახლა div-ებიცაა */
+  .drawer-nav > * + * { border-top: 1px solid rgba(255, 255, 255, 0.1); }
 
   .drawer-auth-banner {
     background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);

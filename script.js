@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const burger = document.querySelector('.burger');
   const overlay = document.querySelector('.overlay');
   const drawerClose = document.querySelector('.drawer-close');
-  const drawerLinks = document.querySelectorAll('.drawer-nav a');
+  const drawerLinks = Array.from(document.querySelectorAll('.drawer-nav a')).filter(a => !a.classList.contains('drawer-exam-trigger'));
   const on = (el, evt, handler) => el && el.addEventListener(evt, handler);
   const setMenu = (open) => {
     body.classList.toggle('menu-open', open);
@@ -228,16 +228,93 @@ document.addEventListener('DOMContentLoaded', () => {
   on(loginOption, 'click', showLogin);
   on(registerOption, 'click', showRegister);
   on(forgotPasswordLink, 'click', (e) => { e.preventDefault(); showForgotPassword(); });
-  // Open exam: navigate to dedicated page
-  const examLinks = Array.from(document.querySelectorAll('.nav a, .drawer-nav a'))
-    .filter(a => (a.textContent || '').trim() === 'გამოცდა');
-  examLinks.forEach(link => on(link, 'click', (e) => {
-    const href = link.getAttribute('href');
-    if (href && href !== '#') return; // already points to exam.html
+  // Exam dropdown/submenu (desktop + mobile)
+  const navExam = document.querySelector('.nav-exam');
+  const navExamTrigger = document.querySelector('.nav .exam-trigger');
+  const navDropdown = document.querySelector('.nav .dropdown');
+
+  const drawerExam = document.querySelector('.drawer-exam');
+  const drawerExamTrigger = document.querySelector('.drawer-exam-trigger');
+  const drawerSubmenu = document.querySelector('.drawer-submenu');
+
+  const closeNavDropdown = () => {
+    if (!navDropdown) return;
+    navDropdown.classList.remove('show');
+    navDropdown.setAttribute('aria-hidden', 'true');
+    if (navExamTrigger) navExamTrigger.setAttribute('aria-expanded', 'false');
+  };
+
+  const onDocClickCloseNav = (e) => {
+    if (!navExam) return;
+    if (navExam.contains(e.target)) return;
+    closeNavDropdown();
+    document.removeEventListener('click', onDocClickCloseNav);
+  };
+
+  on(navExamTrigger, 'click', (e) => {
     e.preventDefault();
-    if (link.closest('.drawer-nav')) closeMenu();
+    if (!navDropdown) return;
+    const willOpen = !navDropdown.classList.contains('show');
+    if (willOpen) {
+      navDropdown.classList.add('show');
+      navDropdown.setAttribute('aria-hidden', 'false');
+      navExamTrigger.setAttribute('aria-expanded', 'true');
+      setTimeout(() => document.addEventListener('click', onDocClickCloseNav), 0);
+    } else {
+      closeNavDropdown();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeNavDropdown();
+      if (drawerSubmenu && !drawerSubmenu.hasAttribute('hidden')) {
+        drawerSubmenu.setAttribute('hidden', '');
+        if (drawerExamTrigger) drawerExamTrigger.setAttribute('aria-expanded', 'false');
+      }
+    }
+  });
+
+  on(drawerExamTrigger, 'click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!drawerSubmenu) return;
+    const isHidden = drawerSubmenu.hasAttribute('hidden');
+    if (isHidden) {
+      drawerSubmenu.removeAttribute('hidden');
+      drawerExamTrigger.setAttribute('aria-expanded', 'true');
+    } else {
+      drawerSubmenu.setAttribute('hidden', '');
+      drawerExamTrigger.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  const goToExam = () => {
+    closeNavDropdown();
+    if (drawerSubmenu && !drawerSubmenu.hasAttribute('hidden')) {
+      drawerSubmenu.setAttribute('hidden', '');
+      if (drawerExamTrigger) drawerExamTrigger.setAttribute('aria-expanded', 'false');
+    }
+    if (document.body.classList.contains('menu-open')) closeMenu();
     window.location.href = 'exam.html';
-  }));
+  };
+
+  const goToReview = () => {
+    closeNavDropdown();
+    if (drawerSubmenu && !drawerSubmenu.hasAttribute('hidden')) {
+      drawerSubmenu.setAttribute('hidden', '');
+      if (drawerExamTrigger) drawerExamTrigger.setAttribute('aria-expanded', 'false');
+    }
+    alert('პროექტის განხილვა — მალე დაემატება');
+  };
+
+  document
+    .querySelectorAll('.dropdown-item.theoretical, .drawer-submenu-item.theoretical')
+    .forEach(el => on(el, 'click', goToExam));
+
+  document
+    .querySelectorAll('.dropdown-item.review, .drawer-submenu-item.review')
+    .forEach(el => on(el, 'click', goToReview));
 
   // (Removed) inline overlay fullscreen listeners
 
