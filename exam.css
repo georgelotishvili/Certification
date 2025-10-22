@@ -559,6 +559,53 @@ body {
     z-index: 8;
   }
 
+  /* Prestart blur overlay: shown until exam starts; only Start/Finish remain clickable */
+  .prestart-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(6px);
+    z-index: 7;
+  }
+
+  .results-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    z-index: 8;
+  }
+
+  .exam-dialog.results {
+    max-height: 80vh;
+    overflow: auto;
+    z-index: 9;
+  }
+
+  .results-list {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 12px;
+    text-align: left;
+  }
+
+  .result-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    padding: 10px 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    background: #ffffff;
+  }
+
+  .result-label { font-weight: 700; color: #111827; }
+  .result-value { font-weight: 800; }
+
+  .pct-red { color: #dc2626; }
+  .pct-yellow { color: #d97706; }
+  .pct-green { color: #16a34a; }
+
 .field { 
   margin: 12px 0; 
 }
@@ -740,16 +787,18 @@ body {
   display: flex; 
   gap: 12px; 
   align-items: center; 
+  z-index: 9; /* Keep above prestart overlay */
 }
 
   .exam-bottom-actions.in-center { 
-    position: static; 
+    position: relative; /* make it stack above overlay while staying in flow */
     transform: none; 
     left: auto; 
     bottom: auto; 
     justify-content: center; 
     height: 100%; 
     align-items: center; 
+    z-index: 9;
   }
 
   .btn-wide { 

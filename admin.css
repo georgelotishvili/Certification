@@ -598,8 +598,8 @@ main {
 
 .head-count { display: inline-block; min-width: 28px; padding: 2px 6px; text-align: center; border-radius: 6px; border: 2px solid #c4b5fd; background: #f5f3ff; color: #6d28d9; font-weight: 800; }
 
-.block-questions { display: block; padding: 0 12px; border-top: 2px solid #bfdbfe; background: linear-gradient(180deg, #eff6ff 0%, #e0f2fe 100%); min-height: 0; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; max-height: 0; overflow: hidden; opacity: 0; transition: max-height .28s ease, opacity .28s ease, padding-top .28s ease, padding-bottom .28s ease; }
-.block-card.open .block-questions { max-height: 1000px; opacity: 1; padding: 10px 12px; }
+.block-questions { display: block; padding: 0 12px; border-top: 2px solid #bfdbfe; background: linear-gradient(180deg, #eff6ff 0%, #e0f2fe 100%); min-height: 0; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; max-height: 0; overflow: hidden; opacity: 0; transition: opacity .28s ease, padding-top .28s ease, padding-bottom .28s ease; }
+.block-card.open .block-questions { max-height: none; opacity: 1; padding: 10px 12px; overflow: visible; }
 
 .q-add-tile { height: 56px; width: 100%; margin-top: 8px; }
 
@@ -621,8 +621,8 @@ main {
 .q-code { color: #065f46; font-weight: 700; font-size: 12px; align-self: end; margin-bottom: 2px; }
 .q-order { display: inline-flex; gap: 6px; }
 .q-toggle { width: 32px; height: 32px; border-radius: 6px; border: 2px solid #86efac; background: #fff; cursor: pointer; font-weight: 800; }
-.q-details { padding-top: 0; max-height: 0; overflow: hidden; opacity: 0; transition: max-height .25s ease, opacity .25s ease, padding-top .25s ease; }
-.question-card.open .q-details { padding-top: 4px; max-height: 1000px; opacity: 1; }
+.q-details { padding-top: 0; max-height: 0; overflow: hidden; opacity: 0; transition: opacity .25s ease, padding-top .25s ease; }
+.question-card.open .q-details { padding-top: 4px; max-height: none; opacity: 1; overflow: visible; }
 .q-answers { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .answer-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
 .a-order { display: inline-flex; gap: 6px; }

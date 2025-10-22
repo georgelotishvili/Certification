@@ -128,6 +128,7 @@
           </aside>
         </div>
         
+        <div class="prestart-overlay" id="prestartOverlay" style="display:none;"></div>
         <div class="confirm-overlay" id="confirmOverlay" style="display:none;"></div>
         <div class="exam-dialog" id="examConfirm" hidden>
           <p class="exam-text">ნამდვილად გსურთ გამოცდის დასრულება?</p>
@@ -143,6 +144,15 @@
           <div class="exam-actions">
             <button class="btn primary" id="agreeExit" type="button">ვეთანხმები</button>
             <button class="btn" id="returnToExam" type="button">გამოცდაზე დაბრუნება</button>
+          </div>
+        </div>
+
+        <div class="results-overlay" id="resultsOverlay" style="display:none;"></div>
+        <div class="exam-dialog results" id="examResults" hidden>
+          <p class="exam-text">გამოცდის შედეგები</p>
+          <div class="results-list" id="resultsList"></div>
+          <div class="exam-actions">
+            <button class="btn primary" id="resultsClose" type="button">დახურვა</button>
           </div>
         </div>
       </div>

@@ -27,6 +27,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const examFinal = document.getElementById('examFinal');
   const confirmOverlay = document.getElementById('confirmOverlay');
   const finalOverlay = document.getElementById('finalOverlay');
+  const prestartOverlay = document.getElementById('prestartOverlay');
+  const resultsOverlay = document.getElementById('resultsOverlay');
+  const examResults = document.getElementById('examResults');
+  const resultsList = document.getElementById('resultsList');
+  const resultsClose = document.getElementById('resultsClose');
   const confirmLeaveYes = document.getElementById('confirmLeaveYes');
   const confirmLeaveNo = document.getElementById('confirmLeaveNo');
   const agreeExit = document.getElementById('agreeExit');
@@ -34,6 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const ctTitle = document.querySelector('.ct-section.ct-title');
   const countdownEl = document.getElementById('examCountdown');
   const rightDateTime = document.getElementById('rightDateTime');
+  // Disable Finish until exam actually starts
+  try { if (examFinish) examFinish.disabled = true; } catch {}
   const cmHeader = document.querySelector('.cm-header');
   const cmContent = document.querySelector('.cm-content');
   const cmDotsWrap = document.querySelector('.cm-dots');
@@ -171,6 +178,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(updateRightDateTime, 1000 * 30);
   // Gate visible initially
   if (gateInput) gateInput.focus();
+  // Before exam start, show blur overlay and keep only Start/Finish usable
+  try { if (prestartOverlay) prestartOverlay.style.display = 'block'; } catch {}
 
   // Intercept keys
   document.addEventListener('keydown', (e) => {
@@ -231,8 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (codeOverlay) codeOverlay.style.display = 'none';
       enterFullscreen();
       if (examStart) examStart.disabled = false;
-      // Auto-start the exam to avoid any intermediate state issues
-      setTimeout(() => { try { examStart?.click(); } catch {} }, 0);
+      // Manual start required: do not auto-click Start
       examStart?.focus();
       updateUserHeader();
     } catch {
@@ -295,8 +303,8 @@ document.addEventListener('DOMContentLoaded', () => {
         remainingMs = 0;
         updateCountdownView();
         stopCountdown();
-        // Auto-finish the exam
-        showStep1();
+        // Time is up → show results
+        showResults();
         return;
       }
       updateCountdownView();
@@ -313,6 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentBlockIndex = 0; // A (0-based)
   let answersState = new Map(); // key: questionId -> { chosenAnswerId, correct }
   let autoNextTimer = null;
+  let examStarted = false;
 
   const loadBlocks = () => {
     try {
@@ -410,6 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const selectAnswer = (answerId) => {
+    if (!examStarted) return; // block interactions until started
     clearAutoNext();
     const fq = flatQuestions[currentFlatIndex];
     const q = fq?.question; if (!q) return;
@@ -473,7 +483,17 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const gotoPrevQuestion = () => gotoQuestionIndex(currentFlatIndex - 1);
-  const gotoNextQuestion = () => gotoQuestionIndex(currentFlatIndex + 1);
+  const gotoNextQuestion = () => {
+    if (currentFlatIndex < flatQuestions.length - 1) {
+      gotoQuestionIndex(currentFlatIndex + 1);
+      return;
+    }
+    // At the end: finish only if all questions are answered
+    const allAnswered = flatQuestions.every(fq => !!answersState.get(fq.question?.id));
+    if (allAnswered) {
+      showResults();
+    }
+  };
 
   const areAllQuestionsAnsweredInBlock = (bi) => {
     const idxs = selectedByBlock[bi] || [];
@@ -506,7 +526,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const updateNavButtons = () => {
     if (prevBtn) prevBtn.disabled = currentFlatIndex <= 0;
-    if (nextBtn) nextBtn.disabled = currentFlatIndex >= flatQuestions.length - 1;
+    // Keep Next enabled even at the last question to allow finishing via Next
+    if (nextBtn) nextBtn.disabled = flatQuestions.length === 0;
+  };
+
+  // ===================== Results Rendering =====================
+  const showResults = () => {
+    try {
+      if (!resultsOverlay || !examResults || !resultsList) return;
+      resultsList.innerHTML = '';
+      selectedByBlock.forEach((idxs, bi) => {
+        if (!idxs.length) return;
+        const b = blocks[bi];
+        const allQs = Array.isArray(b?.questions) ? b.questions : [];
+        let correctCount = 0;
+        idxs.forEach(qi => {
+          const q = allQs[qi];
+          const st = q ? answersState.get(q.id) : null;
+          if (st?.correct) correctCount++;
+        });
+        const total = idxs.length || 1;
+        const pct = Math.round((correctCount / total) * 100);
+        const row = document.createElement('div');
+        row.className = 'result-row';
+        const label = document.createElement('div');
+        label.className = 'result-label';
+        label.textContent = `ბლოკი ${bi + 1}`;
+        const value = document.createElement('div');
+        const colorClass = pct < 70 ? 'pct-red' : (pct <= 75 ? 'pct-yellow' : 'pct-green');
+        value.className = `result-value ${colorClass}`;
+        value.textContent = `${pct}%`;
+        row.append(label, value);
+        resultsList.appendChild(row);
+      });
+      resultsOverlay.style.display = 'block';
+      examResults.hidden = false;
+    } catch {}
+  };
+
+  const hideResults = () => {
+    try {
+      if (resultsOverlay) resultsOverlay.style.display = 'none';
+      if (examResults) examResults.hidden = true;
+    } catch {}
   };
 
   const initExamData = () => {
@@ -526,14 +588,22 @@ document.addEventListener('DOMContentLoaded', () => {
   // Register nav handlers and start exam data
   prevBtn?.addEventListener('click', gotoPrevQuestion);
   nextBtn?.addEventListener('click', gotoNextQuestion);
-  examStart?.addEventListener('click', initExamData);
+  examStart?.addEventListener('click', () => {
+    if (examStarted) return;
+    examStarted = true;
+    if (examStart) examStart.disabled = true;
+    if (examFinish) examFinish.disabled = false;
+    if (prestartOverlay) prestartOverlay.style.display = 'none';
+    initExamData();
+  });
   // Initialize countdown display from saved duration on load
   (function initCountdown() {
     remainingMs = readDurationMinutes() * 60 * 1000;
     updateCountdownView();
   })();
   // Start countdown when exam actually starts (after overlays hidden)
-  examStart?.addEventListener('click', startCountdown);
+  examStart?.addEventListener('click', () => { if (examStarted) startCountdown(); });
+  resultsClose?.addEventListener('click', () => { hideResults(); exitFullscreen(); safeNavigateHome(); });
 });
 
 
