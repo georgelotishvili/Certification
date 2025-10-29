@@ -82,6 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const AUTH_KEY = 'authLoggedIn';
   const CURRENT_USER_KEY = 'currentUser';
   const USED_CODES_KEY = 'usedCodes';
+  const SAVED_EMAIL_KEY = 'savedEmail';
+  const SAVED_PASSWORD_KEY = 'savedPassword';
   const DEFAULT_BANNER_TEXT = 'გთხოვთ გაიაროთ ავტორიზაცია';
   const isLoggedIn = () => localStorage.getItem(AUTH_KEY) === 'true';
   const setLoggedIn = (value) => { localStorage.setItem(AUTH_KEY, value ? 'true' : 'false'); };
@@ -115,6 +117,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!loginModal) return;
     loginModal.classList.add('show');
     document.body.style.overflow = 'hidden';
+    // Restore saved email and password
+    const savedEmail = localStorage.getItem(SAVED_EMAIL_KEY);
+    const savedPassword = localStorage.getItem(SAVED_PASSWORD_KEY);
+    if (loginForm) {
+      const emailInput = loginForm.querySelector('input[name="email"]');
+      const passwordInput = loginForm.querySelector('input[name="password"]');
+      if (emailInput && savedEmail) emailInput.value = savedEmail;
+      if (passwordInput && savedPassword) passwordInput.value = savedPassword;
+    }
   };
   const closeLoginModal = () => {
     if (!loginModal) return;
@@ -201,6 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const performLogout = () => {
     if (!isLoggedIn()) return;
+    if (!confirm('ნამდვილად გსურთ გასვლა?')) return;
     setLoggedIn(false);
     updateAuthUI();
     updateBanner();
@@ -355,7 +367,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
     if (!isValidEmail(email)) return alert('ელფოსტა არასწორია');
     if (!password) return alert('გთხოვთ შეიყვანოთ პაროლი');
-    alert('შესვლა წარმატებულია!');
+    // Save email and password for next time
+    localStorage.setItem(SAVED_EMAIL_KEY, email);
+    localStorage.setItem(SAVED_PASSWORD_KEY, password);
     setLoggedIn(true);
     updateAuthUI();
     const user = getCurrentUser();

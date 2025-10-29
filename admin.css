@@ -293,16 +293,15 @@ header {
     }
 
   .drawer-auth-banner {
-    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+    background: #15803d;
     color: #ffffff;
     padding: 12px 16px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid #14532d;
     border-radius: 6px;
     text-align: center;
     margin-top: 40px;
     line-height: 2;
     font-weight: 500;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     display: none;
   }
 
@@ -424,20 +423,19 @@ main {
 .duration-save {
   height: 40px;
   padding: 0 18px;
-  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  background: #15803d;
   color: #fff;
-  border: 2px solid #166534;
+  border: 1px solid #14532d;
   border-radius: 6px;
-  font-weight: 700;
+  font-weight: 400;
+  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: all .2s ease;
-  box-shadow: 0 2px 6px rgba(22,163,74,0.3);
+  transition: .2s;
 }
 
 .duration-save:hover {
-  background: linear-gradient(135deg, #15803d 0%, #14532d 100%);
-  border-color: #14532d;
-  transform: translateY(-2px);
+  background: #14532d;
+  border-color: #166534;
 }
 
 .duration-flash {
