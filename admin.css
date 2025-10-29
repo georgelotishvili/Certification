@@ -153,12 +153,14 @@ header {
     align-items: center;
     justify-content: center;
     color: var(--brand-dark);
-    pointer-events: none;
+    pointer-events: auto;
+    user-select: text;
     line-height: 2;
     font-weight: 500;
     background: linear-gradient(90deg, rgba(82,82,82,0.05) 0%, rgba(82,82,82,0.1) 50%, rgba(82,82,82,0.05) 100%);
     border-radius: 6px;
     border: 1px solid rgba(82,82,82,0.1);
+    z-index: 101;
   }
 
   .login-btn {

@@ -49,6 +49,48 @@ document.addEventListener('DOMContentLoaded', () => {
   const qNumEl = document.querySelector('.question-number-num');
   const blockNumEl = document.querySelector('.block-number-num');
 
+  // Backend API wiring
+  const API_BASE = 'http://127.0.0.1:8000';
+  const EXAM_ID = 1;
+  let sessionId = null;
+  let sessionToken = null;
+  let serverEndsAtMs = null;
+
+  const authHeaders = () => (sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {});
+  const asJson = (method, body, extra = {}) => ({
+    method,
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(extra.headers || {}) },
+    body: body == null ? undefined : JSON.stringify(body),
+  });
+  const getOpts = (extra = {}) => ({ method: 'GET', headers: { ...authHeaders(), ...(extra.headers || {}) } });
+
+  async function apiAuthCode(code) {
+    const res = await fetch(`${API_BASE}/auth/code`, asJson('POST', { exam_id: EXAM_ID, code: String(code || '').trim() }));
+    if (!res.ok) throw new Error('კოდი არასწორია');
+    return await res.json();
+  }
+  async function apiGetConfig(examId) {
+    const res = await fetch(`${API_BASE}/exam/${examId}/config`, getOpts());
+    if (!res.ok) throw new Error('კონფიგი ვერ ჩაიტვირთა');
+    return await res.json();
+  }
+  async function apiGetBlockQuestions(blockId) {
+    if (!sessionId) throw new Error('სესია არ არის');
+    const res = await fetch(`${API_BASE}/exam/${sessionId}/questions?block_id=${encodeURIComponent(blockId)}`, getOpts());
+    if (!res.ok) throw new Error('კითხვები ვერ ჩაიტვირთა');
+    return await res.json();
+  }
+  async function apiAnswer(questionId, optionId) {
+    if (!sessionId) throw new Error('სესია არ არის');
+    const res = await fetch(`${API_BASE}/exam/${sessionId}/answer`, asJson('POST', { question_id: Number(questionId), option_id: Number(optionId) }));
+    if (!res.ok) throw new Error('პასუხი ვერ შეინახა');
+    return await res.json();
+  }
+  async function apiFinish() {
+    if (!sessionId) return;
+    try { await fetch(`${API_BASE}/exam/${sessionId}/finish`, asJson('POST', {})); } catch {}
+  }
+
   const DEFAULT_TITLE_TEXT = '';
   const getCurrentUser = () => {
     try {
@@ -223,28 +265,22 @@ document.addEventListener('DOMContentLoaded', () => {
     gateForm?.dispatchEvent(new Event('submit', { cancelable: true }));
   });
 
-  // Code gate logic
-  codeForm?.addEventListener('submit', (e) => {
+  // Code gate logic (server auth)
+  codeForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const entered = (codeInput?.value || '').trim();
+    if (!entered) { if (codeError) codeError.hidden = false; codeInput?.focus(); return; }
     try {
-      const raw = localStorage.getItem('currentUser');
-      const current = raw ? JSON.parse(raw) : null;
-      const expected = current?.code || '';
-      const entered = (codeInput?.value || '').trim();
-      if (!entered || entered !== expected) {
-        if (codeError) codeError.hidden = false;
-        codeInput?.focus();
-        return;
-      }
+      const resp = await apiAuthCode(entered);
+      sessionId = resp.session_id;
+      sessionToken = resp.token;
+      serverEndsAtMs = resp.ends_at ? new Date(resp.ends_at).getTime() : null;
       if (codeError) codeError.hidden = true;
       if (codeOverlay) codeOverlay.style.display = 'none';
       enterFullscreen();
-      if (examStart) examStart.disabled = false;
-      // Manual start required: do not auto-click Start
-      examStart?.focus();
+      if (examStart) { examStart.disabled = false; examStart.focus(); }
       updateUserHeader();
     } catch {
-      // Stay on the code gate and show error instead of navigating away
       if (codeError) codeError.hidden = false;
       codeInput?.focus();
     }
@@ -294,8 +330,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const stopCountdown = () => { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } };
   const startCountdown = () => {
     stopCountdown();
-    const minutes = readDurationMinutes();
-    remainingMs = minutes * 60 * 1000;
+    if (serverEndsAtMs) {
+      remainingMs = Math.max(0, serverEndsAtMs - Date.now());
+    } else {
+      const minutes = readDurationMinutes();
+      remainingMs = minutes * 60 * 1000;
+    }
     updateCountdownView();
     countdownTimer = setInterval(() => {
       remainingMs -= 1000;
@@ -354,12 +394,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const rebuildFlat = () => {
     flatQuestions = [];
-    selectedByBlock.forEach((idxs, bi) => {
-      const b = blocks[bi];
-      const allQs = Array.isArray(b.questions) ? b.questions : [];
-      idxs.forEach((qi) => {
-        const q = allQs[qi];
-        if (q) flatQuestions.push({ blockIndex: bi, localIndex: qi, question: q });
+    selectedByBlock.forEach((qs, bi) => {
+      (Array.isArray(qs) ? qs : []).forEach((q) => {
+        if (q) flatQuestions.push({ blockIndex: bi, localIndex: 0, question: q });
       });
     });
   };
@@ -369,8 +406,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const X = flatQuestions.length ? (currentFlatIndex + 1) : 0;
     const Y = flatQuestions.length;
     if (qNumEl) qNumEl.textContent = `${X}/${Y}`;
-    // Right: block A/B (visible blocks = all blocks with at least 1 selected question)
-    const visibleBlocks = selectedByBlock.filter(arr => (arr||[]).length > 0).length || 0;
+    // Right: block A/B (total blocks)
+    const visibleBlocks = blocks.length || 0;
     const A = (currentBlockIndex + 1);
     if (blockNumEl) blockNumEl.textContent = `${A}/${visibleBlocks}`;
   };
@@ -418,16 +455,21 @@ document.addEventListener('DOMContentLoaded', () => {
     renderDotsForCurrentBlock();
   };
 
-  const selectAnswer = (answerId) => {
+  const selectAnswer = async (answerId) => {
     if (!examStarted) return; // block interactions until started
     clearAutoNext();
     const fq = flatQuestions[currentFlatIndex];
     const q = fq?.question; if (!q) return;
     // only first selection allowed
     if (answersState.has(q.id)) return;
-    const correct = String(q.correctAnswerId || '') === String(answerId || '');
-    answersState.set(q.id, { chosenAnswerId: String(answerId || ''), correct });
-    applyAnswerStateStyles();
+    try {
+      const resp = await apiAnswer(q.id, Number(answerId));
+      const correct = !!resp?.correct;
+      answersState.set(q.id, { chosenAnswerId: String(answerId || ''), correct });
+      applyAnswerStateStyles();
+    } catch {
+      // keep UI unchanged on failure
+    }
     // Auto move disabled: navigation only via arrows or dots
   };
 
@@ -438,7 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!fq) return;
     setHeaderText();
     const q = fq.question;
-    const answers = Array.isArray(q.answers) ? q.answers : [];
+    const answers = Array.isArray(q.answers) ? q.answers : (Array.isArray(q.options) ? q.options : []);
     // Question
     const qEl = document.createElement('div');
     qEl.className = 'question';
@@ -460,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
     cmContent.querySelectorAll('.bullet').forEach(b => {
       b.addEventListener('click', () => {
         const answerId = b.getAttribute('data-answer-id');
-        selectAnswer(answerId);
+        selectAnswer(answerId).catch(()=>{});
       });
     });
     applyAnswerStateStyles();
@@ -496,25 +538,21 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const areAllQuestionsAnsweredInBlock = (bi) => {
-    const idxs = selectedByBlock[bi] || [];
-    const b = blocks[bi];
-    const allQs = Array.isArray(b?.questions) ? b.questions : [];
-    return idxs.every(qi => !!answersState.get(allQs[qi]?.id));
+    const qs = selectedByBlock[bi] || [];
+    return qs.every(q => !!answersState.get(q?.id));
   };
 
   const renderDotsForCurrentBlock = () => {
     if (!cmDotsWrap) return;
     cmDotsWrap.innerHTML = '';
     const bi = currentBlockIndex;
-    const idxs = selectedByBlock[bi] || [];
-    const b = blocks[bi];
-    const allQs = Array.isArray(b?.questions) ? b.questions : [];
-    idxs.forEach((qi) => {
+    const qs = selectedByBlock[bi] || [];
+    qs.forEach((q) => {
       const span = document.createElement('span');
       span.className = 'cm-dot';
-      const globalIdx = flatQuestions.findIndex(f => f.blockIndex === bi && f.localIndex === qi);
+      const globalIdx = flatQuestions.findIndex(f => f.blockIndex === bi && f.question?.id === q?.id);
       if (globalIdx === currentFlatIndex) span.classList.add('active');
-      const st = answersState.get(allQs[qi]?.id);
+      const st = answersState.get(q?.id);
       if (st) {
         if (st.correct) { span.style.background = '#16a34a'; span.style.borderColor = '#15803d'; }
         else { span.style.background = '#dc2626'; span.style.borderColor = '#991b1b'; }
@@ -533,19 +571,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // ===================== Results Rendering =====================
   const showResults = () => {
     try {
+      // finalize session on server (fire-and-forget)
+      void apiFinish();
       if (!resultsOverlay || !examResults || !resultsList) return;
       resultsList.innerHTML = '';
-      selectedByBlock.forEach((idxs, bi) => {
-        if (!idxs.length) return;
-        const b = blocks[bi];
-        const allQs = Array.isArray(b?.questions) ? b.questions : [];
+      selectedByBlock.forEach((qs, bi) => {
+        qs = qs || [];
+        if (!qs.length) return;
         let correctCount = 0;
-        idxs.forEach(qi => {
-          const q = allQs[qi];
+        qs.forEach(q => {
           const st = q ? answersState.get(q.id) : null;
           if (st?.correct) correctCount++;
         });
-        const total = idxs.length || 1;
+        const total = qs.length || 1;
         const pct = Math.round((correctCount / total) * 100);
         const row = document.createElement('div');
         row.className = 'result-row';
@@ -571,9 +609,19 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch {}
   };
 
-  const initExamData = () => {
-    blocks = loadBlocks();
-    selectedByBlock = blocks.map(pickPerBlock);
+  const initExamData = async () => {
+    // Load config and selected questions from server
+    try {
+      const cfg = await apiGetConfig(EXAM_ID);
+      blocks = Array.isArray(cfg?.blocks) ? cfg.blocks : [];
+      const lists = await Promise.all(
+        blocks.map(b => apiGetBlockQuestions(b.id).then(r => Array.isArray(r?.questions) ? r.questions : []).catch(() => []))
+      );
+      selectedByBlock = lists;
+    } catch {
+      blocks = [];
+      selectedByBlock = [];
+    }
     flatQuestions = [];
     answersState = new Map();
     rebuildFlat();
@@ -588,17 +636,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Register nav handlers and start exam data
   prevBtn?.addEventListener('click', gotoPrevQuestion);
   nextBtn?.addEventListener('click', gotoNextQuestion);
-  examStart?.addEventListener('click', () => {
+  examStart?.addEventListener('click', async () => {
     if (examStarted) return;
     examStarted = true;
     if (examStart) examStart.disabled = true;
     if (examFinish) examFinish.disabled = false;
     if (prestartOverlay) prestartOverlay.style.display = 'none';
-    initExamData();
+    await initExamData();
   });
   // Initialize countdown display from saved duration on load
   (function initCountdown() {
-    remainingMs = readDurationMinutes() * 60 * 1000;
+    remainingMs = serverEndsAtMs ? Math.max(0, serverEndsAtMs - Date.now()) : (readDurationMinutes() * 60 * 1000);
     updateCountdownView();
   })();
   // Start countdown when exam actually starts (after overlays hidden)

@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import List, Optional
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Exam(Base):
+    __tablename__ = "exams"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), default="Default Exam")
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=45)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    blocks: Mapped[List[Block]] = relationship("Block", back_populates="exam", cascade="all, delete-orphan")
+    codes: Mapped[List[ExamCode]] = relationship("ExamCode", back_populates="exam", cascade="all, delete-orphan")
+    sessions: Mapped[List[Session]] = relationship("Session", back_populates="exam", cascade="all, delete-orphan")
+
+
+class Block(Base):
+    __tablename__ = "blocks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(255))
+    qty: Mapped[int] = mapped_column(Integer, default=1)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    exam: Mapped[Exam] = relationship("Exam", back_populates="blocks")
+    questions: Mapped[List[Question]] = relationship("Question", back_populates="block", cascade="all, delete-orphan", order_by="Question.order_index")
+
+
+class Question(Base):
+    __tablename__ = "questions"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_questions_code"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    block_id: Mapped[int] = mapped_column(ForeignKey("blocks.id", ondelete="CASCADE"))
+    code: Mapped[str] = mapped_column(String(64))
+    text: Mapped[str] = mapped_column(Text)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    block: Mapped[Block] = relationship("Block", back_populates="questions")
+    options: Mapped[List[Option]] = relationship("Option", back_populates="question", cascade="all, delete-orphan")
+    answers: Mapped[List[Answer]] = relationship("Answer", back_populates="question")
+
+
+class Option(Base):
+    __tablename__ = "options"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"))
+    text: Mapped[str] = mapped_column(Text)
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    question: Mapped[Question] = relationship("Question", back_populates="options")
+
+
+class ExamCode(Base):
+    __tablename__ = "exam_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"))
+    code_hash: Mapped[str] = mapped_column(String(255), index=True)
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    exam: Mapped[Exam] = relationship("Exam", back_populates="codes")
+    sessions: Mapped[List[Session]] = relationship("Session", back_populates="code")
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"))
+    code_id: Mapped[int] = mapped_column(ForeignKey("exam_codes.id", ondelete="SET NULL"))
+    token: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    ends_at: Mapped[datetime] = mapped_column(DateTime)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    selected_map: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    exam: Mapped[Exam] = relationship("Exam", back_populates="sessions")
+    code: Mapped[ExamCode] = relationship("ExamCode", back_populates="sessions")
+    answers: Mapped[List[Answer]] = relationship("Answer", back_populates="session", cascade="all, delete-orphan")
+
+
+class Answer(Base):
+    __tablename__ = "answers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"))
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"))
+    option_id: Mapped[int] = mapped_column(ForeignKey("options.id", ondelete="CASCADE"))
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    answered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    session: Mapped[Session] = relationship("Session", back_populates="answers")
+    question: Mapped[Question] = relationship("Question", back_populates="answers")
+

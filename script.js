@@ -21,6 +21,17 @@ document.addEventListener('DOMContentLoaded', () => {
   on(drawerClose, 'click', closeMenu);
   drawerLinks.forEach(link => on(link, 'click', closeMenu));
 
+  // Adjust body offset for fixed header (index header with hero image)
+  const headerEl = document.querySelector('header');
+  const setBodyOffset = () => {
+    if (!headerEl) return;
+    const h = headerEl.offsetHeight || 0;
+    document.body.style.paddingTop = h + 'px';
+  };
+  setBodyOffset();
+  on(window, 'load', setBodyOffset);
+  on(window, 'resize', setBodyOffset);
+
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (loginModal && loginModal.classList.contains('show')) closeLoginModal();
