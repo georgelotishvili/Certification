@@ -24,7 +24,7 @@ html, body {
 
 body {
   color: var(--brand-dark);
-  background: linear-gradient(180deg, #e5e5e5 0%, #d4d4d4 100%);
+  background-color: #131C2F;
   padding-top: 0;
 }
 
@@ -39,6 +39,9 @@ header {
   .header-hero {
     width: 100%;
     display: block;
+    min-height: 140px;
+    object-fit: cover;
+    object-position: center;
   }
 
   .nav-bar {
@@ -114,31 +117,35 @@ header {
 
   .burger {
     position: absolute;
-    right: 10%;
-    top: 50%;
-    transform: translateY(-50%);
+    right: 12px;
+    bottom: 0;
+    top: auto;
+    transform: none;
     width: 40px;
-    height: 30px;
+    height: 40px;
     display: none;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: center;
+    gap: 5px;
     cursor: pointer;
     background: transparent;
     border: 0;
     padding: 4px;
     transition: background-color .2s;
+    z-index: 10;
   }
 
     .burger:hover {
-      background: rgba(0, 0, 0, 0.05);
+      background: rgba(255, 255, 255, 0.1);
     }
 
     .burger span {
       display: block;
       height: 3px;
-      background: var(--brand-dark);
+      background: #ffffff;
       transition: transform .2s ease, opacity .2s ease;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      box-shadow: none;
+      border-radius: 2px;
     }
 
   .auth-banner {
@@ -389,19 +396,12 @@ body.menu-open .overlay {
   
 main {
   min-height: 600px;
-background-color: #131C2F;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.8);
 }
 
 footer {
-  background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
-  color: #e5e7eb;
-  margin-top: 10px;
-  box-shadow: 0 -4px 12px rgba(0,0,0,0.2);
-  border-top: 2px solid #1e293b;
   padding: 40px 20px 20px;
 }
 
@@ -741,5 +741,26 @@ footer {
   .drawer-auth-banner { display: block; }
   .login-btn { display: none; }
   .burger { display: flex; }
+  
+  .header-hero {
+    min-height: 140px;
+    width: 100vw;
+    object-fit: cover;
+    object-position: center center;
+  }
+}
+
+@media (max-width: 768px) {
+  .header-hero {
+    min-height: 120px;
+    width: 100vw;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-hero {
+    min-height: 100px;
+    width: 100vw;
+  }
 }
 
