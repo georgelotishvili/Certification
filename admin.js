@@ -44,6 +44,33 @@ document.addEventListener('DOMContentLoaded', () => {
   const saveBtn = document.getElementById('saveExamDuration');
   const flash = document.getElementById('durationFlash');
   const EXAM_DURATION_KEY = 'examDuration';
+  const ADMIN_PWD_KEY = 'adminGatePassword';
+  const gatePwdInput = document.getElementById('adminGatePassword');
+  const gatePwdSave = document.getElementById('saveAdminGatePassword');
+  const gatePwdFlash = document.getElementById('gatePwdFlash');
+
+  // Simple toast helper
+  const getToastContainer = () => {
+    let c = document.getElementById('toastContainer');
+    if (!c) {
+      c = document.createElement('div');
+      c.id = 'toastContainer';
+      c.className = 'toast-container';
+      document.body.appendChild(c);
+    }
+    return c;
+  };
+  const showToast = (message, type = 'success') => {
+    const c = getToastContainer();
+    const t = document.createElement('div');
+    t.className = `toast${type === 'error' ? ' error' : ''}`;
+    t.setAttribute('role', 'status');
+    t.setAttribute('aria-live', 'polite');
+    t.textContent = String(message || '');
+    c.appendChild(t);
+    requestAnimationFrame(() => { t.classList.add('show'); });
+    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 220); }, 2600);
+  };
 
   const navLinks = document.querySelectorAll('.nav a, .drawer-nav a');
   navLinks.forEach(link => {
@@ -62,6 +89,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saved && durationInput) durationInput.value = saved;
   } catch {}
 
+  // Load saved admin gate password
+  try {
+    const savedPwd = localStorage.getItem(ADMIN_PWD_KEY);
+    if (gatePwdInput) gatePwdInput.value = savedPwd || '';
+  } catch {}
+
   // Save duration
   on(saveBtn, 'click', () => {
     const value = Number(durationInput?.value || 0);
@@ -75,6 +108,18 @@ document.addEventListener('DOMContentLoaded', () => {
       flash.style.display = 'block';
       setTimeout(() => { if (flash) flash.style.display = 'none'; }, 3000);
     }
+  });
+
+  // Save admin gate password
+  on(gatePwdSave, 'click', () => {
+    const value = String(gatePwdInput?.value || '').trim();
+    if (!value) {
+      showToast('გთხოვთ შეიყვანოთ პაროლი', 'error');
+      return;
+    }
+    try { localStorage.setItem(ADMIN_PWD_KEY, value); } catch {}
+    // Use a toast instead of inline flash to avoid layout jumps
+    showToast('ადმინისტრატორის პაროლი შენახულია');
   });
 
   // Blocks grid data + rendering

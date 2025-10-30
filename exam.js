@@ -9,18 +9,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, { passive: false });
   const rootEl = document.documentElement;
+  // Minimal DOM helpers
+  const byId = (id) => document.getElementById(id);
+  const qs = (sel) => document.querySelector(sel);
+  const setHidden = (el, val) => { if (el) el.hidden = !!val; };
+  const show = (el, display = 'block') => { if (el) el.style.display = display; };
+  const hide = (el) => { if (el) el.style.display = 'none'; };
+  const getAnswers = (q) => Array.isArray(q?.answers) ? q.answers : (Array.isArray(q?.options) ? q.options : []);
   const gateOverlay = document.getElementById('examGateOverlay');
   const gateForm = document.getElementById('examGateForm');
   const gateInput = document.getElementById('examPassword');
   const gateError = document.getElementById('examGateError');
   const gateClose = document.getElementById('examGateClose');
-  const devBypass = document.getElementById('devBypass');
-  const codeOverlay = document.getElementById('examCodeOverlay');
-  const codeForm = document.getElementById('examCodeForm');
-  const codeInput = document.getElementById('examCodeInput');
-  const codeError = document.getElementById('examCodeError');
-  const devBypassCode = document.getElementById('devBypassCode');
-  const codeGateClose = document.getElementById('codeGateClose');
+  // Unique code overlay elements removed
   const examStart = document.getElementById('examStart');
   const examFinish = document.getElementById('examFinish');
   const examConfirm = document.getElementById('examConfirm');
@@ -92,6 +93,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const DEFAULT_TITLE_TEXT = '';
+  const ADMIN_PWD_KEY = 'adminGatePassword';
+  const readAdminPassword = () => {
+    try {
+      const v = String(localStorage.getItem(ADMIN_PWD_KEY) || '').trim();
+      return v || 'cpig';
+    } catch { return 'cpig'; }
+  };
   const getCurrentUser = () => {
     try {
       const raw = localStorage.getItem('currentUser');
@@ -136,8 +144,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const unlockKeys = async () => { try { await navigator.keyboard?.unlock?.(); } catch {} };
   const enableBeforeUnload = () => {
     if (beforeUnloadHandler) return;
-    beforeUnloadHandler = (e) => { e.preventDefault(); e.returnValue = ''; };
-    window.addEventListener('beforeunload', beforeUnloadHandler);
+    beforeUnloadHandler = (e) => { 
+      // Completely prevent native browser alerts/dialogs - they exit fullscreen
+      e.preventDefault(); 
+      e.returnValue = ''; 
+      // Ensure fullscreen stays active even if moron tries to show native dialog
+      if (mustStayFullscreen && !document.fullscreenElement) {
+        enterFullscreen();
+      }
+    };
+    window.addEventListener('beforeunload', beforeUnloadHandler, { capture: true });
   };
   const disableBeforeUnload = () => {
     if (!beforeUnloadHandler) return;
@@ -175,24 +191,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const focusTrapOff = () => { if (trapFocusHandler) document.removeEventListener('keydown', trapFocusHandler); trapFocusHandler = null; };
 
   const showStep1 = () => { 
-    examFinal.hidden = true; 
-    if (finalOverlay) finalOverlay.style.display = 'none';
-    examConfirm.hidden = false;
-    if (confirmOverlay) confirmOverlay.style.display = 'block';
+    setHidden(examFinal, true);
+    hide(finalOverlay);
+    setHidden(examConfirm, false);
+    show(confirmOverlay);
     confirmLeaveYes?.focus(); 
   };
   const showStep2 = () => { 
-    examConfirm.hidden = true;
-    if (confirmOverlay) confirmOverlay.style.display = 'none';
-    examFinal.hidden = false;
-    if (finalOverlay) finalOverlay.style.display = 'block';
+    setHidden(examConfirm, true);
+    hide(confirmOverlay);
+    setHidden(examFinal, false);
+    show(finalOverlay);
     agreeExit?.focus(); 
   };
   const hideAll = () => { 
-    examConfirm.hidden = true;
-    examFinal.hidden = true;
-    if (confirmOverlay) confirmOverlay.style.display = 'none';
-    if (finalOverlay) finalOverlay.style.display = 'none';
+    setHidden(examConfirm, true);
+    setHidden(examFinal, true);
+    hide(confirmOverlay);
+    hide(finalOverlay);
     examStart?.focus(); 
   };
 
@@ -214,14 +230,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize exam mode: show gate first; don't enter fullscreen until passed
   hideAll();
   focusTrapOn();
-  enableBeforeUnload();
+  // beforeunload disabled to avoid native browser prompt
   updateUserHeader();
   updateRightDateTime();
   setInterval(updateRightDateTime, 1000 * 30);
+  // Disable examStart initially until code is correct
+  if (examStart) examStart.disabled = true;
   // Gate visible initially
   if (gateInput) gateInput.focus();
   // Before exam start, show blur overlay and keep only Start/Finish usable
-  try { if (prestartOverlay) prestartOverlay.style.display = 'block'; } catch {}
+  try { show(prestartOverlay); } catch {}
 
   // Intercept keys
   document.addEventListener('keydown', (e) => {
@@ -231,9 +249,20 @@ document.addEventListener('DOMContentLoaded', () => {
     ensureFullscreen();
   });
   // Any click/tap interaction should try to enter fullscreen if blocked on load
-  document.addEventListener('click', ensureFullscreen, { capture: true });
-  document.addEventListener('pointerdown', ensureFullscreen, { capture: true });
+  document.addEventListener('click', () => { ensureFullscreen(); }, { capture: true });
   document.addEventListener('fullscreenchange', () => {
+    // Don't show exit warning if answer-all dialog is open
+    if (answerAllDialog && !answerAllDialog.hidden) {
+      if (!document.fullscreenElement && mustStayFullscreen) {
+        // Immediately restore fullscreen without showing alerts - use requestAnimationFrame for better timing
+        requestAnimationFrame(() => {
+          if (mustStayFullscreen && !document.fullscreenElement) {
+            enterFullscreen();
+          }
+        });
+      }
+      return;
+    }
     if (!document.fullscreenElement && mustStayFullscreen) { showStep1(); enterFullscreen(); }
   });
 
@@ -241,67 +270,27 @@ document.addEventListener('DOMContentLoaded', () => {
   gateForm?.addEventListener('submit', (e) => {
     e.preventDefault();
     const value = (gateInput?.value || '').trim();
-    if (value !== 'cpig') {
+    const expected = readAdminPassword();
+    if (value !== expected) {
       if (gateError) gateError.hidden = false;
       gateInput?.focus();
       return;
     }
     if (gateError) gateError.hidden = true;
-    // Hide gate and enter fullscreen
-    if (gateOverlay) gateOverlay.style.display = 'none';
-    // Show second auth for unique code and disable Start until correct
-    if (examStart) examStart.disabled = true;
-    if (codeOverlay) codeOverlay.style.display = 'flex';
-    (codeInput || examStart)?.focus();
+    // Hide gate and enable starting the exam immediately
+    hide(gateOverlay);
+    if (examStart) { examStart.disabled = false; examStart.focus(); }
+    enterFullscreen();
   });
 
   // Close button on gate: return to index without entering exam
   gateClose?.addEventListener('click', safeNavigateHome);
 
-  // Dev bypasses
-  // 1) Password gate bypass: fill correct password and proceed
-  devBypass?.addEventListener('click', () => {
-    if (gateInput) gateInput.value = 'cpig';
-    gateForm?.dispatchEvent(new Event('submit', { cancelable: true }));
-  });
+  // Dev bypass removed: only official authorization is allowed
 
-  // Code gate logic (server auth)
-  codeForm?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const entered = (codeInput?.value || '').trim();
-    if (!entered) { if (codeError) codeError.hidden = false; codeInput?.focus(); return; }
-    try {
-      const resp = await apiAuthCode(entered);
-      sessionId = resp.session_id;
-      sessionToken = resp.token;
-      serverEndsAtMs = resp.ends_at ? new Date(resp.ends_at).getTime() : null;
-      if (codeError) codeError.hidden = true;
-      if (codeOverlay) codeOverlay.style.display = 'none';
-      enterFullscreen();
-      if (examStart) { examStart.disabled = false; examStart.focus(); }
-      updateUserHeader();
-    } catch {
-      if (codeError) codeError.hidden = false;
-      codeInput?.focus();
-    }
-  });
-
-  // 2) Code gate bypass: fill current user's unique code and proceed
-  devBypassCode?.addEventListener('click', () => {
-    try {
-      const raw = localStorage.getItem('currentUser');
-      const current = raw ? JSON.parse(raw) : null;
-      if (!current?.code) { safeNavigateHome(); return; }
-      if (codeInput) codeInput.value = current.code;
-      codeForm?.dispatchEvent(new Event('submit', { cancelable: true }));
-    } catch { safeNavigateHome(); }
-  });
-
-  // Close button on code gate: return to index
-  codeGateClose?.addEventListener('click', safeNavigateHome);
+  // Code gate removed
 
   // Actions
-  examStart?.addEventListener('click', hideAll);
   examFinish?.addEventListener('click', showStep1);
   confirmLeaveNo?.addEventListener('click', hideAll);
   confirmLeaveYes?.addEventListener('click', showStep2);
@@ -360,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentFlatIndex = 0; // global question index X (0-based)
   let currentBlockIndex = 0; // A (0-based)
   let answersState = new Map(); // key: questionId -> { chosenAnswerId, correct }
-  let autoNextTimer = null;
+  // removed autoNextTimer (was unused)
   let examStarted = false;
 
   const loadBlocks = () => {
@@ -369,6 +358,31 @@ document.addEventListener('DOMContentLoaded', () => {
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? parsed : [];
     } catch { return []; }
+  };
+
+  // Render from localStorage immediately to avoid blank screen while server loads
+  const preRenderLocalFirstQuestion = () => {
+    try {
+      const localBlocks = loadBlocks();
+      const b = Array.isArray(localBlocks) ? localBlocks : [];
+      if (!b.length) return false;
+      blocks = b;
+      selectedByBlock = blocks.map((blk) => {
+        const allQs = Array.isArray(blk?.questions) ? blk.questions : [];
+        const indices = pickPerBlock(blk);
+        return indices.map(i => allQs[i]).filter(Boolean);
+      });
+      flatQuestions = [];
+      answersState = new Map();
+      rebuildFlat();
+      currentFlatIndex = 0;
+      currentBlockIndex = flatQuestions.length ? flatQuestions[0].blockIndex : 0;
+      renderCurrentQuestion();
+      renderDotsForCurrentBlock();
+      updateNavButtons();
+      updateIndicators();
+      return flatQuestions.length > 0;
+    } catch { return false; }
   };
 
   // Pick exactly qty questions per block randomly, but keep admin order among selected
@@ -436,7 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  const clearAutoNext = () => { if (autoNextTimer) { clearTimeout(autoNextTimer); autoNextTimer = null; } };
+  // no auto-next; navigation is explicit
 
   const applyAnswerStateStyles = () => {
     const fq = flatQuestions[currentFlatIndex];
@@ -444,31 +458,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const state = answersState.get(q.id);
     if (!state) return;
     const isCorrect = state.correct;
-    cmContent?.querySelectorAll('.bullet').forEach(b => {
-      b.style.pointerEvents = 'none';
-      const id = b.getAttribute('data-answer-id');
-      if (id === state.chosenAnswerId) {
-        b.style.borderColor = isCorrect ? '#16a34a' : '#dc2626';
-        b.style.background = isCorrect ? '#16a34a' : '#dc2626';
-      }
-    });
+    const bullets = Array.from(cmContent?.querySelectorAll?.('.bullet') || []);
+    const chosenId = String(state.chosenAnswerId || '');
+    const selected = bullets.find(b => b.getAttribute('data-answer-id') === chosenId);
+    if (!selected) { return; }
+    bullets.forEach(b => { b.style.pointerEvents = 'none'; });
+    selected.style.borderColor = isCorrect ? '#16a34a' : '#dc2626';
+    selected.style.background = isCorrect ? '#16a34a' : '#dc2626';
     renderDotsForCurrentBlock();
   };
 
-  const selectAnswer = async (answerId) => {
+  const selectAnswer = async (answerId, bulletEl = null) => {
     if (!examStarted) return; // block interactions until started
-    clearAutoNext();
     const fq = flatQuestions[currentFlatIndex];
     const q = fq?.question; if (!q) return;
     // only first selection allowed
     if (answersState.has(q.id)) return;
+    // Optimistic UI update for instant feedback
+    answersState.set(q.id, { chosenAnswerId: String(answerId || ''), correct: false });
+    if (bulletEl) { try { bulletEl.style.pointerEvents = 'none'; } catch {} }
+    applyAnswerStateStyles();
     try {
       const resp = await apiAnswer(q.id, Number(answerId));
       const correct = !!resp?.correct;
       answersState.set(q.id, { chosenAnswerId: String(answerId || ''), correct });
       applyAnswerStateStyles();
     } catch {
-      // keep UI unchanged on failure
+      // Offline/local fallback: determine correctness from local data
+      const correctLocal = String(q?.correctAnswerId || '') === String(answerId || '');
+      answersState.set(q.id, { chosenAnswerId: String(answerId || ''), correct: correctLocal });
+      applyAnswerStateStyles();
     }
     // Auto move disabled: navigation only via arrows or dots
   };
@@ -480,7 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!fq) return;
     setHeaderText();
     const q = fq.question;
-    const answers = Array.isArray(q.answers) ? q.answers : (Array.isArray(q.options) ? q.options : []);
+    const answers = getAnswers(q);
     // Question
     const qEl = document.createElement('div');
     qEl.className = 'question';
@@ -491,30 +510,60 @@ document.addEventListener('DOMContentLoaded', () => {
     answers.slice(0,4).forEach((a, idx) => {
       const row = document.createElement('div');
       row.className = ['answerA','answerb','answerc','answerd'][idx] || 'answerA';
+      const answerIdStr = String(a.id);
       row.innerHTML = `
-        <div class="mark"><div class="bullet" data-answer-id="${String(a.id)}"></div></div>
+        <div class="mark"><div class="bullet" data-answer-id="${answerIdStr}"></div></div>
         <div class="code">${labels[idx] || ''}</div>
         <div class="text">${escapeHtml(String(a.text || ''))}</div>
       `;
+      // Click handlers on entire row and specific bullet for better UX
+      const bulletEl = row.querySelector('.bullet');
+      const wire = (el) => el && el.addEventListener('click', () => { selectAnswer(answerIdStr, bulletEl).catch(()=>{}); });
+      wire(row);
+      wire(bulletEl);
+      wire(row.querySelector('.code'));
+      wire(row.querySelector('.text'));
       cmContent.appendChild(row);
     });
-    // Wire clicks
-    cmContent.querySelectorAll('.bullet').forEach(b => {
-      b.addEventListener('click', () => {
-        const answerId = b.getAttribute('data-answer-id');
-        selectAnswer(answerId).catch(()=>{});
-      });
-    });
+    // Event delegation fallback (robust to future DOM changes)
+    const delegated = (e) => {
+      const rowEl = e.target?.closest?.('.answerA, .answerb, .answerc, .answerd');
+      if (!rowEl || !cmContent.contains(rowEl)) return;
+      const bullet = rowEl.querySelector('.bullet');
+      const id = bullet?.getAttribute('data-answer-id');
+      if (id) selectAnswer(id, bullet).catch(()=>{});
+    };
+    cmContent.addEventListener('click', delegated);
     applyAnswerStateStyles();
     updateIndicators();
   };
 
+  const answerAllOverlay = document.getElementById('answerAllOverlay');
+  const answerAllDialog = document.getElementById('answerAllDialog');
+  const answerAllClose = document.getElementById('answerAllClose');
+  let pendingBlockTransition = null;
+
+  const showAnswerAllDialog = (nextBlockIndex, nextFlatIndex) => {
+    if (!answerAllOverlay || !answerAllDialog) return;
+    pendingBlockTransition = { nextBlockIndex, nextFlatIndex };
+    show(answerAllOverlay);
+    setHidden(answerAllDialog, false);
+    ensureFullscreen();
+    setTimeout(() => { answerAllClose?.focus(); }, 150);
+  };
+
+  const hideAnswerAllDialog = () => {
+    hide(answerAllOverlay);
+    setHidden(answerAllDialog, true);
+    pendingBlockTransition = null;
+    setTimeout(() => ensureFullscreen(), 50);
+  };
+
   const gotoQuestionIndex = (idx) => {
-    clearAutoNext();
     if (idx < 0 || idx >= flatQuestions.length) return;
     const nextBlock = flatQuestions[idx].blockIndex;
     if (nextBlock !== currentBlockIndex && !areAllQuestionsAnsweredInBlock(currentBlockIndex)) {
-      alert('გთხოვთ უპასუხოთ ყველა კითხვას');
+      showAnswerAllDialog(nextBlock, idx);
       return;
     }
     currentFlatIndex = idx;
@@ -597,40 +646,89 @@ document.addEventListener('DOMContentLoaded', () => {
         row.append(label, value);
         resultsList.appendChild(row);
       });
-      resultsOverlay.style.display = 'block';
-      examResults.hidden = false;
+      show(resultsOverlay);
+      setHidden(examResults, false);
     } catch {}
   };
 
   const hideResults = () => {
     try {
-      if (resultsOverlay) resultsOverlay.style.display = 'none';
-      if (examResults) examResults.hidden = true;
+      hide(resultsOverlay);
+      setHidden(examResults, true);
     } catch {}
   };
 
   const initExamData = async () => {
-    // Load config and selected questions from server
+    // Load config
     try {
       const cfg = await apiGetConfig(EXAM_ID);
       blocks = Array.isArray(cfg?.blocks) ? cfg.blocks : [];
-      const lists = await Promise.all(
-        blocks.map(b => apiGetBlockQuestions(b.id).then(r => Array.isArray(r?.questions) ? r.questions : []).catch(() => []))
-      );
-      selectedByBlock = lists;
-    } catch {
+    } catch (err) {
+      console.error('Failed to load exam config:', err);
       blocks = [];
-      selectedByBlock = [];
     }
-    flatQuestions = [];
-    answersState = new Map();
-    rebuildFlat();
-    currentFlatIndex = 0;
-    currentBlockIndex = flatQuestions.length ? flatQuestions[0].blockIndex : 0;
-    renderCurrentQuestion();
-    renderDotsForCurrentBlock();
-    updateNavButtons();
-    updateIndicators();
+
+    // If no blocks from server → fallback to local immediately (no delay)
+    if (!Array.isArray(blocks) || blocks.length === 0) {
+      const localBlocks = loadBlocks();
+      blocks = Array.isArray(localBlocks) ? localBlocks : [];
+      selectedByBlock = blocks.map((b) => {
+        const allQs = Array.isArray(b?.questions) ? b.questions : [];
+        const indices = pickPerBlock(b);
+        return indices.map(i => allQs[i]).filter(Boolean);
+      });
+      flatQuestions = [];
+      answersState = new Map();
+      rebuildFlat();
+      currentFlatIndex = 0;
+      currentBlockIndex = flatQuestions.length ? flatQuestions[0].blockIndex : 0;
+      renderCurrentQuestion();
+      renderDotsForCurrentBlock();
+      updateNavButtons();
+      updateIndicators();
+      return;
+    }
+
+    // Progressive load: fetch first block quickly, render immediately; others in background
+    try {
+      selectedByBlock = Array.from({ length: blocks.length }, () => []);
+
+      // 1) First block
+      if (blocks.length > 0) {
+        try {
+          const r0 = await apiGetBlockQuestions(blocks[0].id);
+          selectedByBlock[0] = Array.isArray(r0?.questions) ? r0.questions : [];
+        } catch (err0) {
+          console.error('Failed to load first block questions', err0);
+        }
+      }
+
+      flatQuestions = [];
+      answersState = new Map();
+      rebuildFlat();
+      currentFlatIndex = 0;
+      currentBlockIndex = flatQuestions.length ? flatQuestions[0].blockIndex : 0;
+      renderCurrentQuestion(); // show first question ASAP (~0.1s depending on first fetch)
+      renderDotsForCurrentBlock();
+      updateNavButtons();
+      updateIndicators();
+
+      // 2) Remaining blocks in background
+      const restPromises = blocks.slice(1).map((b, idx) =>
+        apiGetBlockQuestions(b.id)
+          .then(r => ({ i: idx + 1, qs: Array.isArray(r?.questions) ? r.questions : [] }))
+          .catch((err) => { console.error('Failed to load block', b.id, err); return { i: idx + 1, qs: [] }; })
+      );
+      const rest = await Promise.all(restPromises);
+      rest.forEach(({ i, qs }) => { selectedByBlock[i] = qs; });
+      rebuildFlat();
+      // Keep current selection and UI; just refresh dots/indicators/buttons
+      renderDotsForCurrentBlock();
+      updateNavButtons();
+      updateIndicators();
+    } catch (err) {
+      console.error('Progressive load failed:', err);
+    }
   };
 
   // Register nav handlers and start exam data
@@ -641,17 +739,24 @@ document.addEventListener('DOMContentLoaded', () => {
     examStarted = true;
     if (examStart) examStart.disabled = true;
     if (examFinish) examFinish.disabled = false;
-    if (prestartOverlay) prestartOverlay.style.display = 'none';
-    await initExamData();
+    if (prestartOverlay) hide(prestartOverlay);
+    // Show local question immediately (if available), then load server data in background
+    preRenderLocalFirstQuestion();
+    void initExamData();
+    startCountdown();
   });
   // Initialize countdown display from saved duration on load
   (function initCountdown() {
     remainingMs = serverEndsAtMs ? Math.max(0, serverEndsAtMs - Date.now()) : (readDurationMinutes() * 60 * 1000);
     updateCountdownView();
   })();
-  // Start countdown when exam actually starts (after overlays hidden)
-  examStart?.addEventListener('click', () => { if (examStarted) startCountdown(); });
   resultsClose?.addEventListener('click', () => { hideResults(); exitFullscreen(); safeNavigateHome(); });
+
+  // Handle answer all dialog
+  answerAllClose?.addEventListener('click', () => {
+    // Simply close warning; stay on the same block/question
+    hideAnswerAllDialog();
+  });
 });
 
 

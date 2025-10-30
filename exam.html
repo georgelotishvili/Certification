@@ -18,22 +18,9 @@
             <button class="btn primary" type="submit">შესვლა</button>
           </div>
           <div class="gate-error" id="examGateError" hidden>პაროლი არასწორია</div>
-          <div class="dev-tools"><button type="button" id="devBypass" class="dev-bypass">დროებითი შესვლა</button></div>
         </form>
       </div>
-      <!-- Second auth: unique code overlay -->
-      <div class="code-overlay" id="examCodeOverlay" style="display:none;">
-        <form class="exam-dialog gate" id="examCodeForm" autocomplete="off">
-          <button class="gate-close" id="codeGateClose" type="button" aria-label="დახურვა">×</button>
-          <p class="exam-text">შეიყვანეთ უნიკალური კოდი</p>
-          <div class="field"><input type="text" id="examCodeInput" placeholder="უნიკალური კოდი" inputmode="numeric" /></div>
-          <div class="exam-actions">
-            <button class="btn primary" type="submit">დადასტურება</button>
-          </div>
-          <div class="gate-error" id="examCodeError" hidden>კოდი არასწორია</div>
-          <div class="dev-tools"><button type="button" id="devBypassCode" class="dev-bypass">დროებითი შესვლა</button></div>
-        </form>
-      </div>
+      
       <div class="exam-container" role="dialog" aria-modal="true" aria-label="Exam screen">
         <div class="exam-layout">
           <aside class="pane left" id="examPaneLeft">
@@ -59,51 +46,10 @@
             </div>
             <div class="center-middle">
               <div class="cm-header">შეარჩიეთ და მონიშნეთ სწორი პასუხი</div>
-              <div class="cm-content">
-
-                <div class="question">
-                  <div class="question-text">არქიტექტურული დაგეგმარება წარმოადგენს შენობის სივრცითი ორგანიზაციის პროცესს რომელიც მოიცავს ფუნქციონალურ ზონირებას ესთეტიკურ გადაწყვეტილებებს კონსტრუქციულ სისტემებს და ინჟინერიულ კომუნიკაციებს რათა შეიქმნას ჰარმონიული გარემო რომელიც აკმაყოფილებს როგორც ფუნქციონალურ ასევე ესთეტიკურ მოთხოვნებს და უზრუნველყოფს კომფორტულ და უსაფრთხო ცხოვრების პირობებს მომხმარებლებისთვის ხოლო თანამედროვე ტექნოლოგიების გამოყენება საშუალებას იძლევა შეიქმნას ენერგოეფექტური და ეკოლოგიურად სუფთა შენობები რომლებიც შეესაბამება მდგრადი განვითარების პრინციპებს</div>
-                </div>
-
-                <div class="answerA">
-                  <div class="mark"><div class="bullet"></div></div>
-                  <div class="code">A</div>
-                  <div class="text">თანამედროვე არქიტექტურა ხასიათდება მინიმალისტური ფორმებით გეომეტრიული სიმარტივით და ფუნქციონალური მიდგომით რომელიც უპირატესობას ანიჭებს სივრცის რაციონალურ გამოყენებას ბუნებრივი განათების მაქსიმიზაციას და გარემოსთან ჰარმონიულ ურთიერთობას ხოლო მასალების შერჩევისას აქცენტი კეთდება ეკოლოგიურად სუფთა და გრძელვადიან მასალებზე რომლებიც უზრუნველყოფენ შენობის გამძლეობას და ენერგოეფექტურობას</div>
-                </div>
-
-                <div class="answerb">
-                  <div class="mark"><div class="bullet"></div></div>
-                  <div class="code">B</div>
-                  <div class="text">ურბანული დაგეგმარება მოიცავს ქალაქის განვითარების სტრატეგიულ ხედვას სატრანსპორტო ინფრასტრუქტურის ოპტიმიზაციას საზოგადოებრივი სივრცეების შექმნას და სოციალური თანასწორობის უზრუნველყოფას რათა ყველა მოქალაქეს ჰქონდეს წვდომა ხარისხიან სერვისებზე განათლებაზე ჯანდაცვაზე და კულტურულ ობიექტებზე ამასთან ერთად მნიშვნელოვანია გარემოსდაცვითი ასპექტების გათვალისწინება და მწვანე ზონების შენარჩუნება</div>
-                </div>
-
-                <div class="answerc">
-                  <div class="mark"><div class="bullet"></div></div>
-                  <div class="code">C</div>
-                  <div class="text">კონსტრუქციული სისტემების შერჩევა დამოკიდებულია შენობის ტიპზე მისი ფუნქციურ დანიშნულებაზე გეოლოგიურ პირობებზე და სეისმურ აქტივობაზე რეგიონში სადაც იგეგმება მშენებლობა ამიტომ საჭიროა დეტალური ინჟინერული გამოკვლევები და გათვლები რათა უზრუნველყოფილ იქნას შენობის სტაბილურობა და უსაფრთხოება ხანგრძლივი ექსპლუატაციის პერიოდში და მოხდეს ყველა ნორმატივისა და სტანდარტის დაცვა</div>
-                </div>
-
-                <div class="answerd">
-                  <div class="mark"><div class="bullet"></div></div>
-                  <div class="code">D</div>
-                  <div class="text">ისტორიული მემკვიდრეობის დაცვა და რესტავრაცია მოითხოვს სპეციალურ ცოდნას ტრადიციული მშენებლობის ტექნოლოგიებში ავთენტური მასალების გამოყენებაში და კულტურული ღირებულებების შენარჩუნებაში რათა შემდგომი თაობებისთვის გადაეცეს ისტორიული ძეგლები მათი ორიგინალური სახით და შენარჩუნდეს ქვეყნის კულტურული იდენტობა და არქიტექტურული მემკვიდრეობა რომელიც წარმოადგენს ერის ისტორიის მნიშვნელოვან ნაწილს</div>
-                </div>
-
-              </div>
+              <div class="cm-content"></div>
               <div class="cm-footer">
                 <button class="cm-nav prev" type="button" aria-label="წინა კითხვა"></button>
-                <div class="cm-dots">
-                  <span class="cm-dot"></span>
-                  <span class="cm-dot"></span>
-                  <span class="cm-dot"></span>
-                  <span class="cm-dot"></span>
-                  <span class="cm-dot"></span>
-                  <span class="cm-dot"></span>
-                  <span class="cm-dot"></span>
-                  <span class="cm-dot"></span>
-                  <span class="cm-dot"></span>
-                  <span class="cm-dot"></span>
-                </div>
+                <div class="cm-dots"></div>
                 <button class="cm-nav next" type="button" aria-label="შემდეგი კითხვა"></button>
               </div>
             </div>
@@ -153,6 +99,14 @@
           <div class="results-list" id="resultsList"></div>
           <div class="exam-actions">
             <button class="btn primary" id="resultsClose" type="button">დახურვა</button>
+          </div>
+        </div>
+
+        <div class="answer-all-overlay" id="answerAllOverlay" style="display:none;"></div>
+        <div class="exam-dialog" id="answerAllDialog" hidden>
+          <p class="exam-text">გთხოვთ უპასუხოთ მიმდინარე ბლოკის ყველა კითხვას!</p>
+          <div class="exam-actions">
+            <button class="btn primary" id="answerAllClose" type="button">გასაგებია</button>
           </div>
         </div>
       </div>
