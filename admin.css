@@ -81,6 +81,13 @@ header {
         transition: all 200ms ease;
       }
 
+      .nav a.active,
+      .nav a[aria-current="page"] {
+        color: #ffffff;
+        background: rgba(148, 163, 184, 0.35);
+        box-shadow: 0 3px 10px rgba(15, 23, 42, 0.25);
+      }
+
       .nav a:hover { 
         color: #ffffff;
         background: rgba(255, 255, 255, 0.1);
@@ -251,6 +258,14 @@ header {
       padding: 14px 16px;
       font-weight: 500;
       transition: all 0.2s ease;
+    }
+
+    .drawer-nav a.active,
+    .drawer-nav a[aria-current="page"] {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+      font-weight: 600;
+      padding-left: 24px;
     }
 
     .drawer-nav a + a {

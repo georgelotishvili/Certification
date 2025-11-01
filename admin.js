@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
     navLinks: Array.from(document.querySelectorAll('.nav a, .drawer-nav a')),
     sections: {
       exam: document.getElementById('exam-settings'),
-      results: document.getElementById('results-section'),
       registrations: document.getElementById('registrations-section'),
     },
     durationInput: document.getElementById('examDuration'),
@@ -33,14 +32,16 @@ document.addEventListener('DOMContentLoaded', () => {
     blocksGrid: document.querySelector('.exam-blocks-grid'),
     blocksCount: document.getElementById('adminBlocksCount'),
     questionsCount: document.getElementById('adminQuestionsCount'),
-    resultsGrid: document.getElementById('resultsGrid'),
-    resultsSearch: document.getElementById('resultsSearch'),
-    resultsApiKeyInput: document.getElementById('resultsApiKey'),
-    saveResultsApiKeyBtn: document.getElementById('saveResultsApiKey'),
     usersGrid: document.getElementById('usersGrid'),
     usersSearch: document.getElementById('usersSearch'),
     usersSort: document.getElementById('usersSort'),
     onlyAdmins: document.getElementById('onlyAdmins'),
+  };
+
+  const NAV_TARGETS = {
+    'გამოცდა': 'exam',
+    'რეგისტრაციები': 'registrations',
+    'რეგისტრირებული პირები': 'registrations',
   };
 
   const on = (element, event, handler) => element && element.addEventListener(event, handler);
@@ -49,22 +50,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const examSettings = createExamSettingsModule();
   const blocksModule = createBlocksModule();
-  const resultsModule = createResultsModule();
   const usersModule = createUsersModule();
 
-  wireNavigation({ results: resultsModule, users: usersModule });
+  wireNavigation({ users: usersModule });
 
   examSettings.init();
   blocksModule.init();
-  resultsModule.init();
   usersModule.init();
 
-  showSection('exam');
+  showSection(null);
 
   function showSection(name) {
+    const activeName = typeof name === 'string' ? name : null;
     Object.entries(DOM.sections).forEach(([key, el]) => {
       if (!el) return;
-      el.style.display = key === name ? 'block' : 'none';
+      el.style.display = activeName && key === activeName ? 'block' : 'none';
+    });
+
+    DOM.navLinks.forEach((link) => {
+      const label = (link.textContent || '').trim();
+      const target = NAV_TARGETS[label];
+      const isActive = !!activeName && target === activeName;
+      link.classList.toggle('active', isActive);
+      if (isActive) {
+        link.setAttribute('aria-current', 'page');
+      } else {
+        link.removeAttribute('aria-current');
+      }
     });
   }
 
@@ -139,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function wireNavigation(modules) {
-    const { results, users } = modules;
+    const { users } = modules;
     const setMenu = (open) => {
       DOM.body?.classList.toggle('menu-open', open);
       if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -161,21 +173,17 @@ document.addEventListener('DOMContentLoaded', () => {
     on(DOM.loginBtn, 'click', goHome);
     on(DOM.drawerLoginBtn, 'click', goHome);
 
-    const NAV_ACTIONS = {
-      'გამოცდა': () => { showSection('exam'); },
-      'შედეგები': () => { showSection('results'); results.render(); },
-      'რეგისტრაციები': () => { showSection('registrations'); users.render(); },
-      'რეგისტრირებული პირები': () => { showSection('registrations'); users.render(); },
-    };
-
     DOM.navLinks.forEach((link) => {
       on(link, 'click', (event) => {
         const label = (link.textContent || '').trim();
-        const action = NAV_ACTIONS[label];
-        if (!action) return;
+        const targetSection = NAV_TARGETS[label];
+        if (!targetSection) return;
         event.preventDefault();
         closeMenu();
-        action();
+        showSection(targetSection);
+        if (targetSection === 'registrations') {
+          users.render();
+        }
       });
     });
   }
@@ -759,189 +767,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  function createResultsModule() {
-    const state = { items: [] };
-
-    function loadSavedApiKey() {
-      try {
-        if (DOM.resultsApiKeyInput) DOM.resultsApiKeyInput.value = localStorage.getItem(KEYS.ADMIN_API_KEY) || '';
-      } catch {}
-    }
-
-    function saveApiKey() {
-      const value = String(DOM.resultsApiKeyInput?.value || '').trim();
-      try { localStorage.setItem(KEYS.ADMIN_API_KEY, value); } catch {}
-      showToast('Admin API Key შენახულია');
-    }
-
-    function groupByCandidate(items) {
-      const map = new Map();
-      (items || []).forEach((item) => {
-        const key = `${item.candidate_first_name || ''}|${item.candidate_last_name || ''}|${item.candidate_code || ''}`;
-        if (!map.has(key)) {
-          map.set(key, {
-            key,
-            firstName: item.candidate_first_name || '',
-            lastName: item.candidate_last_name || '',
-            code: item.candidate_code || '',
-            sessions: [],
-          });
-        }
-        map.get(key).sessions.push(item);
-      });
-      return Array.from(map.values());
-    }
-
-    async function fetchResults() {
-      const response = await fetch(`${API_BASE}/admin/results`, { headers: { ...getAdminHeaders() } });
-      if (!response.ok) throw new Error('results failed');
-      return await response.json();
-    }
-
-    function renderSessionDetails(container, payload, sessionId) {
-      const session = payload?.session || {};
-      const blockStats = Array.isArray(payload?.block_stats) ? payload.block_stats : [];
-      const answers = Array.isArray(payload?.answers) ? payload.answers : [];
-      const top = document.createElement('div');
-      top.className = 'block-tile';
-      top.innerHTML = `
-        <div><strong>${(session.candidate_first_name || '').trim()} ${(session.candidate_last_name || '').trim()}</strong> • ${session.candidate_code || ''}</div>
-        <div>${formatDateTime(session.started_at)}${session.finished_at ? ' → ' + formatDateTime(session.finished_at) : ''} • ${Math.round(Number(session.score_percent || 0))}%</div>
-      `;
-
-      const blocksDiv = document.createElement('div');
-      blocksDiv.style.margin = '8px 0';
-      blockStats.forEach((block) => {
-        const row = document.createElement('div');
-        row.className = 'result-row';
-        row.innerHTML = `<div class="result-label">ბლოკი ${block.block_id}</div><div class="result-value">${block.percent}%</div>`;
-        blocksDiv.appendChild(row);
-      });
-
-      const answersList = document.createElement('div');
-      answersList.style.display = 'grid';
-      answersList.style.gap = '6px';
-      answers.forEach((answer) => {
-        const item = document.createElement('div');
-        item.className = 'question-card open';
-        item.innerHTML = `
-          <div class="q-head"><div class="q-order"></div><div class="q-actions"><span class="q-code">${answer.question_code}</span></div></div>
-          <div class="q-details" aria-hidden="false">
-            <div class="q-answers">${answer.question_text}</div>
-            <div>${answer.option_text} • ${answer.is_correct ? 'სწორი' : 'არასწორი'}</div>
-          </div>
-        `;
-        answersList.appendChild(item);
-      });
-
-      container.innerHTML = '';
-      container.dataset.loaded = '1';
-      container.appendChild(top);
-      container.appendChild(blocksDiv);
-      container.appendChild(answersList);
-    }
-
-    function draw(items) {
-      if (!DOM.resultsGrid) return;
-      DOM.resultsGrid.innerHTML = '';
-      const query = String(DOM.resultsSearch?.value || '').trim().toLowerCase();
-      const groups = groupByCandidate(items).filter((group) => {
-        const haystack = `${group.firstName} ${group.lastName} ${group.code}`.toLowerCase();
-        return !query || haystack.includes(query);
-      });
-
-      if (!groups.length) {
-        DOM.resultsGrid.innerHTML = '<div class="block-tile">მონაცემები ვერ მოიძებნა</div>';
-        return;
-      }
-
-      groups.forEach((group) => {
-        const card = document.createElement('div');
-        card.className = 'block-tile block-card';
-        card.innerHTML = `
-          <div class="block-head">
-            <div class="block-order"></div>
-            <span class="head-label">${(group.firstName || '').trim()} ${(group.lastName || '').trim()}</span>
-            <input class="head-name" type="text" value="${(group.code || '').replace(/"/g, '&quot;')}" readonly aria-label="კოდი" />
-            <button class="head-toggle" type="button" aria-expanded="false">▾</button>
-          </div>
-          <div class="block-questions" aria-hidden="true">
-            <div class="questions-list"></div>
-          </div>
-        `;
-
-        const list = card.querySelector('.questions-list');
-        const sortedSessions = group.sessions.slice().sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
-        sortedSessions.forEach((session) => {
-          const row = document.createElement('div');
-          row.className = 'question-card';
-          row.dataset.sessionId = session.session_id;
-          row.innerHTML = `
-            <div class="q-head">
-              <div class="q-order"></div>
-              <div class="q-actions">
-                <div class="q-actions-row"></div>
-                <button class="q-toggle" type="button" aria-expanded="false">▾</button>
-                <span class="q-code">${formatDateTime(session.started_at)}${session.finished_at ? ' → ' + formatDateTime(session.finished_at) : ''} • ${Math.round(Number(session.score_percent || 0))}%</span>
-              </div>
-            </div>
-            <div class="q-details" aria-hidden="true"></div>
-          `;
-          const toggle = row.querySelector('.q-toggle');
-          const details = row.querySelector('.q-details');
-          toggle?.addEventListener('click', async () => {
-            const isOpen = row.classList.contains('open');
-            row.classList.toggle('open', !isOpen);
-            details?.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
-            if (!isOpen && details && !details.dataset.loaded) {
-              details.innerHTML = '<div class="block-tile">იტვირთება...</div>';
-              try {
-                const response = await fetch(`${API_BASE}/admin/results/${session.session_id}`, { headers: { ...getAdminHeaders() } });
-                const data = await response.json();
-                renderSessionDetails(details, data, session.session_id);
-              } catch {
-                details.innerHTML = '<div class="block-tile">ჩატვირთვის შეცდომა</div>';
-              }
-            }
-          });
-          list?.appendChild(row);
-        });
-
-        const headToggle = card.querySelector('.head-toggle');
-        headToggle?.addEventListener('click', () => {
-          const isOpen = card.classList.contains('open');
-          card.classList.toggle('open', !isOpen);
-          card.querySelector('.block-questions')?.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
-        });
-
-        DOM.resultsGrid.appendChild(card);
-      });
-    }
-
-    async function render() {
-      if (!DOM.resultsGrid) return;
-      DOM.resultsGrid.innerHTML = '<div class="block-tile">იტვირთება...</div>';
-      try {
-        const data = await fetchResults();
-        state.items = Array.isArray(data?.items) ? data.items : [];
-        draw(state.items);
-      } catch {
-        DOM.resultsGrid.innerHTML = '<div class="block-tile">ვერ ჩაიტვირთა შედეგები</div>';
-      }
-    }
-
-    function init() {
-      loadSavedApiKey();
-      on(DOM.saveResultsApiKeyBtn, 'click', saveApiKey);
-      on(DOM.resultsSearch, 'input', () => draw(state.items));
-    }
-
-    return {
-      init,
-      render: () => render(),
-    };
-  }
-
   function createUsersModule() {
     async function fetchUsers() {
       if (!DOM.usersGrid) return { items: [] };
@@ -964,7 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const disabled = founderRow ? 'disabled' : (isFounderActor() ? '' : 'disabled');
       return `
         <div class="block-tile block-card" data-id="${user.id}">
-          <div class="block-head" style="grid-template-columns:auto 1fr auto auto auto;">
+        <div class="block-head" style="grid-template-columns:auto 1fr auto auto auto;">
             <div class="block-order"></div>
             <div style="font-size:16px;font-weight:700;color:#0f172a;">${fullName}</div>
             <label title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}" style="display:inline-flex;gap:4px;align-items:center;padding:4px 8px;border-radius:6px;border:2px solid #e5e7eb;background:#fff;user-select:none;">
@@ -990,9 +815,10 @@ document.addEventListener('DOMContentLoaded', () => {
                   </div>
                   <div>
                     <div style="font-weight:700;color:#065f46;margin-bottom:8px;">ქმედებები</div>
-                    <div style="display:flex;flex-direction:column;gap:6px;">
-                      <button class="btn-user-announcements" style="padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;" onclick="alert('განცხადებები — მალე დაემატება')">განცხადებები</button>
-                      <button class="btn-user-results" style="padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;" onclick="alert('შედეგები — მალე დაემატება')">შედეგები</button>
+                    <div class="user-action-buttons" style="margin-top:12px;display:flex;flex-direction:column;gap:6px;width:100%;">
+                      <button class="btn-user-announcements" type="button" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">განცხადებები</button>
+                      <button class="btn-user-results" type="button" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">გამოცდის შედეგები</button>
+                      <button class="btn-user-certificate" type="button" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">სერტიფიკატი</button>
                     </div>
                   </div>
                 </div>
@@ -1050,6 +876,30 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       }
+
+      const announcementsBtn = card.querySelector('.btn-user-announcements');
+      const actionsWrap = card.querySelector('.user-action-buttons');
+      if (actionsWrap && !actionsWrap.querySelector('.btn-user-results')) {
+        const resultsFallbackBtn = document.createElement('button');
+        resultsFallbackBtn.className = 'btn-user-results';
+        resultsFallbackBtn.type = 'button';
+        resultsFallbackBtn.textContent = 'გამოცდის შედეგები';
+        resultsFallbackBtn.style.cssText = 'width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;';
+        actionsWrap.appendChild(resultsFallbackBtn);
+      }
+      if (actionsWrap && !actionsWrap.querySelector('.btn-user-certificate')) {
+        const certFallbackBtn = document.createElement('button');
+        certFallbackBtn.className = 'btn-user-certificate';
+        certFallbackBtn.type = 'button';
+        certFallbackBtn.textContent = 'სერტიფიკატი';
+        certFallbackBtn.style.cssText = 'width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;';
+        actionsWrap.appendChild(certFallbackBtn);
+      }
+      const resultsBtns = card.querySelectorAll('.btn-user-results');
+      const certificateBtns = card.querySelectorAll('.btn-user-certificate');
+      announcementsBtn?.addEventListener('click', () => alert('განცხადებები — მალე დაემატება'));
+      resultsBtns?.forEach((btn) => btn.addEventListener('click', () => alert('გამოცდის შედეგები — მალე დაემატება')));
+      certificateBtns?.forEach((btn) => btn.addEventListener('click', () => alert('სერტიფიკატი — მალე დაემატება')));
     }
 
     function drawUsers(items) {

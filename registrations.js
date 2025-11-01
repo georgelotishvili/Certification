@@ -121,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const wrapper = document.createElement('div');
     wrapper.innerHTML = `
       <div class="block-tile block-card" data-id="${user.id}">
-        <div class="block-head" style="grid-template-columns:auto 1fr auto auto auto;">
+        <div class="block-head" style="grid-template-columns:auto 1fr auto;">
           <div class="block-order"></div>
           <div style="display:flex;flex-direction:column;gap:4px;">
             <div style="font-size:16px;font-weight:700;color:#0f172a;">${fullName}</div>
@@ -153,9 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     </label>
                     <button class="btn-delete" ${disableDelete} style="width:fit-content;padding:6px 12px;">წაშლა</button>
                   </div>
-                  <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
-                    <button class="btn-user-announcements" style="padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">განცხადებები</button>
-                    <button class="btn-user-results" style="padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">შედეგები</button>
+                  <div class="user-action-buttons" style="margin-top:12px;display:flex;flex-direction:column;gap:6px;width:100%;">
+                    <button class="btn-user-announcements" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">განცხადებები</button>
+                    <button class="btn-user-results" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">გამოცდის შედეგები</button>
+                    <button class="btn-user-certificate" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">სერტიფიკატი</button>
                   </div>
                 </div>
               </div>
@@ -174,9 +175,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const announcementsBtn = card.querySelector('.btn-user-announcements');
-    const resultsBtn = card.querySelector('.btn-user-results');
+    const actionsWrap = card.querySelector('.user-action-buttons');
+    if (actionsWrap && !actionsWrap.querySelector('.btn-user-results')) {
+      const resultsFallbackBtn = document.createElement('button');
+      resultsFallbackBtn.className = 'btn-user-results';
+      resultsFallbackBtn.type = 'button';
+      resultsFallbackBtn.textContent = 'გამოცდის შედეგები';
+      resultsFallbackBtn.style.cssText = 'width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;';
+      actionsWrap.appendChild(resultsFallbackBtn);
+    }
+    if (actionsWrap && !actionsWrap.querySelector('.btn-user-certificate')) {
+      const certFallbackBtn = document.createElement('button');
+      certFallbackBtn.className = 'btn-user-certificate';
+      certFallbackBtn.type = 'button';
+      certFallbackBtn.textContent = 'სერტიფიკატი';
+      certFallbackBtn.style.cssText = 'width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;';
+      actionsWrap.appendChild(certFallbackBtn);
+    }
+    const resultsBtns = card.querySelectorAll('.btn-user-results');
+    const certificateBtns = card.querySelectorAll('.btn-user-certificate');
     announcementsBtn?.addEventListener('click', () => alert('განცხადებები — მალე დაემატება'));
-    resultsBtn?.addEventListener('click', () => alert('შედეგები — მალე დაემატება'));
+    resultsBtns?.forEach((btn) => btn.addEventListener('click', () => alert('გამოცდის შედეგები — მალე დაემატება')));
+    certificateBtns?.forEach((btn) => btn.addEventListener('click', () => alert('სერტიფიკატი — მალე დაემატება')));
 
     const adminCheckbox = card.querySelector('.chk-admin');
     if (adminCheckbox && !adminCheckbox.disabled) {
