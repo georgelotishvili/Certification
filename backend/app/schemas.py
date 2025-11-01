@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
+from pydantic import EmailStr
 
 
 class BlockOut(BaseModel):
@@ -27,6 +28,22 @@ class AuthCodeRequest(BaseModel):
 
 
 class AuthCodeResponse(BaseModel):
+    session_id: int
+    token: str
+    exam_id: int
+    duration_minutes: int
+    ends_at: datetime
+
+
+# Session start without code (admin-started)
+class StartSessionRequest(BaseModel):
+    exam_id: int
+    candidate_first_name: str
+    candidate_last_name: str
+    candidate_code: str
+
+
+class StartSessionResponse(BaseModel):
     session_id: int
     token: str
     exam_id: int
@@ -70,6 +87,7 @@ class FinishResponse(BaseModel):
     answered: int
     correct: int
     score_percent: float
+    block_stats: List[dict]
 
 
 class AdminStatsResponse(BaseModel):
@@ -78,4 +96,68 @@ class AdminStatsResponse(BaseModel):
     enabled_blocks: int
     enabled_questions: int
 
+
+# Admin results list/detail
+class ResultListItem(BaseModel):
+    session_id: int
+    started_at: datetime
+    finished_at: datetime | None
+    candidate_first_name: str | None
+    candidate_last_name: str | None
+    candidate_code: str | None
+    score_percent: float
+
+
+class ResultListResponse(BaseModel):
+    items: List[ResultListItem]
+    total: int
+
+
+class AnswerDetail(BaseModel):
+    question_id: int
+    question_code: str
+    question_text: str
+    option_id: int
+    option_text: str
+    is_correct: bool
+    answered_at: datetime
+
+
+class ResultDetailResponse(BaseModel):
+    session: ResultListItem
+    block_stats: List[dict]
+    answers: List[AnswerDetail]
+
+
+# Users (registration and admin listing)
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    personal_id: str
+    first_name: str
+    last_name: str
+    phone: str
+    email: str
+    code: str
+    is_admin: bool
+    is_founder: bool = False
+    created_at: datetime
+
+
+class UserCreate(BaseModel):
+    personal_id: str
+    first_name: str
+    last_name: str
+    phone: str
+    email: EmailStr
+    password: str
+
+
+class UsersListResponse(BaseModel):
+    items: List[UserOut]
+    total: int
+
+
+class ToggleAdminRequest(BaseModel):
+    is_admin: bool
 

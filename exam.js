@@ -75,6 +75,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!res.ok) throw new Error('კონფიგი ვერ ჩაიტვირთა');
     return await res.json();
   }
+  async function apiStartSession(firstName, lastName, code) {
+    const res = await fetch(`${API_BASE}/exam/session/start`, asJson('POST', {
+      exam_id: EXAM_ID,
+      candidate_first_name: String(firstName||''),
+      candidate_last_name: String(lastName||''),
+      candidate_code: String(code||''),
+    }));
+    if (!res.ok) throw new Error('სესია ვერ დაიწყო');
+    return await res.json();
+  }
   async function apiGetBlockQuestions(blockId) {
     if (!sessionId) throw new Error('სესია არ არის');
     const res = await fetch(`${API_BASE}/exam/${sessionId}/questions?block_id=${encodeURIComponent(blockId)}`, getOpts());
@@ -277,10 +287,20 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (gateError) gateError.hidden = true;
-    // Hide gate and enable starting the exam immediately
+    // Hide gate and enable Start immediately; start server session in background
     hide(gateOverlay);
-    if (examStart) { examStart.disabled = false; examStart.focus(); }
     enterFullscreen();
+    if (examStart) { examStart.disabled = false; examStart.focus(); }
+    (async () => {
+      try {
+        const user = getCurrentUser() || {};
+        const resp = await apiStartSession(user.firstName, user.lastName, user.code);
+        sessionId = resp.session_id;
+        sessionToken = resp.token;
+        serverEndsAtMs = resp.ends_at ? new Date(resp.ends_at).getTime() : null;
+        updateUserHeader();
+      } catch {}
+    })();
   });
 
   // Close button on gate: return to index without entering exam

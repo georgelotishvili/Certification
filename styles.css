@@ -3,9 +3,8 @@
   margin: 0;
   padding: 0;
   text-decoration: none;
-  font-size: 14px;
+  font-size: 12px;
   font-family: 'DejaVu Sans', sans-serif;
-  font-weight: 100;
 }
 
 html, body {
@@ -17,7 +16,6 @@ html, body {
 @font-face {
   font-family: 'DejaVu Sans';
   src: url('fonts/dejavu-sans.ttf') format('truetype');
-  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
@@ -69,7 +67,6 @@ header {
 
       .nav a { 
         color: #e5e7eb;
-        font-weight: 500;
         padding: 6px 12px;
         transition: .2s;
       }
@@ -108,7 +105,6 @@ header {
     background: transparent;
     border: 0;
     cursor: pointer;
-    font-weight: 500;
   }
   .dropdown-item:hover {
     background: rgba(255,255,255,0.08);
@@ -160,7 +156,6 @@ header {
     justify-content: center;
     pointer-events: none;
     line-height: 2;
-    font-weight: 500;
   }
 
   .nav-bar .auth-banner {
@@ -186,7 +181,6 @@ header {
     color: var(--brand-dark);
     border: 1px solid #d1d5db;
     cursor: pointer;
-    font-weight: 400;
     letter-spacing: 0.5px;
     transition: .2s;
     box-shadow: none;
@@ -313,7 +307,6 @@ header {
     display: block;
     color: #e5e7eb;
     padding: 14px 16px;
-    font-weight: 500;
     transition: .2s;
   }
   .drawer-nav a:hover, .drawer-item > a:hover {
@@ -334,7 +327,6 @@ header {
     color: #e5e7eb;
     padding: 10px 22px 10px 28px;
     cursor: pointer;
-    font-weight: 500;
   }
   .drawer-submenu-item:hover {
     background: rgba(255,255,255,0.08);
@@ -350,7 +342,6 @@ header {
     text-align: center;
     margin-top: 40px;
     line-height: 2;
-    font-weight: 500;
   }
 
   .drawer-login {
@@ -360,7 +351,6 @@ header {
     color: #111827;
     border: 2px solid #d1d5db;
     cursor: pointer;
-    font-weight: 600;
     transition: .2s;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
@@ -416,7 +406,6 @@ footer {
   .footer-section h4 {
     color: #ffffff;
     font-size: 16px;
-    font-weight: 600;
     margin-bottom: 16px;
     border-bottom: 2px solid rgba(255, 255, 255, 0.2);
     padding-bottom: 8px;
@@ -498,7 +487,6 @@ footer {
     color: #ffffff;
     border: 1px solid #14532d;
     cursor: pointer;
-    font-weight: 400;
     font-size: 13px;
     letter-spacing: 0.5px;
     transition: .2s;
@@ -526,7 +514,6 @@ footer {
   .footer-bottom .admin-link {
     color: #93c5fd;
     text-decoration: none;
-    font-weight: 500;
     transition: color .2s;
   }
 
@@ -597,7 +584,6 @@ footer {
     color: #e5e7eb;
     margin-bottom: 24px;
     font-size: 20px;
-    font-weight: 600;
   }
 
   .modal-buttons { 
@@ -610,7 +596,6 @@ footer {
     padding: 12px 24px;
     border: none;
     cursor: pointer;
-    font-weight: 600;
     transition: .2s;
     box-shadow: 0 2px 6px rgba(0,0,0,0.2);
   }
@@ -663,7 +648,6 @@ footer {
       background: rgba(255,255,255,.08);
       color: #e5e7eb;
       padding: 0 14px;
-      font-weight: 400;
       transition: .2s;
     }
 
@@ -690,7 +674,6 @@ footer {
       width: 100%;
       height: 44px;
       border: 1px solid #14532d;
-      font-weight: 400;
       letter-spacing: 0.5px;
       transition: .2s;
     }
@@ -711,7 +694,6 @@ footer {
       color: #93c5fd;
       text-decoration: none;
       font-size: 13px;
-      font-weight: 500;
       transition: color .2s;
       padding: 4px 8px;
       display: inline-block;
@@ -728,7 +710,6 @@ footer {
       border: 2px solid rgba(255, 255, 255, 0.3);
       width: 100%;
       height: 44px;
-      font-weight: 600;
       transition: .2s;
     }
 

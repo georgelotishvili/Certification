@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, status
@@ -18,10 +18,41 @@ from ..schemas import (
     OptionOut,
     QuestionOut,
     QuestionsResponse,
+    StartSessionRequest,
+    StartSessionResponse,
 )
 
 
 router = APIRouter()
+@router.post("/session/start", response_model=StartSessionResponse)
+def start_session(payload: StartSessionRequest, db: Session = Depends(get_db)):
+    exam = db.get(Exam, payload.exam_id)
+    if not exam:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam not found")
+    now = datetime.utcnow()
+    ends_at = now + timedelta(minutes=exam.duration_minutes)
+    token = f"sess_{now.timestamp()}_{random.randint(1000,9999)}"
+    session = ExamSession(
+        exam_id=exam.id,
+        token=token,
+        started_at=now,
+        ends_at=ends_at,
+        active=True,
+        candidate_first_name=payload.candidate_first_name,
+        candidate_last_name=payload.candidate_last_name,
+        candidate_code=payload.candidate_code,
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return StartSessionResponse(
+        session_id=session.id,
+        token=token,
+        exam_id=exam.id,
+        duration_minutes=exam.duration_minutes,
+        ends_at=ends_at,
+    )
+
 
 
 def _get_session_or_401(
@@ -201,7 +232,22 @@ def finish_exam(
     correct = sum(1 for a in answers if a.is_correct)
     score_percent = float(correct) / total_questions * 100.0 if total_questions else 0.0
 
+    # Build per-block stats
+    block_stats: List[dict] = []
+    for key, ids in selected_map.items():
+        b_total = len(ids)
+        if b_total == 0:
+            block_stats.append({"block_id": int(key), "correct": 0, "total": 0, "percent": 0.0})
+            continue
+        ans_stmt_b = select(Answer).where(Answer.session_id == session.id, Answer.question_id.in_(ids))
+        answers_b = db.scalars(ans_stmt_b).all()
+        b_correct = sum(1 for a in answers_b if a.is_correct)
+        b_pct = round((b_correct / b_total) * 100.0, 2)
+        block_stats.append({"block_id": int(key), "correct": b_correct, "total": b_total, "percent": b_pct})
+
     session.active = False
+    session.score_percent = round(score_percent, 2)
+    session.block_stats = json.dumps(block_stats)
     db.add(session)
     db.commit()
 
@@ -209,7 +255,8 @@ def finish_exam(
         "total_questions": total_questions,
         "answered": answered,
         "correct": correct,
-        "score_percent": round(score_percent, 2),
+        "score_percent": session.score_percent,
+        "block_stats": block_stats,
     }
 
 

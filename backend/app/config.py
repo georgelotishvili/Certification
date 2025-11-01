@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-key"
     admin_api_key: Optional[str] = None
     cors_origins: List[str] = ["*"]
+    founder_admin_email: Optional[str] = "naormala@gmail.com"
 
     class Config:
         env_file = ".env"

@@ -7,6 +7,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const loginBtn = document.querySelector('.login-btn');
   const drawerLoginBtn = document.querySelector('.drawer-login');
   
+  // Admin-only access gate (client-side)
+  const AUTH_KEY = 'authLoggedIn';
+  const SAVED_EMAIL_KEY = 'savedEmail';
+  const CURRENT_USER_KEY = 'currentUser';
+  const FOUNDER_EMAIL = 'naormala@gmail.com';
+  const isLoggedIn = () => localStorage.getItem(AUTH_KEY) === 'true';
+  const emailLower = () => (localStorage.getItem(SAVED_EMAIL_KEY) || '').toLowerCase();
+  const getCurrentUser = () => { try { const raw = localStorage.getItem(CURRENT_USER_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
+  const isLocalAdmin = () => !!(getCurrentUser()?.isAdmin);
+  if (!isLoggedIn() || !(emailLower() === FOUNDER_EMAIL.toLowerCase() || isLocalAdmin())) {
+    alert('ადმინისტრატორის გვერდზე დაშვება აქვს მხოლოდ ადმინს');
+    window.location.href = 'index.html';
+    return;
+  }
+  
   const on = (el, evt, handler) => el && el.addEventListener(evt, handler);
   
   const setMenu = (open) => {
@@ -78,7 +93,27 @@ document.addEventListener('DOMContentLoaded', () => {
       const text = (link.textContent || '').trim();
       if (text === 'გამოცდა') {
         e.preventDefault();
+        const resultsSection = document.getElementById('results-section');
+        const regsSection = document.getElementById('registrations-section');
         if (examSection) examSection.style.display = 'block';
+        if (resultsSection) resultsSection.style.display = 'none';
+        if (regsSection) regsSection.style.display = 'none';
+      }
+      if (text === 'შედეგები') {
+        e.preventDefault();
+        const resultsSection = document.getElementById('results-section');
+        const regsSection = document.getElementById('registrations-section');
+        if (examSection) examSection.style.display = 'none';
+        if (regsSection) regsSection.style.display = 'none';
+        if (resultsSection) { resultsSection.style.display = 'block'; renderResults(); }
+      }
+      if (text === 'რეგისტრაციები' || text === 'რეგისტრირებული პირები') {
+        e.preventDefault();
+        const resultsSection = document.getElementById('results-section');
+        const regsSection = document.getElementById('registrations-section');
+        if (examSection) examSection.style.display = 'none';
+        if (resultsSection) resultsSection.style.display = 'none';
+        if (regsSection) { regsSection.style.display = 'block'; renderUsers(); }
       }
     });
   });
@@ -592,5 +627,307 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initial render
   renderBlocks();
+
+  // ================= Results rendering =================
+  const API_BASE = 'http://127.0.0.1:8000';
+  const resultsGrid = document.getElementById('resultsGrid');
+  const resultsSearch = document.getElementById('resultsSearch');
+  const resultsApiKeyInput = document.getElementById('resultsApiKey');
+  const saveResultsApiKeyBtn = document.getElementById('saveResultsApiKey');
+  const ADMIN_API_KEY_LS = 'adminApiKey';
+  try { if (resultsApiKeyInput) resultsApiKeyInput.value = localStorage.getItem(ADMIN_API_KEY_LS) || ''; } catch {}
+  on(saveResultsApiKeyBtn, 'click', () => {
+    const v = String(resultsApiKeyInput?.value || '').trim();
+    try { localStorage.setItem(ADMIN_API_KEY_LS, v); } catch {}
+    showToast('Admin API Key შენახულია');
+  });
+  let lastResults = [];
+
+  const fmtDT = (iso) => {
+    try { const d = new Date(iso); const p = (n)=>String(n).padStart(2,'0'); return `${p(d.getDate())}-${p(d.getMonth()+1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; } catch { return String(iso||''); }
+  };
+
+  const adminHeaders = () => {
+    const key = localStorage.getItem(ADMIN_API_KEY_LS);
+    return key ? { 'x-admin-key': key } : {};
+  };
+
+  const actorHeaders = () => {
+    const actor = (localStorage.getItem(SAVED_EMAIL_KEY) || '').trim();
+    return actor ? { 'x-actor-email': actor } : {};
+  };
+
+  async function fetchResults() {
+    const res = await fetch(`${API_BASE}/admin/results`, { headers: { ...adminHeaders() } });
+    if (!res.ok) throw new Error('results failed');
+    return await res.json();
+  }
+
+  function groupByCandidate(items) {
+    const map = new Map();
+    items.forEach(it => {
+      const key = `${it.candidate_first_name||''}|${it.candidate_last_name||''}|${it.candidate_code||''}`;
+      if (!map.has(key)) map.set(key, { key, firstName: it.candidate_first_name||'', lastName: it.candidate_last_name||'', code: it.candidate_code||'', sessions: [] });
+      map.get(key).sessions.push(it);
+    });
+    return Array.from(map.values());
+  }
+
+  async function renderResults() {
+    if (!resultsGrid) return;
+    resultsGrid.innerHTML = '';
+    try {
+      const data = await fetchResults();
+      lastResults = Array.isArray(data?.items) ? data.items : [];
+      drawResults(lastResults);
+    } catch {
+      resultsGrid.innerHTML = '<div class="block-tile">ვერ ჩაიტვირთა შედეგები</div>';
+    }
+  }
+
+  function drawResults(items) {
+    const groups = groupByCandidate(items);
+    const q = String(resultsSearch?.value || '').trim().toLowerCase();
+    const filtered = groups.filter(g => {
+      const s = `${g.firstName} ${g.lastName} ${g.code}`.toLowerCase();
+      return !q || s.includes(q);
+    });
+    filtered.forEach(g => {
+      const card = document.createElement('div');
+      card.className = 'block-tile block-card';
+      card.innerHTML = `
+        <div class="block-head">
+          <div class="block-order"></div>
+          <span class="head-label">${(g.firstName||'').trim()} ${(g.lastName||'').trim()}</span>
+          <input class="head-name" type="text" value="${(g.code||'').replace(/"/g,'&quot;')}" readonly aria-label="კოდი" />
+          <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+        </div>
+        <div class="block-questions" aria-hidden="true">
+          <div class="questions-list"></div>
+        </div>`;
+      const list = card.querySelector('.questions-list');
+      // sort sessions by started_at desc
+      const sess = g.sessions.slice().sort((a,b)=> new Date(b.started_at)-new Date(a.started_at));
+      sess.forEach(s => {
+        const row = document.createElement('div');
+        row.className = 'question-card';
+        row.dataset.sessionId = s.session_id;
+        row.innerHTML = `
+          <div class="q-head">
+            <div class="q-order"></div>
+            <div class="q-actions">
+              <div class="q-actions-row"></div>
+              <button class="q-toggle" type="button" aria-expanded="false">▾</button>
+              <span class="q-code">${fmtDT(s.started_at)}${s.finished_at ? ' → '+fmtDT(s.finished_at) : ''} • ${Math.round(Number(s.score_percent||0))}%</span>
+            </div>
+          </div>
+          <div class="q-details" aria-hidden="true"></div>`;
+        // Load details on demand
+        const btn = row.querySelector('.q-toggle');
+        btn.addEventListener('click', async () => {
+          const isOpen = row.classList.contains('open');
+          row.classList.toggle('open', !isOpen);
+          const details = row.querySelector('.q-details');
+          if (details) details.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
+          if (!isOpen && details && !details.dataset.loaded) {
+            details.innerHTML = '<div class="block-tile">იტვირთება...</div>';
+            try {
+              const resp = await fetch(`${API_BASE}/admin/results/${s.session_id}`, { headers: { ...adminHeaders() } });
+              const data = await resp.json();
+              renderSessionDetails(details, data);
+              details.dataset.loaded = '1';
+            } catch {
+              details.innerHTML = '<div class="block-tile">ჩატვირთვის შეცდომა</div>';
+            }
+          }
+        });
+        list.appendChild(row);
+      });
+      // toggle behaviour
+      const toggle = card.querySelector('.head-toggle');
+      toggle.addEventListener('click', () => {
+        const isOpen = card.classList.contains('open');
+        card.classList.toggle('open', !isOpen);
+        const q = card.querySelector('.block-questions');
+        if (q) q.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
+      });
+      resultsGrid.appendChild(card);
+    });
+  }
+
+  function renderSessionDetails(container, data) {
+    const sess = data?.session || {};
+    const blocks = Array.isArray(data?.block_stats) ? data.block_stats : [];
+    const answers = Array.isArray(data?.answers) ? data.answers : [];
+    const top = document.createElement('div');
+    top.className = 'block-tile';
+    top.innerHTML = `<div><strong>${(sess.candidate_first_name||'')} ${(sess.candidate_last_name||'')}</strong> • ${sess.candidate_code||''}</div>
+    <div>${fmtDT(sess.started_at)}${sess.finished_at ? ' → '+fmtDT(sess.finished_at) : ''} • ${Math.round(Number(sess.score_percent||0))}%</div>`;
+    const blocksDiv = document.createElement('div');
+    blocksDiv.style.margin = '8px 0';
+    blocks.forEach(b => {
+      const row = document.createElement('div');
+      row.className = 'result-row';
+      row.innerHTML = `<div class="result-label">ბლოკი ${b.block_id}</div><div class="result-value">${b.percent}%</div>`;
+      blocksDiv.appendChild(row);
+    });
+    const list = document.createElement('div');
+    list.style.display = 'grid'; list.style.gap = '6px';
+    answers.forEach(a => {
+      const r = document.createElement('div');
+      r.className = 'question-card open';
+      r.innerHTML = `<div class="q-head"><div class="q-order"></div><div class="q-actions"><span class="q-code">${a.question_code}</span></div></div>
+      <div class="q-details" aria-hidden="false"><div class="q-answers">${a.question_text}</div><div>${a.option_text} • ${a.is_correct ? 'სწორი' : 'არასწორი'}</div></div>`;
+      list.appendChild(r);
+    });
+    container.innerHTML = '';
+    container.appendChild(top);
+    container.appendChild(blocksDiv);
+    container.appendChild(list);
+  }
+
+  on(resultsSearch, 'input', () => drawResults(lastResults));
+
+  // ================= Registrations (users) =================
+  const usersGrid = document.getElementById('usersGrid');
+  const usersSearch = document.getElementById('usersSearch');
+  const usersSort = document.getElementById('usersSort');
+  const onlyAdmins = document.getElementById('onlyAdmins');
+
+  const isFounderActor = () => (localStorage.getItem(SAVED_EMAIL_KEY) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
+
+  function userRowHTML(u) {
+    const full = `${(u.first_name||'').trim()} ${(u.last_name||'').trim()}`.trim();
+    const founderRow = !!u.is_founder;
+    const checked = founderRow ? 'checked' : (u.is_admin ? 'checked' : '');
+    const disabled = founderRow ? 'disabled' : (isFounderActor() ? '' : 'disabled');
+    return `
+      <div class="block-tile block-card" data-id="${u.id}">
+        <div class="block-head" style="grid-template-columns:auto 1fr auto auto auto;">
+          <div class="block-order"></div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="font-size:16px;font-weight:700;color:#0f172a;">${full || '(უსახელო)'}</div>
+            <div style="font-size:13px;color:#525252;">
+              <span style="color:#6d28d9;font-weight:600;">კოდი: ${(u.code||'')}</span> •
+              <span style="color:#065f46;">${(u.email||'')}</span>
+            </div>
+          </div>
+          <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+        </div>
+        <div class="block-questions" aria-hidden="true">
+          <div class="questions-list">
+            <div class="question-card open">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:12px;">
+                <div>
+                  <div style="font-weight:700;color:#065f46;margin-bottom:8px;">კონტაქტი</div>
+                  <div style="color:#525252;font-size:13px;line-height:1.8;">
+                    <div>პირადი №: <strong>${u.personal_id}</strong></div>
+                    <div>ტელეფონი: <strong>${u.phone}</strong></div>
+                    <div>რეგისტრაცია: <strong>${fmtDT(u.created_at)}</strong></div>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-weight:700;color:#065f46;margin-bottom:8px;">ქმედებები</div>
+                  <div style="display:flex;flex-direction:column;gap:8px;">
+                    <label class="a-correct-wrap" title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}" style="width:fit-content;">
+                      <input type="checkbox" class="chk-admin" ${checked} ${disabled} />
+                      <span>ადმინი</span>
+                    </label>
+                    <button class="btn-delete" ${founderRow || !isFounderActor() ? 'disabled' : ''} style="width:fit-content;padding:6px 12px;">წაშლა</button>
+                  </div>
+                  <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
+                    <button class="btn-user-announcements" style="padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;" onclick="alert('განცხადებები — მალე დაემატება')">განცხადებები</button>
+                    <button class="btn-user-results" style="padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;" onclick="alert('შედეგები — მალე დაემატება')">შედეგები</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  async function fetchUsers() {
+    if (!usersGrid) return { items: [] };
+    const params = new URLSearchParams();
+    const q = String(usersSearch?.value||'').trim();
+    if (q) params.set('search', q);
+    if (onlyAdmins?.checked) params.set('only_admins', 'true');
+    params.set('sort', usersSort?.value || 'date_desc');
+    const res = await fetch(`${API_BASE}/admin/users?${params.toString()}`, { headers: { ...adminHeaders(), ...actorHeaders() } });
+    if (!res.ok) throw new Error('users failed');
+    return await res.json();
+  }
+
+  function mountUserCard(card) {
+    const toggle = card.querySelector('.head-toggle');
+    toggle?.addEventListener('click', () => {
+      const isOpen = card.classList.contains('open');
+      card.classList.toggle('open', !isOpen);
+      card.querySelector('.block-questions')?.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
+    });
+
+    const chk = card.querySelector('.chk-admin');
+    if (chk) {
+      chk.addEventListener('change', async (e) => {
+        const id = card.dataset.id;
+        const want = !!e.target.checked;
+        if (!confirm('დარწმუნებული ხართ, რომ შეცვალოთ ადმინის სტატუსი?')) { e.target.checked = !want; return; }
+        try {
+          const r = await fetch(`${API_BASE}/admin/users/${id}/admin`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', ...adminHeaders(), ...actorHeaders() },
+            body: JSON.stringify({ is_admin: want }),
+          });
+          if (!r.ok) throw 0;
+        } catch {
+          e.target.checked = !want;
+          alert('ვერ შეინახა სტატუსი');
+        }
+      });
+    }
+
+    const del = card.querySelector('.btn-delete');
+    if (del) {
+      del.addEventListener('click', async () => {
+        const id = card.dataset.id;
+        if (!confirm('დარწმუნებული ხართ, რომ წაშალოთ ჩანაწერი?')) return;
+        try {
+          const r = await fetch(`${API_BASE}/admin/users/${id}`, { method: 'DELETE', headers: { ...adminHeaders(), ...actorHeaders() } });
+          if (!r.ok) throw 0;
+          card.remove();
+        } catch {
+          alert('წაშლა ვერ შესრულდა');
+        }
+      });
+    }
+  }
+
+  function drawUsers(items) {
+    if (!usersGrid) return;
+    usersGrid.innerHTML = '';
+    (items||[]).forEach(u => {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = userRowHTML(u);
+      const card = wrapper.firstElementChild;
+      mountUserCard(card);
+      usersGrid.appendChild(card);
+    });
+  }
+
+  async function renderUsers() {
+    if (!usersGrid) return;
+    usersGrid.innerHTML = '<div class="block-tile">იტვირთება...</div>';
+    try {
+      const data = await fetchUsers();
+      drawUsers(data.items || []);
+    } catch {
+      usersGrid.innerHTML = '<div class="block-tილe">ჩატვირთვის შეცდომა</div>';
+    }
+  }
+
+  on(usersSearch, 'input', renderUsers);
+  on(usersSort, 'change', renderUsers);
+  on(onlyAdmins, 'change', renderUsers);
 
 });

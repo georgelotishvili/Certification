@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Float,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -102,6 +103,13 @@ class Session(Base):
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     selected_map: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Candidate metadata (optional, filled when using admin-started sessions)
+    candidate_first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    candidate_last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    candidate_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Aggregated results
+    block_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
+    score_percent: Mapped[float] = mapped_column(Float, default=0.0)
 
     exam: Mapped[Exam] = relationship("Exam", back_populates="sessions")
     code: Mapped[ExamCode] = relationship("ExamCode", back_populates="sessions")
@@ -121,3 +129,22 @@ class Answer(Base):
     session: Mapped[Session] = relationship("Session", back_populates="answers")
     question: Mapped[Question] = relationship("Question", back_populates="answers")
 
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("personal_id", name="uq_users_personal_id"),
+        UniqueConstraint("code", name="uq_users_code"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    personal_id: Mapped[str] = mapped_column(String(11), index=True)
+    first_name: Mapped[str] = mapped_column(String(100))
+    last_name: Mapped[str] = mapped_column(String(100))
+    phone: Mapped[str] = mapped_column(String(20), index=True)
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    code: Mapped[str] = mapped_column(String(10), index=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

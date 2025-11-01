@@ -85,6 +85,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const SAVED_EMAIL_KEY = 'savedEmail';
   const SAVED_PASSWORD_KEY = 'savedPassword';
   const DEFAULT_BANNER_TEXT = 'გთხოვთ გაიაროთ ავტორიზაცია';
+  const NEED_REGISTER_TEXT = 'გთხოვთ დაასრულოთ რეგისტრაცია';
+  const API_BASE = 'http://127.0.0.1:8000';
+  const FOUNDER_EMAIL = 'naormala@gmail.com';
   const isLoggedIn = () => localStorage.getItem(AUTH_KEY) === 'true';
   const setLoggedIn = (value) => { localStorage.setItem(AUTH_KEY, value ? 'true' : 'false'); };
   const getTrimmed = (fd, name) => (fd.get(name) || '').toString().trim();
@@ -95,6 +98,24 @@ document.addEventListener('DOMContentLoaded', () => {
     try { const raw = localStorage.getItem(CURRENT_USER_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
   };
   const saveCurrentUser = (user) => localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  const isFounder = () => (localStorage.getItem(SAVED_EMAIL_KEY) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
+  const isLocalAdmin = () => !!(getCurrentUser()?.isAdmin);
+  const adminLink = document.querySelector('.admin-link');
+  const updateAdminLinkVisibility = () => {
+    if (!adminLink) return;
+    const user = getCurrentUser();
+    const visible = isLoggedIn() && ((user && !!user.isAdmin) || isFounder());
+    adminLink.style.display = visible ? '' : 'none';
+  };
+  // Ensure stored profile belongs to the currently logged-in email to avoid showing other person's data
+  const ensureProfileConsistency = () => {
+    if (!isLoggedIn()) return;
+    const savedEmailLower = (localStorage.getItem(SAVED_EMAIL_KEY) || '').toLowerCase();
+    const user = getCurrentUser();
+    if (user && String(user.email || '').toLowerCase() !== savedEmailLower) {
+      try { localStorage.removeItem(CURRENT_USER_KEY); } catch {}
+    }
+  };
   const generateUniqueCode = () => {
     const used = getUsedCodes();
     for (let i = 0; i < 10000; i++) {
@@ -106,9 +127,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const updateBanner = () => {
     const user = getCurrentUser();
-    const text = (isLoggedIn() && user)
-      ? `${user.firstName} ${user.lastName} — ${user.code}`
-      : DEFAULT_BANNER_TEXT;
+    let text = DEFAULT_BANNER_TEXT;
+    if (isLoggedIn()) {
+      text = user ? `${user.firstName} ${user.lastName} — ${user.code}` : NEED_REGISTER_TEXT;
+    }
     if (authBanner) authBanner.textContent = text;
     if (drawerAuthBanner) drawerAuthBanner.textContent = text;
   };
@@ -207,8 +229,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const updateAuthUI = () => {
     const logged = isLoggedIn();
-    if (loginBtn) loginBtn.textContent = logged ? 'გასვლა' : 'ავტორიზაცია';
-    if (drawerLoginBtn) drawerLoginBtn.textContent = logged ? 'გასვლა' : 'ავტორიზაცია';
+    const hasProfile = !!getCurrentUser();
+    const label = !logged ? 'ავტორიზაცია' : (hasProfile ? 'გასვლა' : 'რეგისტრაცია');
+    if (loginBtn) loginBtn.textContent = label;
+    if (drawerLoginBtn) drawerLoginBtn.textContent = label;
   };
   const performLogout = () => {
     if (!isLoggedIn()) return;
@@ -216,18 +240,29 @@ document.addEventListener('DOMContentLoaded', () => {
     setLoggedIn(false);
     updateAuthUI();
     updateBanner();
+    updateAdminLinkVisibility();
     alert('გასვლა შესრულებულია');
     closeLoginModal();
   };
   const handleAuthButtonClick = (fromDrawer) => {
-    if (isLoggedIn()) {
-      performLogout();
-      if (fromDrawer) closeMenu();
-    } else {
+    const logged = isLoggedIn();
+    const hasProfile = !!getCurrentUser();
+    if (!logged) {
       if (fromDrawer) closeMenu();
       openLoginModal();
       showOptions();
+      return;
     }
+    // Logged in
+    if (!hasProfile) {
+      if (fromDrawer) closeMenu();
+      openLoginModal();
+      showRegister();
+      return;
+    }
+    // Logged in with profile -> logout
+    performLogout();
+    if (fromDrawer) closeMenu();
   };
 
   on(loginBtn, 'click', () => handleAuthButtonClick(false));
@@ -373,20 +408,37 @@ document.addEventListener('DOMContentLoaded', () => {
     setLoggedIn(true);
     updateAuthUI();
     const user = getCurrentUser();
-    if (!user) {
+    const loginEmailLower = email.toLowerCase();
+    // If stored profile belongs to different email, clear it to avoid showing another person's data
+    if (user && String(user.email || '').toLowerCase() !== loginEmailLower) {
+      try { localStorage.removeItem(CURRENT_USER_KEY); } catch {}
+    }
+
+    // Try to hydrate profile from backend by email
+    (async () => {
+      try {
+        const resp = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(email)}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          saveCurrentUser({ firstName: data.first_name, lastName: data.last_name, code: data.code, isAdmin: !!data.is_admin, email: data.email });
+          updateBanner();
+          updateAdminLinkVisibility();
+          closeLoginModal();
+          loginForm.reset();
+          showOptions();
+          return;
+        }
+      } catch {}
+      // If no profile on server, ask to register
       updateBanner();
+      updateAdminLinkVisibility();
       showRegister();
       try {
         const regEmailInput = registerForm?.querySelector('input[name="email"]');
         if (regEmailInput) regEmailInput.value = email;
       } catch {}
       alert('თქვენ ჯერ არ გაქვთ დასრულებული რეგისტრაცია. გთხოვთ შეავსოთ ველები, რათა გამოჩნდეს თქვენი სახელი/გვარი და უნიკალური კოდი.');
-      return;
-    }
-    updateBanner();
-    closeLoginModal();
-    loginForm.reset();
-    showOptions();
+    })();
   });
 
   // Forgot password form submission
@@ -422,22 +474,85 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!isValidEmail(email)) return alert('ელფოსტა არასწორია');
     if (password.length < 6) return alert('პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო');
     if (password !== confirmPassword) return alert('პაროლები არ ემთხვევა');
-    const code = generateUniqueCode();
-    const used = getUsedCodes();
-    used.add(code);
-    saveUsedCodes(used);
-    saveCurrentUser({ firstName, lastName, code });
-    setLoggedIn(true);
-    updateAuthUI();
-    updateBanner();
-    alert('რეგისტრაცია მიღებულია!');
-    closeLoginModal();
-    registerForm.reset();
-    showOptions();
+    // Send to backend
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/users/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            personal_id: personalId,
+            first_name: firstName,
+            last_name: lastName,
+            phone,
+            email,
+            password,
+          }),
+        });
+        if (!res.ok) {
+          const status = res.status;
+          let detail = '';
+          try { const j = await res.json(); if (j && j.detail) detail = j.detail; } catch {}
+          // If personal_id already exists, guide user to login and auto-hydrate profile
+          if (status === 409 || /already registered/i.test(detail || '')) {
+            alert('ეს პირადი ნომერი უკვე რეგისტრირებულია. გადავდივართ ავტორიზაციაზე.');
+            // Prefill and try to auto-complete login by fetching profile
+            try {
+              localStorage.setItem(SAVED_EMAIL_KEY, email);
+              localStorage.setItem(SAVED_PASSWORD_KEY, password);
+            } catch {}
+            setLoggedIn(true);
+            try {
+              const resp = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(email)}`);
+              if (resp.ok) {
+                const data = await resp.json();
+                saveCurrentUser({ firstName: data.first_name, lastName: data.last_name, code: data.code, isAdmin: !!data.is_admin, email: data.email });
+                updateAuthUI();
+                updateBanner();
+                updateAdminLinkVisibility();
+                closeLoginModal();
+                showOptions();
+                return;
+              }
+            } catch {}
+            // Fallback: show login prefilled
+            showLogin();
+            const emailInput = loginForm?.querySelector('input[name="email"]');
+            const pwdInput = loginForm?.querySelector('input[name="password"]');
+            if (emailInput) emailInput.value = email;
+            if (pwdInput) pwdInput.value = password;
+            updateAuthUI();
+            updateBanner();
+            updateAdminLinkVisibility();
+            return;
+          }
+          alert(String(detail || 'რეგისტრაცია ვერ შესრულდა'));
+          return;
+        }
+        const data = await res.json();
+        // Persist for banner and admin visibility
+        saveCurrentUser({ firstName: data.first_name || firstName, lastName: data.last_name || lastName, code: data.code, isAdmin: !!data.is_admin, email: data.email });
+        // Remember credentials locally for convenience
+        localStorage.setItem(SAVED_EMAIL_KEY, email);
+        localStorage.setItem(SAVED_PASSWORD_KEY, password);
+        setLoggedIn(true);
+        updateAuthUI();
+        updateBanner();
+        updateAdminLinkVisibility();
+        alert('რეგისტრაცია მიღებულია!');
+        closeLoginModal();
+        registerForm.reset();
+        showOptions();
+      } catch {
+        alert('ქსელური პრობლემა - სცადეთ მოგვიანებით');
+      }
+    })();
   });
   // Initialize auth UI state on load
   updateAuthUI();
+  ensureProfileConsistency();
   updateBanner();
+  updateAdminLinkVisibility();
   // (Escape handled above for both menu and modal)
 
   // Footer form submission
