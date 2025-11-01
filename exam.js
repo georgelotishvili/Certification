@@ -1,850 +1,1004 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // Prevent zooming with Ctrl/+/-, Ctrl+mousewheel, and mousewheel-only zoom on some browsers
-  document.addEventListener('wheel', (e) => {
-    if (e.ctrlKey) { e.preventDefault(); }
-  }, { passive: false });
-  document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=')) {
-      e.preventDefault();
-    }
-  }, { passive: false });
-  const rootEl = document.documentElement;
-  // Minimal DOM helpers
+  preventZooming();
+
   const byId = (id) => document.getElementById(id);
-  const qs = (sel) => document.querySelector(sel);
-  const setHidden = (el, val) => { if (el) el.hidden = !!val; };
+  const qs = (selector) => document.querySelector(selector);
+  const setHidden = (el, value) => { if (el) el.hidden = !!value; };
   const show = (el, display = 'block') => { if (el) el.style.display = display; };
   const hide = (el) => { if (el) el.style.display = 'none'; };
-  const getAnswers = (q) => Array.isArray(q?.answers) ? q.answers : (Array.isArray(q?.options) ? q.options : []);
-  const gateOverlay = document.getElementById('examGateOverlay');
-  const gateForm = document.getElementById('examGateForm');
-  const gateInput = document.getElementById('examPassword');
-  const gateError = document.getElementById('examGateError');
-  const gateClose = document.getElementById('examGateClose');
-  // Unique code overlay elements removed
-  const examStart = document.getElementById('examStart');
-  const examFinish = document.getElementById('examFinish');
-  const examConfirm = document.getElementById('examConfirm');
-  const examFinal = document.getElementById('examFinal');
-  const confirmOverlay = document.getElementById('confirmOverlay');
-  const finalOverlay = document.getElementById('finalOverlay');
-  const prestartOverlay = document.getElementById('prestartOverlay');
-  const resultsOverlay = document.getElementById('resultsOverlay');
-  const examResults = document.getElementById('examResults');
-  const resultsList = document.getElementById('resultsList');
-  const resultsClose = document.getElementById('resultsClose');
-  const confirmLeaveYes = document.getElementById('confirmLeaveYes');
-  const confirmLeaveNo = document.getElementById('confirmLeaveNo');
-  const agreeExit = document.getElementById('agreeExit');
-  const returnToExam = document.getElementById('returnToExam');
-  const ctTitle = document.querySelector('.ct-section.ct-title');
-  const countdownEl = document.getElementById('examCountdown');
-  const rightDateTime = document.getElementById('rightDateTime');
-  // Disable Finish until exam actually starts
-  try { if (examFinish) examFinish.disabled = true; } catch {}
-  const cmHeader = document.querySelector('.cm-header');
-  const cmContent = document.querySelector('.cm-content');
-  const cmDotsWrap = document.querySelector('.cm-dots');
-  const prevBtn = document.querySelector('.cm-nav.prev');
-  const nextBtn = document.querySelector('.cm-nav.next');
-  const qNumEl = document.querySelector('.question-number-num');
-  const blockNumEl = document.querySelector('.block-number-num');
+  const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const getAnswers = (question) => Array.isArray(question?.answers)
+    ? question.answers
+    : (Array.isArray(question?.options) ? question.options : []);
 
-  // Backend API wiring
+  const DOM = {
+    root: document.documentElement,
+    gateOverlay: byId('examGateOverlay'),
+    gateForm: byId('examGateForm'),
+    gateInput: byId('examPassword'),
+    gateError: byId('examGateError'),
+    gateClose: byId('examGateClose'),
+    examStart: byId('examStart'),
+    examFinish: byId('examFinish'),
+    examConfirm: byId('examConfirm'),
+    examFinal: byId('examFinal'),
+    confirmOverlay: byId('confirmOverlay'),
+    finalOverlay: byId('finalOverlay'),
+    prestartOverlay: byId('prestartOverlay'),
+    resultsOverlay: byId('resultsOverlay'),
+    examResults: byId('examResults'),
+    resultsList: byId('resultsList'),
+    resultsClose: byId('resultsClose'),
+    confirmLeaveYes: byId('confirmLeaveYes'),
+    confirmLeaveNo: byId('confirmLeaveNo'),
+    agreeExit: byId('agreeExit'),
+    returnToExam: byId('returnToExam'),
+    ctTitle: qs('.ct-section.ct-title'),
+    countdownEl: byId('examCountdown'),
+    rightDateTime: byId('rightDateTime'),
+    cmHeader: qs('.cm-header'),
+    cmContent: qs('.cm-content'),
+    cmDotsWrap: qs('.cm-dots'),
+    prevBtn: qs('.cm-nav.prev'),
+    nextBtn: qs('.cm-nav.next'),
+    qNumEl: qs('.question-number-num'),
+    blockNumEl: qs('.block-number-num'),
+    answerAllOverlay: byId('answerAllOverlay'),
+    answerAllDialog: byId('answerAllDialog'),
+    answerAllClose: byId('answerAllClose'),
+  };
+
+  if (DOM.examFinish) {
+    try { DOM.examFinish.disabled = true; } catch {}
+  }
+
+  const state = {
+    sessionId: null,
+    sessionToken: null,
+    serverEndsAtMs: null,
+    isStartingSession: false,
+    gatePassed: false,
+    examStarted: false,
+    mustStayFullscreen: true,
+    blocks: [],
+    selectedByBlock: [],
+    flatQuestions: [],
+    flatIndexByQuestionId: new Map(),
+    answers: new Map(),
+    currentFlatIndex: 0,
+    currentBlockIndex: 0,
+    pendingBlockTransition: null,
+    trapFocusHandler: null,
+  };
+
+  const timers = { countdown: null };
+  let remainingMs = 0;
+
   const API_BASE = 'http://127.0.0.1:8000';
   const EXAM_ID = 1;
-  let sessionId = null;
-  let sessionToken = null;
-  let serverEndsAtMs = null;
-  let isStartingSession = false;
-  let gatePassed = false;
+  const BLOCKS_KEY = 'examBlocks_v1';
+  const EXAM_DURATION_KEY = 'examDuration';
+  const ADMIN_PWD_KEY = 'adminGatePassword';
+  const DEFAULT_TITLE_TEXT = '';
+  const KEYBOARD_LOCKS = ['Escape', 'F11', 'F4'];
 
-  const authHeaders = () => (sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {});
+  const dlog = (...args) => {
+    try { console.debug('[exam]', ...args); } catch {}
+  };
+
+  const authHeaders = () => (state.sessionToken ? { 'Authorization': `Bearer ${state.sessionToken}` } : {});
   const asJson = (method, body, extra = {}) => ({
     method,
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(extra.headers || {}) },
     body: body == null ? undefined : JSON.stringify(body),
   });
-  const getOpts = (extra = {}) => ({ method: 'GET', headers: { ...authHeaders(), ...(extra.headers || {}) } });
-  // Debug helper
-  const dlog = (...args) => { try { console.debug('[exam]', ...args); } catch {} };
+  const getOpts = (extra = {}) => ({
+    method: 'GET',
+    headers: { ...authHeaders(), ...(extra.headers || {}) },
+  });
 
-  // Start server session once; safe to call multiple times (guards duplicates)
   async function beginSession() {
-    if (isStartingSession || (sessionId && sessionToken)) return;
-    isStartingSession = true;
+    if (state.isStartingSession || (state.sessionId && state.sessionToken)) return;
+    state.isStartingSession = true;
     try {
       const user = getCurrentUser() || {};
       const resp = await apiStartSession(user.firstName, user.lastName, user.code);
-      sessionId = resp.session_id;
-      sessionToken = resp.token;
-      serverEndsAtMs = resp.ends_at ? new Date(resp.ends_at).getTime() : null;
+      state.sessionId = resp.session_id;
+      state.sessionToken = resp.token;
+      state.serverEndsAtMs = resp.ends_at ? new Date(resp.ends_at).getTime() : null;
       updateUserHeader();
-      dlog('session started', { sessionId, hasToken: !!sessionToken });
-    } catch (e) {
-      dlog('session start failed', e);
+      dlog('session started', { sessionId: state.sessionId, hasToken: !!state.sessionToken });
+    } catch (err) {
+      dlog('session start failed', err);
     } finally {
-      isStartingSession = false;
-      if (examStart) { examStart.disabled = false; examStart.focus(); }
+      state.isStartingSession = false;
+      if (DOM.examStart) {
+        DOM.examStart.disabled = false;
+        if (!state.examStarted) {
+          try { DOM.examStart.focus(); } catch {}
+        }
+      }
     }
   }
 
-  async function apiAuthCode(code) {
-    const res = await fetch(`${API_BASE}/auth/code`, asJson('POST', { exam_id: EXAM_ID, code: String(code || '').trim() }));
-    if (!res.ok) throw new Error('კოდი არასწორია');
-    return await res.json();
-  }
   async function apiGetConfig(examId) {
     dlog('GET config');
     const res = await fetch(`${API_BASE}/exam/${examId}/config`, getOpts());
     if (!res.ok) throw new Error('კონფიგი ვერ ჩაიტვირთა');
-    const j = await res.json();
-    dlog('config ok', j);
-    return j;
+    const json = await res.json();
+    dlog('config ok', json);
+    return json;
   }
+
   async function apiStartSession(firstName, lastName, code) {
     const res = await fetch(`${API_BASE}/exam/session/start`, asJson('POST', {
       exam_id: EXAM_ID,
-      candidate_first_name: String(firstName||''),
-      candidate_last_name: String(lastName||''),
-      candidate_code: String(code||''),
+      candidate_first_name: String(firstName || ''),
+      candidate_last_name: String(lastName || ''),
+      candidate_code: String(code || ''),
     }));
     if (!res.ok) throw new Error('სესია ვერ დაიწყო');
     return await res.json();
   }
+
   async function apiGetBlockQuestions(blockId) {
-    if (!sessionId) throw new Error('სესია არ არის');
-    dlog('GET questions', { sessionId, hasToken: !!sessionToken, blockId });
-    const res = await fetch(`${API_BASE}/exam/${sessionId}/questions?block_id=${encodeURIComponent(blockId)}`, getOpts());
+    if (!state.sessionId) throw new Error('სესია არ არის');
+    dlog('GET questions', { sessionId: state.sessionId, hasToken: !!state.sessionToken, blockId });
+    const res = await fetch(`${API_BASE}/exam/${state.sessionId}/questions?block_id=${encodeURIComponent(blockId)}`, getOpts());
     if (!res.ok) throw new Error('კითხვები ვერ ჩაიტვირთა');
-    const j = await res.json();
-    dlog('questions ok', j);
-    return j;
+    const json = await res.json();
+    dlog('questions ok', json);
+    return json;
   }
+
   async function apiAnswer(questionId, optionId) {
-    if (!sessionId) throw new Error('სესია არ არის');
-    const res = await fetch(`${API_BASE}/exam/${sessionId}/answer`, asJson('POST', { question_id: Number(questionId), option_id: Number(optionId) }));
+    if (!state.sessionId) throw new Error('სესია არ არის');
+    const res = await fetch(`${API_BASE}/exam/${state.sessionId}/answer`, asJson('POST', {
+      question_id: Number(questionId),
+      option_id: Number(optionId),
+    }));
     if (!res.ok) throw new Error('პასუხი ვერ შეინახა');
     return await res.json();
   }
+
   async function apiFinish() {
-    if (!sessionId) return;
-    try { await fetch(`${API_BASE}/exam/${sessionId}/finish`, asJson('POST', {})); } catch {}
+    if (!state.sessionId) return;
+    try { await fetch(`${API_BASE}/exam/${state.sessionId}/finish`, asJson('POST', {})); } catch {}
   }
 
-  const DEFAULT_TITLE_TEXT = '';
-  const ADMIN_PWD_KEY = 'adminGatePassword';
-  const readAdminPassword = () => {
+  function readAdminPassword() {
     try {
-      const v = String(localStorage.getItem(ADMIN_PWD_KEY) || '').trim();
-      return v || 'cpig';
-    } catch { return 'cpig'; }
-  };
-  const getCurrentUser = () => {
+      const value = String(localStorage.getItem(ADMIN_PWD_KEY) || '').trim();
+      return value || 'cpig';
+    } catch {
+      return 'cpig';
+    }
+  }
+
+  function getCurrentUser() {
     try {
       const raw = localStorage.getItem('currentUser');
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
-  };
-  const updateUserHeader = () => {
-    if (!ctTitle) return;
+  }
+
+  function updateUserHeader() {
+    if (!DOM.ctTitle) return;
     const user = getCurrentUser();
     if (user?.firstName && user?.lastName && user?.code) {
-      ctTitle.textContent = `${user.firstName} ${user.lastName} — ${user.code}`;
+      DOM.ctTitle.textContent = `${user.firstName} ${user.lastName} — ${user.code}`;
     } else {
-      ctTitle.textContent = DEFAULT_TITLE_TEXT;
+      DOM.ctTitle.textContent = DEFAULT_TITLE_TEXT;
     }
-  };
+  }
 
-  const pad2 = (n) => String(n).padStart(2, '0');
-  const formatDate = (d) => {
-    const day = pad2(d.getDate());
-    const m = pad2(d.getMonth() + 1);
-    const y = d.getFullYear();
-    return `${day}-${m}-${y}`;
-  };
-  const formatTime = (d) => {
-    const hh = pad2(d.getHours());
-    const mm = pad2(d.getMinutes());
-    return `${hh}:${mm}`;
-  };
-  const updateRightDateTime = () => {
-    if (!rightDateTime) return;
+  const pad2 = (value) => String(value).padStart(2, '0');
+  const formatDate = (date) => `${pad2(date.getDate())}-${pad2(date.getMonth() + 1)}-${date.getFullYear()}`;
+  const formatTime = (date) => `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+
+  function updateRightDateTime() {
+    if (!DOM.rightDateTime) return;
     const now = new Date();
-    rightDateTime.innerHTML = `<div class="rd-date">${formatDate(now)}</div><div class="rd-time">${formatTime(now)}</div>`;
+    DOM.rightDateTime.innerHTML = `<div class="rd-date">${formatDate(now)}</div><div class="rd-time">${formatTime(now)}</div>`;
+  }
+
+  const focusTrap = {
+    enable() {
+      if (state.trapFocusHandler) return;
+      state.trapFocusHandler = (event) => {
+        if (event.key !== 'Tab') return;
+        const items = getVisibleFocusable();
+        if (!items.length) return;
+        event.preventDefault();
+        const currentIndex = items.indexOf(document.activeElement);
+        const nextIndex = event.shiftKey
+          ? (currentIndex <= 0 ? items.length - 1 : currentIndex - 1)
+          : (currentIndex === items.length - 1 ? 0 : currentIndex + 1);
+        items[nextIndex].focus();
+      };
+      document.addEventListener('keydown', state.trapFocusHandler);
+    },
+    disable() {
+      if (!state.trapFocusHandler) return;
+      document.removeEventListener('keydown', state.trapFocusHandler);
+      state.trapFocusHandler = null;
+    },
   };
 
-  let trapFocusHandler = null;
-  let mustStayFullscreen = true;
-  let beforeUnloadHandler = null;
+  async function lockKeys() {
+    try { await navigator.keyboard?.lock?.(KEYBOARD_LOCKS); } catch {}
+  }
 
-  const lockKeys = async () => { try { await navigator.keyboard?.lock?.(['Escape','F11','F4']); } catch {} };
-  const unlockKeys = async () => { try { await navigator.keyboard?.unlock?.(); } catch {} };
-  const enableBeforeUnload = () => {
-    if (beforeUnloadHandler) return;
-    beforeUnloadHandler = (e) => { 
-      // Completely prevent native browser alerts/dialogs - they exit fullscreen
-      e.preventDefault(); 
-      e.returnValue = ''; 
-      // Ensure fullscreen stays active even if moron tries to show native dialog
-      if (mustStayFullscreen && !document.fullscreenElement) {
-        enterFullscreen();
-      }
-    };
-    window.addEventListener('beforeunload', beforeUnloadHandler, { capture: true });
-  };
-  const disableBeforeUnload = () => {
-    if (!beforeUnloadHandler) return;
-    window.removeEventListener('beforeunload', beforeUnloadHandler);
-    beforeUnloadHandler = null;
-  };
+  async function unlockKeys() {
+    try { await navigator.keyboard?.unlock?.(); } catch {}
+  }
 
-  // Navigate out safely without triggering native leave-confirm
-  const safeNavigateHome = () => {
-    mustStayFullscreen = false;
-    disableBeforeUnload();
-    focusTrapOff();
+  function safeNavigateHome() {
+    state.mustStayFullscreen = false;
+    focusTrap.disable();
     unlockKeys();
     try {
       if (document.fullscreenElement) {
-        (document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen)?.call(document);
+        (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen)?.call(document);
       }
     } catch {}
     window.location.href = 'index.html';
-  };
+  }
 
-  const getVisibleFocusable = () => Array.from(document.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])')).filter(el => !el.hasAttribute('disabled') && el.offsetParent !== null && !el.closest('[hidden]'));
-  const focusTrapOn = () => {
-    trapFocusHandler = (e) => {
-      if (e.key !== 'Tab') return;
-      e.preventDefault();
-      const items = getVisibleFocusable();
-      if (!items.length) return;
-      const index = items.indexOf(document.activeElement);
-      const nextIndex = e.shiftKey ? (index <= 0 ? items.length - 1 : index - 1) : (index === items.length - 1 ? 0 : index + 1);
-      items[nextIndex].focus();
-    };
-    document.addEventListener('keydown', trapFocusHandler);
-  };
-  const focusTrapOff = () => { if (trapFocusHandler) document.removeEventListener('keydown', trapFocusHandler); trapFocusHandler = null; };
+  function getVisibleFocusable() {
+    return Array.from(document.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])'))
+      .filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null && !el.closest('[hidden]'));
+  }
 
-  const showStep1 = () => { 
-    setHidden(examFinal, true);
-    hide(finalOverlay);
-    setHidden(examConfirm, false);
-    show(confirmOverlay);
-    confirmLeaveYes?.focus(); 
-  };
-  const showStep2 = () => { 
-    setHidden(examConfirm, true);
-    hide(confirmOverlay);
-    setHidden(examFinal, false);
-    show(finalOverlay);
-    agreeExit?.focus(); 
-  };
-  const hideAll = () => { 
-    setHidden(examConfirm, true);
-    setHidden(examFinal, true);
-    hide(confirmOverlay);
-    hide(finalOverlay);
-    examStart?.focus(); 
-  };
+  function showStep1() {
+    if (!DOM.examConfirm || !DOM.confirmOverlay) return;
+    setHidden(DOM.examFinal, true);
+    hide(DOM.finalOverlay);
+    setHidden(DOM.examConfirm, false);
+    show(DOM.confirmOverlay);
+    DOM.confirmLeaveYes?.focus();
+  }
 
-  const enterFullscreen = () => {
+  function showStep2() {
+    if (!DOM.examFinal || !DOM.finalOverlay || !DOM.confirmOverlay) return;
+    setHidden(DOM.examConfirm, true);
+    hide(DOM.confirmOverlay);
+    setHidden(DOM.examFinal, false);
+    show(DOM.finalOverlay);
+    DOM.agreeExit?.focus();
+  }
+
+  function hideAll() {
+    setHidden(DOM.examConfirm, true);
+    setHidden(DOM.examFinal, true);
+    hide(DOM.confirmOverlay);
+    hide(DOM.finalOverlay);
+    DOM.examStart?.focus();
+  }
+
+  function enterFullscreen() {
     try {
-      const req = rootEl.requestFullscreen || rootEl.webkitRequestFullscreen || rootEl.msRequestFullscreen;
-      if (req) {
-        const p = req.call(rootEl, { navigationUI: 'hide' });
-        if (p?.then) p.then(lockKeys).catch(()=>{}); else lockKeys();
-      } else { lockKeys(); }
+      const request = DOM.root.requestFullscreen || DOM.root.webkitRequestFullscreen || DOM.root.msRequestFullscreen;
+      if (request) {
+        const result = request.call(DOM.root, { navigationUI: 'hide' });
+        if (result?.then) {
+          result.then(lockKeys).catch(() => {});
+        } else {
+          lockKeys();
+        }
+      } else {
+        lockKeys();
+      }
     } catch {}
-  };
-  const ensureFullscreen = () => { if (mustStayFullscreen && !document.fullscreenElement) enterFullscreen(); };
-  const exitFullscreen = () => {
-    mustStayFullscreen = false; disableBeforeUnload(); focusTrapOff(); unlockKeys();
-    try { if (document.fullscreenElement) (document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen)?.call(document); } catch {}
-  };
+  }
 
-  // Initialize exam mode: show gate first; don't enter fullscreen until passed
-  hideAll();
-  focusTrapOn();
-  // beforeunload disabled to avoid native browser prompt
-  updateUserHeader();
-  updateRightDateTime();
-  setInterval(updateRightDateTime, 1000 * 30);
-  // Start button remains enabled; თუ session/token არ არის, Start-ზე დაჭერით გაიხსნება Gate
-  // Gate ხილულია საწყისად
-  if (gateInput) gateInput.focus();
-  // Before exam start, show blur overlay and keep only Start/Finish usable
-  try { show(prestartOverlay); } catch {}
+  function ensureFullscreen() {
+    if (state.mustStayFullscreen && !document.fullscreenElement) {
+      enterFullscreen();
+    }
+  }
 
-  // (არ არის საჭირო helper-ები Gate-ს დამალვა/დამოწმებისთვის)
+  function exitFullscreen() {
+    state.mustStayFullscreen = false;
+    focusTrap.disable();
+    unlockKeys();
+    try {
+      if (document.fullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen)?.call(document);
+      }
+    } catch {}
+  }
 
-  // Intercept keys
-  document.addEventListener('keydown', (e) => {
-    if ((e.key === 'F4' && e.altKey)) { e.preventDefault(); showStep1(); return; }
-    if (e.key === 'Escape') { e.preventDefault(); showStep1(); return; }
-    // Any keyboard interaction should try restoring fullscreen if needed
-    ensureFullscreen();
-  });
-  // Any click/tap interaction should try to enter fullscreen if blocked on load
-  document.addEventListener('click', () => { ensureFullscreen(); }, { capture: true });
-  document.addEventListener('fullscreenchange', () => {
-    // Don't show exit warning if answer-all dialog is open
-    if (answerAllDialog && !answerAllDialog.hidden) {
-      if (!document.fullscreenElement && mustStayFullscreen) {
-        // Immediately restore fullscreen without showing alerts - use requestAnimationFrame for better timing
-        requestAnimationFrame(() => {
-          if (mustStayFullscreen && !document.fullscreenElement) {
-            enterFullscreen();
-          }
-        });
+  function loadBlocks() {
+    try {
+      const raw = localStorage.getItem(BLOCKS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function pickPerBlock(block) {
+    const questions = Array.isArray(block?.questions) ? block.questions : [];
+    const qty = Math.max(0, Math.min(Number(block?.qty) || 0, questions.length));
+    if (!qty) return [];
+    const indices = Array.from({ length: questions.length }, (_, index) => index);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    const picked = new Set(indices.slice(0, qty));
+    const ordered = [];
+    for (let i = 0; i < questions.length && ordered.length < qty; i++) {
+      if (picked.has(i)) ordered.push(i);
+    }
+    return ordered;
+  }
+
+  function resetAnswers() {
+    state.answers = new Map();
+  }
+
+  function hydrateSelectedQuestions(blocks, selected, { resetPosition = true, resetAnswersFlag = false } = {}) {
+    state.blocks = Array.isArray(blocks) ? blocks : [];
+    const normalized = Array.isArray(selected) ? selected : [];
+    state.selectedByBlock = state.blocks.map((_, index) => {
+      const blockQuestions = normalized[index];
+      return Array.isArray(blockQuestions) ? blockQuestions.filter(Boolean) : [];
+    });
+    if (resetAnswersFlag) {
+      resetAnswers();
+    }
+    rebuildFlat({ resetPosition });
+  }
+
+  function rebuildFlat({ resetPosition = false } = {}) {
+    state.flatQuestions = [];
+    state.flatIndexByQuestionId = new Map();
+
+    state.selectedByBlock.forEach((questions, blockIndex) => {
+      (questions || []).forEach((question, localIndex) => {
+        if (!question) return;
+        const entry = { blockIndex, localIndex, question };
+        const key = String(question.id);
+        state.flatIndexByQuestionId.set(key, state.flatQuestions.length);
+        state.flatQuestions.push(entry);
+      });
+    });
+
+    if (resetPosition || state.flatQuestions.length === 0) {
+      state.currentFlatIndex = 0;
+    } else if (state.currentFlatIndex >= state.flatQuestions.length) {
+      state.currentFlatIndex = state.flatQuestions.length - 1;
+    }
+
+    const currentEntry = state.flatQuestions[state.currentFlatIndex];
+    state.currentBlockIndex = currentEntry ? currentEntry.blockIndex : 0;
+  }
+
+  function getCurrentEntry() {
+    return state.flatQuestions[state.currentFlatIndex] || null;
+  }
+
+  function setCurrentFlatIndex(nextIndex) {
+    if (nextIndex < 0 || nextIndex >= state.flatQuestions.length) return;
+    state.currentFlatIndex = nextIndex;
+    const entry = state.flatQuestions[nextIndex];
+    state.currentBlockIndex = entry ? entry.blockIndex : 0;
+    renderExamView();
+  }
+
+  function renderHeader(entry) {
+    if (!DOM.cmHeader) return;
+    DOM.cmHeader.innerHTML = '';
+    if (!entry) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.display = 'grid';
+    wrapper.style.gridTemplateColumns = '1fr 1fr 1fr';
+
+    const left = document.createElement('div');
+    left.textContent = `ბლოკი ${entry.blockIndex + 1}`;
+    left.style.justifySelf = 'start';
+
+    const center = document.createElement('div');
+    center.textContent = 'შეარჩიეთ და მონიშნეთ სწორი პასუხი';
+    center.style.justifySelf = 'center';
+
+    const right = document.createElement('div');
+    right.textContent = entry.question?.code ? String(entry.question.code) : '';
+    right.style.justifySelf = 'end';
+
+    wrapper.append(left, center, right);
+    DOM.cmHeader.appendChild(wrapper);
+  }
+
+  function renderQuestion() {
+    if (!DOM.cmContent) return;
+    DOM.cmContent.innerHTML = '';
+
+    const entry = getCurrentEntry();
+    renderHeader(entry);
+
+    if (!entry) {
+      if (state.examStarted) {
+        DOM.cmContent.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;color:#7f1d1d;font-weight:700;">კითხვები ვერ ჩაიტვირთა</div>';
       }
       return;
     }
-    if (!document.fullscreenElement && mustStayFullscreen) { showStep1(); enterFullscreen(); }
-  });
 
-  // Gate logic (password)
-  gateForm?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const value = (gateInput?.value || '').trim();
-    const expected = readAdminPassword();
-    if (value !== expected) {
-      if (gateError) gateError.hidden = false;
-      gateInput?.focus();
+    const question = entry.question;
+    const answers = getAnswers(question);
+    const fragment = document.createDocumentFragment();
+
+    const questionWrap = document.createElement('div');
+    questionWrap.className = 'question';
+    questionWrap.innerHTML = `<div class="question-text">${escapeHtml(question.text || '')}</div>`;
+    fragment.appendChild(questionWrap);
+
+    const classes = ['answerA', 'answerb', 'answerc', 'answerd'];
+    const labels = ['A', 'B', 'C', 'D'];
+
+    answers.slice(0, 4).forEach((answer, index) => {
+      if (!answer) return;
+      const answerId = String(answer.id);
+      const row = document.createElement('div');
+      row.className = `${classes[index] || 'answerA'} cm-answer`;
+      row.dataset.answerId = answerId;
+      row.innerHTML = `
+        <div class="mark"><div class="bullet" data-answer-id="${answerId}"></div></div>
+        <div class="code">${labels[index] || ''}</div>
+        <div class="text">${escapeHtml(answer.text || '')}</div>
+      `;
+      fragment.appendChild(row);
+    });
+
+    DOM.cmContent.appendChild(fragment);
+    applyAnswerStateStyles();
+  }
+
+  function renderDots() {
+    if (!DOM.cmDotsWrap) return;
+    DOM.cmDotsWrap.innerHTML = '';
+
+    const blockIndex = state.currentBlockIndex;
+    const questions = state.selectedByBlock[blockIndex] || [];
+    if (!questions.length) return;
+
+    const fragment = document.createDocumentFragment();
+
+    questions.forEach((question) => {
+      if (!question) return;
+      const key = String(question.id);
+      const dot = document.createElement('span');
+      dot.className = 'cm-dot';
+      dot.dataset.questionId = key;
+
+      const flatIndex = state.flatIndexByQuestionId.get(key);
+      if (flatIndex === state.currentFlatIndex) {
+        dot.classList.add('active');
+      }
+
+      const answerState = state.answers.get(key);
+      if (answerState) {
+        if (answerState.correct) {
+          dot.style.background = '#16a34a';
+          dot.style.borderColor = '#15803d';
+        } else {
+          dot.style.background = '#dc2626';
+          dot.style.borderColor = '#991b1b';
+        }
+      } else {
+        dot.style.background = '';
+        dot.style.borderColor = '';
+      }
+
+      fragment.appendChild(dot);
+    });
+
+    DOM.cmDotsWrap.appendChild(fragment);
+  }
+
+  function updateIndicators() {
+    const totalQuestions = state.flatQuestions.length;
+    const currentQuestionNumber = totalQuestions ? state.currentFlatIndex + 1 : 0;
+    if (DOM.qNumEl) {
+      DOM.qNumEl.textContent = `${currentQuestionNumber}/${totalQuestions}`;
+    }
+
+    const totalBlocks = state.blocks.length || 0;
+    const currentBlockNumber = totalQuestions ? state.currentBlockIndex + 1 : 0;
+    if (DOM.blockNumEl) {
+      DOM.blockNumEl.textContent = `${currentBlockNumber}/${totalBlocks}`;
+    }
+  }
+
+  function updateNavButtons() {
+    if (DOM.prevBtn) {
+      DOM.prevBtn.disabled = state.currentFlatIndex <= 0;
+    }
+    if (DOM.nextBtn) {
+      DOM.nextBtn.disabled = state.flatQuestions.length === 0;
+    }
+  }
+
+  function renderExamView() {
+    renderQuestion();
+    renderDots();
+    updateIndicators();
+    updateNavButtons();
+  }
+
+  function applyAnswerStateStyles() {
+    if (!DOM.cmContent) return;
+    const entry = getCurrentEntry();
+    if (!entry) return;
+
+    const key = String(entry.question?.id ?? '');
+    const answerState = state.answers.get(key);
+    const rows = Array.from(DOM.cmContent.querySelectorAll('.cm-answer'));
+    if (!rows.length) return;
+
+    if (!answerState) {
+      rows.forEach((row) => {
+        row.style.pointerEvents = '';
+        const bullet = row.querySelector('.bullet');
+        if (bullet) {
+          bullet.style.background = '';
+          bullet.style.borderColor = '';
+        }
+      });
       return;
     }
-    if (gateError) gateError.hidden = true;
-    // Hide gate; mark as passed and start session in background
-    gatePassed = true;
-    hide(gateOverlay);
-    enterFullscreen();
-    if (examStart) { examStart.disabled = false; }
-    void beginSession();
-  });
 
-  // Close button on gate: return to index without entering exam
-  gateClose?.addEventListener('click', safeNavigateHome);
+    rows.forEach((row) => {
+      row.style.pointerEvents = 'none';
+      const bullet = row.querySelector('.bullet');
+      if (!bullet) return;
+      bullet.style.background = '';
+      bullet.style.borderColor = '';
+      if (row.dataset.answerId === String(answerState.chosenAnswerId || '')) {
+        const color = answerState.correct ? '#16a34a' : '#dc2626';
+        bullet.style.background = color;
+        bullet.style.borderColor = color;
+      }
+    });
+  }
 
-  // Dev bypass removed: only official authorization is allowed
+  async function selectAnswer(answerId) {
+    if (!state.examStarted) return;
+    const entry = getCurrentEntry();
+    if (!entry) return;
+    const key = String(entry.question?.id ?? '');
+    if (!key || state.answers.has(key)) return;
 
-  // Code gate removed
+    state.answers.set(key, { chosenAnswerId: String(answerId || ''), correct: false });
+    applyAnswerStateStyles();
+    renderDots();
 
-  // Actions
-  examFinish?.addEventListener('click', showStep1);
-  confirmLeaveNo?.addEventListener('click', hideAll);
-  confirmLeaveYes?.addEventListener('click', showStep2);
-  returnToExam?.addEventListener('click', hideAll);
-  agreeExit?.addEventListener('click', () => { exitFullscreen(); safeNavigateHome(); });
-  
-  // Countdown wiring - uses admin-set duration from localStorage (key: 'examDuration')
-  const EXAM_DURATION_KEY = 'examDuration';
-  let countdownTimer = null;
-  let remainingMs = 0;
-  
-  const readDurationMinutes = () => {
-    try { const v = Number(localStorage.getItem(EXAM_DURATION_KEY) || 0); return v > 0 ? v : 60; } catch { return 60; }
-  };
-  const formatHMS = (ms) => {
-    const total = Math.max(0, Math.floor(ms / 1000));
-    const hh = Math.floor(total / 3600);
-    const mm = Math.floor((total % 3600) / 60);
-    const ss = total % 60;
-    const p2 = (n) => String(n).padStart(2, '0');
-    return `${p2(hh)}:${p2(mm)}:${p2(ss)}`;
-  };
-  const updateCountdownView = () => {
-    if (countdownEl) countdownEl.textContent = formatHMS(remainingMs);
-  };
-  const stopCountdown = () => { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } };
-  const startCountdown = () => {
+    try {
+      const response = await apiAnswer(entry.question.id, Number(answerId));
+      const isCorrect = !!response?.correct;
+      state.answers.set(key, { chosenAnswerId: String(answerId || ''), correct: isCorrect });
+    } catch {
+      const fallbackCorrect = String(entry.question?.correctAnswerId || '') === String(answerId || '');
+      state.answers.set(key, { chosenAnswerId: String(answerId || ''), correct: fallbackCorrect });
+    }
+
+    applyAnswerStateStyles();
+    renderDots();
+  }
+
+  function areAllQuestionsAnsweredInBlock(blockIndex) {
+    const questions = state.selectedByBlock[blockIndex] || [];
+    return questions.every((question) => {
+      const key = String(question?.id ?? '');
+      return !!state.answers.get(key);
+    });
+  }
+
+  function gotoQuestionIndex(index) {
+    if (index < 0 || index >= state.flatQuestions.length) return;
+    const target = state.flatQuestions[index];
+    if (!target) return;
+
+    if (target.blockIndex !== state.currentBlockIndex && !areAllQuestionsAnsweredInBlock(state.currentBlockIndex)) {
+      showAnswerAllDialog(target.blockIndex, index);
+      return;
+    }
+
+    setCurrentFlatIndex(index);
+  }
+
+  function gotoPrevQuestion() {
+    gotoQuestionIndex(state.currentFlatIndex - 1);
+  }
+
+  function gotoNextQuestion() {
+    if (state.currentFlatIndex < state.flatQuestions.length - 1) {
+      gotoQuestionIndex(state.currentFlatIndex + 1);
+      return;
+    }
+    if (allQuestionsAnswered()) {
+      showResults();
+    }
+  }
+
+  function allQuestionsAnswered() {
+    return state.flatQuestions.length > 0 && state.flatQuestions.every(({ question }) => {
+      const key = String(question?.id ?? '');
+      return !!state.answers.get(key);
+    });
+  }
+
+  function showAnswerAllDialog(nextBlockIndex, nextFlatIndex) {
+    if (!DOM.answerAllOverlay || !DOM.answerAllDialog) return;
+    state.pendingBlockTransition = { nextBlockIndex, nextFlatIndex };
+    show(DOM.answerAllOverlay);
+    setHidden(DOM.answerAllDialog, false);
+    ensureFullscreen();
+    setTimeout(() => DOM.answerAllClose?.focus(), 150);
+  }
+
+  function hideAnswerAllDialog() {
+    hide(DOM.answerAllOverlay);
+    setHidden(DOM.answerAllDialog, true);
+    state.pendingBlockTransition = null;
+    setTimeout(() => ensureFullscreen(), 50);
+  }
+
+  function showResults() {
+    try {
+      stopCountdown();
+      void apiFinish();
+      if (!DOM.resultsOverlay || !DOM.examResults || !DOM.resultsList) return;
+
+      DOM.resultsList.innerHTML = '';
+      state.selectedByBlock.forEach((questions, blockIndex) => {
+        const items = questions || [];
+        if (!items.length) return;
+        let correctCount = 0;
+        items.forEach((question) => {
+          const key = String(question?.id ?? '');
+          if (state.answers.get(key)?.correct) correctCount += 1;
+        });
+        const total = items.length || 1;
+        const percent = Math.round((correctCount / total) * 100);
+
+        const row = document.createElement('div');
+        row.className = 'result-row';
+
+        const label = document.createElement('div');
+        label.className = 'result-label';
+        label.textContent = `ბლოკი ${blockIndex + 1}`;
+
+        const value = document.createElement('div');
+        const colorClass = percent < 70 ? 'pct-red' : (percent <= 75 ? 'pct-yellow' : 'pct-green');
+        value.className = `result-value ${colorClass}`;
+        value.textContent = `${percent}%`;
+
+        row.append(label, value);
+        DOM.resultsList.appendChild(row);
+      });
+
+      show(DOM.resultsOverlay);
+      setHidden(DOM.examResults, false);
+    } catch {}
+  }
+
+  function hideResults() {
+    hide(DOM.resultsOverlay);
+    setHidden(DOM.examResults, true);
+  }
+
+  function readDurationMinutes() {
+    try {
+      const value = Number(localStorage.getItem(EXAM_DURATION_KEY) || 0);
+      return value > 0 ? value : 60;
+    } catch {
+      return 60;
+    }
+  }
+
+  function formatHMS(ms) {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
+  }
+
+  function updateCountdownView() {
+    if (DOM.countdownEl) {
+      DOM.countdownEl.textContent = formatHMS(remainingMs);
+    }
+  }
+
+  function stopCountdown() {
+    if (timers.countdown) {
+      clearInterval(timers.countdown);
+      timers.countdown = null;
+    }
+  }
+
+  function startCountdown() {
     stopCountdown();
-    if (serverEndsAtMs) {
-      remainingMs = Math.max(0, serverEndsAtMs - Date.now());
+    if (state.serverEndsAtMs) {
+      remainingMs = Math.max(0, state.serverEndsAtMs - Date.now());
     } else {
-      const minutes = readDurationMinutes();
-      remainingMs = minutes * 60 * 1000;
+      remainingMs = readDurationMinutes() * 60 * 1000;
     }
     updateCountdownView();
-    countdownTimer = setInterval(() => {
+    timers.countdown = setInterval(() => {
       remainingMs -= 1000;
       if (remainingMs <= 0) {
         remainingMs = 0;
         updateCountdownView();
         stopCountdown();
-        // Time is up → show results
         showResults();
         return;
       }
       updateCountdownView();
     }, 1000);
-  };
+  }
 
-  // ===================== Exam Data Loading & Selection =====================
-  const BLOCKS_KEY = 'examBlocks_v1';
-  // Runtime state for exam
-  let blocks = [];
-  let selectedByBlock = []; // array of arrays of question indices chosen (in admin order)
-  let flatQuestions = []; // flattened questions with blockIndex, localIndex
-  let currentFlatIndex = 0; // global question index X (0-based)
-  let currentBlockIndex = 0; // A (0-based)
-  let answersState = new Map(); // key: questionId -> { chosenAnswerId, correct }
-  // removed autoNextTimer (was unused)
-  let examStarted = false;
-
-  // (ერთიანი offline სტარტი ამოღებულია — სავალდებულოა Gate-ის გავლა და სერვერის სესია)
-
-  const loadBlocks = () => {
-    try {
-      const raw = localStorage.getItem(BLOCKS_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
-  };
-
-  // Render from localStorage immediately to avoid blank screen while server loads
-  const preRenderLocalFirstQuestion = () => {
-    try {
-      const localBlocks = loadBlocks();
-      const b = Array.isArray(localBlocks) ? localBlocks : [];
-      if (!b.length) return false;
-      blocks = b;
-      selectedByBlock = blocks.map((blk) => {
-        const allQs = Array.isArray(blk?.questions) ? blk.questions : [];
-        const indices = pickPerBlock(blk);
-        return indices.map(i => allQs[i]).filter(Boolean);
-      });
-      flatQuestions = [];
-      answersState = new Map();
-      rebuildFlat();
-      currentFlatIndex = 0;
-      currentBlockIndex = flatQuestions.length ? flatQuestions[0].blockIndex : 0;
-      renderCurrentQuestion();
-      renderDotsForCurrentBlock();
-      updateNavButtons();
-      updateIndicators();
-      return flatQuestions.length > 0;
-    } catch { return false; }
-  };
-
-  // Pick exactly qty questions per block randomly, but keep admin order among selected
-  const pickPerBlock = (b) => {
-    const allQs = Array.isArray(b.questions) ? b.questions : [];
-    const qty = Math.max(0, Math.min(Number(b.qty) || 0, allQs.length));
-    if (qty === 0) return [];
-    // random unique indices
-    const indices = Array.from({length: allQs.length}, (_, i) => i);
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const t = indices[i]; indices[i] = indices[j]; indices[j] = t;
-    }
-    const pickedSet = new Set(indices.slice(0, qty));
-    // keep admin order among selected
-    const ordered = [];
-    for (let i = 0; i < allQs.length; i++) {
-      if (pickedSet.has(i)) ordered.push(i);
-      if (ordered.length === qty) break;
-    }
-    return ordered;
-  };
-
-  const rebuildFlat = () => {
-    flatQuestions = [];
-    selectedByBlock.forEach((qs, bi) => {
-      (Array.isArray(qs) ? qs : []).forEach((q) => {
-        if (q) flatQuestions.push({ blockIndex: bi, localIndex: 0, question: q });
-      });
+  function hydrateFromLocalStorage() {
+    const blocks = loadBlocks();
+    const normalizedBlocks = Array.isArray(blocks) ? blocks : [];
+    const selected = normalizedBlocks.map((block) => {
+      const questions = Array.isArray(block?.questions) ? block.questions : [];
+      const picks = pickPerBlock(block);
+      return picks.map((index) => questions[index]).filter(Boolean);
     });
-  };
+    hydrateSelectedQuestions(normalizedBlocks, selected, { resetPosition: true, resetAnswersFlag: true });
+    renderExamView();
+    return state.flatQuestions.length > 0;
+  }
 
-  const updateIndicators = () => {
-    // Left: question X/Y
-    const X = flatQuestions.length ? (currentFlatIndex + 1) : 0;
-    const Y = flatQuestions.length;
-    if (qNumEl) qNumEl.textContent = `${X}/${Y}`;
-    // Right: block A/B (total blocks)
-    const visibleBlocks = blocks.length || 0;
-    const A = (currentBlockIndex + 1);
-    if (blockNumEl) blockNumEl.textContent = `${A}/${visibleBlocks}`;
-  };
-
-  const setHeaderText = () => {
-    const fq = flatQuestions[currentFlatIndex];
-    const bNum = currentBlockIndex + 1;
-    const code = fq?.question?.code ? String(fq.question.code) : '';
-    if (cmHeader) cmHeader.textContent = '';
-    // Build: left block number, center text, right code
-    const left = document.createElement('div'); left.textContent = `ბლოკი ${bNum}`;
-    const center = document.createElement('div'); center.textContent = 'შეარჩიეთ და მონიშნეთ სწორი პასუხი';
-    const right = document.createElement('div'); right.textContent = code;
-    left.style.justifySelf = 'start';
-    center.style.justifySelf = 'center';
-    right.style.justifySelf = 'end';
-    const wrap = document.createElement('div');
-    wrap.style.display = 'grid';
-    wrap.style.gridTemplateColumns = '1fr 1fr 1fr';
-    wrap.append(left, center, right);
-    if (cmHeader) { cmHeader.innerHTML = ''; cmHeader.appendChild(wrap); }
-  };
-
-  const escapeHtml = (s) => String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  // no auto-next; navigation is explicit
-
-  const applyAnswerStateStyles = () => {
-    const fq = flatQuestions[currentFlatIndex];
-    const q = fq?.question; if (!q) return;
-    const state = answersState.get(q.id);
-    if (!state) return;
-    const isCorrect = state.correct;
-    const bullets = Array.from(cmContent?.querySelectorAll?.('.bullet') || []);
-    const chosenId = String(state.chosenAnswerId || '');
-    const selected = bullets.find(b => b.getAttribute('data-answer-id') === chosenId);
-    if (!selected) { return; }
-    bullets.forEach(b => { b.style.pointerEvents = 'none'; });
-    selected.style.borderColor = isCorrect ? '#16a34a' : '#dc2626';
-    selected.style.background = isCorrect ? '#16a34a' : '#dc2626';
-    renderDotsForCurrentBlock();
-  };
-
-  const selectAnswer = async (answerId, bulletEl = null) => {
-    if (!examStarted) return; // block interactions until started
-    const fq = flatQuestions[currentFlatIndex];
-    const q = fq?.question; if (!q) return;
-    // only first selection allowed
-    if (answersState.has(q.id)) return;
-    // Optimistic UI update for instant feedback
-    answersState.set(q.id, { chosenAnswerId: String(answerId || ''), correct: false });
-    if (bulletEl) { try { bulletEl.style.pointerEvents = 'none'; } catch {} }
-    applyAnswerStateStyles();
-    try {
-      const resp = await apiAnswer(q.id, Number(answerId));
-      const correct = !!resp?.correct;
-      answersState.set(q.id, { chosenAnswerId: String(answerId || ''), correct });
-      applyAnswerStateStyles();
-    } catch {
-      // Offline/local fallback: determine correctness from local data
-      const correctLocal = String(q?.correctAnswerId || '') === String(answerId || '');
-      answersState.set(q.id, { chosenAnswerId: String(answerId || ''), correct: correctLocal });
-      applyAnswerStateStyles();
-    }
-    // Auto move disabled: navigation only via arrows or dots
-  };
-
-  const renderCurrentQuestion = () => {
-    if (!cmContent) return;
-    const fq = flatQuestions[currentFlatIndex];
-    cmContent.innerHTML = '';
-    if (!fq) return;
-    setHeaderText();
-    const q = fq.question;
-    const answers = getAnswers(q);
-    // Question
-    const qEl = document.createElement('div');
-    qEl.className = 'question';
-    qEl.innerHTML = `<div class="question-text">${escapeHtml(String(q.text || ''))}</div>`;
-    cmContent.appendChild(qEl);
-    // Answers A-D, keep admin order
-    const labels = ['A','B','C','D'];
-    answers.slice(0,4).forEach((a, idx) => {
-      const row = document.createElement('div');
-      row.className = ['answerA','answerb','answerc','answerd'][idx] || 'answerA';
-      const answerIdStr = String(a.id);
-      row.innerHTML = `
-        <div class="mark"><div class="bullet" data-answer-id="${answerIdStr}"></div></div>
-        <div class="code">${labels[idx] || ''}</div>
-        <div class="text">${escapeHtml(String(a.text || ''))}</div>
-      `;
-      // Click handlers on entire row and specific bullet for better UX
-      const bulletEl = row.querySelector('.bullet');
-      const wire = (el) => el && el.addEventListener('click', () => { selectAnswer(answerIdStr, bulletEl).catch(()=>{}); });
-      wire(row);
-      wire(bulletEl);
-      wire(row.querySelector('.code'));
-      wire(row.querySelector('.text'));
-      cmContent.appendChild(row);
-    });
-    // Event delegation fallback (robust to future DOM changes)
-    const delegated = (e) => {
-      const rowEl = e.target?.closest?.('.answerA, .answerb, .answerc, .answerd');
-      if (!rowEl || !cmContent.contains(rowEl)) return;
-      const bullet = rowEl.querySelector('.bullet');
-      const id = bullet?.getAttribute('data-answer-id');
-      if (id) selectAnswer(id, bullet).catch(()=>{});
-    };
-    cmContent.addEventListener('click', delegated);
-    applyAnswerStateStyles();
-    updateIndicators();
-  };
-
-  const answerAllOverlay = document.getElementById('answerAllOverlay');
-  const answerAllDialog = document.getElementById('answerAllDialog');
-  const answerAllClose = document.getElementById('answerAllClose');
-  let pendingBlockTransition = null;
-
-  const showAnswerAllDialog = (nextBlockIndex, nextFlatIndex) => {
-    if (!answerAllOverlay || !answerAllDialog) return;
-    pendingBlockTransition = { nextBlockIndex, nextFlatIndex };
-    show(answerAllOverlay);
-    setHidden(answerAllDialog, false);
-    ensureFullscreen();
-    setTimeout(() => { answerAllClose?.focus(); }, 150);
-  };
-
-  const hideAnswerAllDialog = () => {
-    hide(answerAllOverlay);
-    setHidden(answerAllDialog, true);
-    pendingBlockTransition = null;
-    setTimeout(() => ensureFullscreen(), 50);
-  };
-
-  const gotoQuestionIndex = (idx) => {
-    if (idx < 0 || idx >= flatQuestions.length) return;
-    const nextBlock = flatQuestions[idx].blockIndex;
-    if (nextBlock !== currentBlockIndex && !areAllQuestionsAnsweredInBlock(currentBlockIndex)) {
-      showAnswerAllDialog(nextBlock, idx);
-      return;
-    }
-    currentFlatIndex = idx;
-    currentBlockIndex = nextBlock;
-    renderCurrentQuestion();
-    renderDotsForCurrentBlock();
-    updateNavButtons();
-  };
-
-  const gotoPrevQuestion = () => gotoQuestionIndex(currentFlatIndex - 1);
-  const gotoNextQuestion = () => {
-    if (currentFlatIndex < flatQuestions.length - 1) {
-      gotoQuestionIndex(currentFlatIndex + 1);
-      return;
-    }
-    // At the end: finish only if all questions are answered
-    const allAnswered = flatQuestions.every(fq => !!answersState.get(fq.question?.id));
-    if (allAnswered) {
-      showResults();
-    }
-  };
-
-  const areAllQuestionsAnsweredInBlock = (bi) => {
-    const qs = selectedByBlock[bi] || [];
-    return qs.every(q => !!answersState.get(q?.id));
-  };
-
-  const renderDotsForCurrentBlock = () => {
-    if (!cmDotsWrap) return;
-    cmDotsWrap.innerHTML = '';
-    const bi = currentBlockIndex;
-    const qs = selectedByBlock[bi] || [];
-    qs.forEach((q) => {
-      const span = document.createElement('span');
-      span.className = 'cm-dot';
-      const globalIdx = flatQuestions.findIndex(f => f.blockIndex === bi && f.question?.id === q?.id);
-      if (globalIdx === currentFlatIndex) span.classList.add('active');
-      const st = answersState.get(q?.id);
-      if (st) {
-        if (st.correct) { span.style.background = '#16a34a'; span.style.borderColor = '#15803d'; }
-        else { span.style.background = '#dc2626'; span.style.borderColor = '#991b1b'; }
+  async function initExamData() {
+    if (!state.sessionId || !state.sessionToken) {
+      if (!state.flatQuestions.length) {
+        hydrateFromLocalStorage();
       }
-      span.addEventListener('click', () => { gotoQuestionIndex(globalIdx); });
-      cmDotsWrap.appendChild(span);
-    });
-  };
-
-  const updateNavButtons = () => {
-    if (prevBtn) prevBtn.disabled = currentFlatIndex <= 0;
-    // Keep Next enabled even at the last question to allow finishing via Next
-    if (nextBtn) nextBtn.disabled = flatQuestions.length === 0;
-  };
-
-  // ===================== Results Rendering =====================
-  const showResults = () => {
-    try {
-      // finalize session on server (fire-and-forget)
-      void apiFinish();
-      if (!resultsOverlay || !examResults || !resultsList) return;
-      resultsList.innerHTML = '';
-      selectedByBlock.forEach((qs, bi) => {
-        qs = qs || [];
-        if (!qs.length) return;
-        let correctCount = 0;
-        qs.forEach(q => {
-          const st = q ? answersState.get(q.id) : null;
-          if (st?.correct) correctCount++;
-        });
-        const total = qs.length || 1;
-        const pct = Math.round((correctCount / total) * 100);
-        const row = document.createElement('div');
-        row.className = 'result-row';
-        const label = document.createElement('div');
-        label.className = 'result-label';
-        label.textContent = `ბლოკი ${bi + 1}`;
-        const value = document.createElement('div');
-        const colorClass = pct < 70 ? 'pct-red' : (pct <= 75 ? 'pct-yellow' : 'pct-green');
-        value.className = `result-value ${colorClass}`;
-        value.textContent = `${pct}%`;
-        row.append(label, value);
-        resultsList.appendChild(row);
-      });
-      show(resultsOverlay);
-      setHidden(examResults, false);
-    } catch {}
-  };
-
-  const hideResults = () => {
-    try {
-      hide(resultsOverlay);
-      setHidden(examResults, true);
-    } catch {}
-  };
-
-  const initExamData = async () => {
-    // Helper: render using localStorage blocks immediately (fallback)
-    const renderFromLocalStorage = () => {
-      const localBlocks = loadBlocks();
-      blocks = Array.isArray(localBlocks) ? localBlocks : [];
-      selectedByBlock = blocks.map((b) => {
-        const allQs = Array.isArray(b?.questions) ? b.questions : [];
-        const indices = pickPerBlock(b);
-        return indices.map(i => allQs[i]).filter(Boolean);
-      });
-      flatQuestions = [];
-      answersState = new Map();
-      rebuildFlat();
-      currentFlatIndex = 0;
-      currentBlockIndex = flatQuestions.length ? flatQuestions[0].blockIndex : 0;
-      renderCurrentQuestion();
-      renderDotsForCurrentBlock();
-      updateNavButtons();
-      updateIndicators();
-    };
-
-    // თუ სესია არ არის (ოფლაინ რეჟიმი) → მყისიერად გადავიდეთ localStorage-ზე
-    if (!sessionId || !sessionToken) {
-      renderFromLocalStorage();
       return;
     }
 
-    // Load config
     try {
-      const cfg = await apiGetConfig(EXAM_ID);
-      blocks = Array.isArray(cfg?.blocks) ? cfg.blocks : [];
+      const config = await apiGetConfig(EXAM_ID);
+      state.blocks = Array.isArray(config?.blocks) ? config.blocks : [];
     } catch (err) {
       console.error('Failed to load exam config:', err);
-      blocks = [];
+      state.blocks = [];
     }
 
-    // If no blocks from server → fallback to local immediately (no delay)
-    if (!Array.isArray(blocks) || blocks.length === 0) {
-      renderFromLocalStorage();
+    if (!Array.isArray(state.blocks) || !state.blocks.length) {
+      if (!state.flatQuestions.length) {
+        hydrateFromLocalStorage();
+      }
       return;
     }
 
-    // Progressive load: fetch first block quickly, render immediately; others in background
+    state.selectedByBlock = Array.from({ length: state.blocks.length }, () => []);
+
     try {
-      selectedByBlock = Array.from({ length: blocks.length }, () => []);
-
-      // 1) First block
-      if (blocks.length > 0) {
-        try {
-          const r0 = await apiGetBlockQuestions(blocks[0].id);
-          selectedByBlock[0] = Array.isArray(r0?.questions) ? r0.questions : [];
-        } catch (err0) {
-          console.error('Failed to load first block questions', err0);
-          // Hard fallback if first block failed
-          renderFromLocalStorage();
-          return;
-        }
-        // If API responded but returned empty questions, also fallback
-        if (!Array.isArray(selectedByBlock[0]) || selectedByBlock[0].length === 0) {
-          renderFromLocalStorage();
-          return;
-        }
-      }
-
-      flatQuestions = [];
-      answersState = new Map();
-      rebuildFlat();
-      currentFlatIndex = 0;
-      currentBlockIndex = flatQuestions.length ? flatQuestions[0].blockIndex : 0;
-      renderCurrentQuestion(); // show first question ASAP (~0.1s depending on first fetch)
-      renderDotsForCurrentBlock();
-      updateNavButtons();
-      updateIndicators();
-
-      // 2) Remaining blocks in background
-      const restPromises = blocks.slice(1).map((b, idx) =>
-        apiGetBlockQuestions(b.id)
-          .then(r => ({ i: idx + 1, qs: Array.isArray(r?.questions) ? r.questions : [] }))
-          .catch((err) => { console.error('Failed to load block', b.id, err); return { i: idx + 1, qs: [] }; })
-      );
-      const rest = await Promise.all(restPromises);
-      rest.forEach(({ i, qs }) => { selectedByBlock[i] = qs; });
-      rebuildFlat();
-      // Keep current selection and UI; just refresh dots/indicators/buttons
-      renderDotsForCurrentBlock();
-      updateNavButtons();
-      updateIndicators();
+      const first = await apiGetBlockQuestions(state.blocks[0].id);
+      state.selectedByBlock[0] = Array.isArray(first?.questions) ? first.questions : [];
     } catch (err) {
-      console.error('Progressive load failed:', err);
-      // Visible hint
-      if (cmContent) {
-        cmContent.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;color:#7f1d1d;font-weight:700;">კითხვები ვერ ჩაიტვირთა</div>';
+      console.error('Failed to load first block questions', err);
+      if (!state.flatQuestions.length) {
+        hydrateFromLocalStorage();
       }
+      return;
     }
-  };
 
-  // Register nav handlers and start exam data
-  prevBtn?.addEventListener('click', gotoPrevQuestion);
-  nextBtn?.addEventListener('click', gotoNextQuestion);
-  examStart?.addEventListener('click', async () => {
-    if (examStarted) return;
-    // If session not ready →
-    if (!sessionToken || !sessionId) {
-      if (!gatePassed) {
-        // Gate not passed yet → show it
-        if (gateOverlay) show(gateOverlay);
-        try { gateInput?.focus(); } catch {}
+    if (!Array.isArray(state.selectedByBlock[0]) || !state.selectedByBlock[0].length) {
+      if (!state.flatQuestions.length) {
+        hydrateFromLocalStorage();
+      }
+      return;
+    }
+
+    resetAnswers();
+    rebuildFlat({ resetPosition: true });
+    renderExamView();
+
+    const restPromises = state.blocks.slice(1).map((block, index) =>
+      apiGetBlockQuestions(block.id)
+        .then((payload) => ({
+          index: index + 1,
+          questions: Array.isArray(payload?.questions) ? payload.questions : [],
+        }))
+        .catch((err) => {
+          console.error('Failed to load block', block.id, err);
+          return { index: index + 1, questions: [] };
+        })
+    );
+
+    const rest = await Promise.all(restPromises);
+    rest.forEach(({ index, questions }) => {
+      state.selectedByBlock[index] = questions;
+    });
+
+    rebuildFlat({ resetPosition: false });
+    renderDots();
+    updateNavButtons();
+    updateIndicators();
+  }
+
+  function handleGateSubmit(event) {
+    event.preventDefault();
+    const value = (DOM.gateInput?.value || '').trim();
+    const expected = readAdminPassword();
+    if (value !== expected) {
+      setHidden(DOM.gateError, false);
+      DOM.gateInput?.focus();
+      return;
+    }
+    setHidden(DOM.gateError, true);
+    state.gatePassed = true;
+    state.mustStayFullscreen = true;
+    hide(DOM.gateOverlay);
+    enterFullscreen();
+    if (DOM.examStart) DOM.examStart.disabled = false;
+    void beginSession();
+  }
+
+  function activateExamUi() {
+    state.examStarted = true;
+    if (DOM.examStart) DOM.examStart.disabled = true;
+    if (DOM.examFinish) DOM.examFinish.disabled = false;
+    hide(DOM.prestartOverlay);
+  }
+
+  function handleExamStart() {
+    if (state.examStarted) return;
+
+    if (!state.sessionId || !state.sessionToken) {
+      if (!state.gatePassed) {
+        show(DOM.gateOverlay);
+        DOM.gateInput?.focus();
         return;
       }
-      // Gate passed but session not ready → დაიწყე ოფლაინ რეჟიმით მაშინვე
-      examStarted = true;
-      if (examStart) examStart.disabled = true;
-      if (examFinish) examFinish.disabled = false;
-      if (prestartOverlay) hide(prestartOverlay);
-      preRenderLocalFirstQuestion();
-      void initExamData(); // ეს შიგნით localStorage-ზე გადადის თუ sessionId არაა
+      activateExamUi();
+      hydrateFromLocalStorage();
       startCountdown();
-      // პარალელურად სცადე სესიის წამოწყება, რომ გაეშვას სერვერზე თუ აღმოჩნდა ხელმისაწვდომი
+      void initExamData();
       void beginSession();
       return;
     }
-    // სესია მზად არის → დავიწყოთ გამოცდა
-    examStarted = true;
-    if (examStart) examStart.disabled = true;
-    if (examFinish) examFinish.disabled = false;
-    if (prestartOverlay) hide(prestartOverlay);
-    preRenderLocalFirstQuestion();
-    void initExamData();
+
+    activateExamUi();
+    hydrateFromLocalStorage();
     startCountdown();
-  });
-  // Initialize countdown display from saved duration on load
-  (function initCountdown() {
-    remainingMs = serverEndsAtMs ? Math.max(0, serverEndsAtMs - Date.now()) : (readDurationMinutes() * 60 * 1000);
+    void initExamData();
+  }
+
+  function handleAnswerClick(event) {
+    const row = event.target?.closest?.('.cm-answer');
+    if (!row || !DOM.cmContent?.contains(row)) return;
+    const answerId = row.dataset.answerId || event.target?.getAttribute?.('data-answer-id');
+    if (!answerId) return;
+    selectAnswer(answerId).catch(() => {});
+  }
+
+  function handleDotClick(event) {
+    const dot = event.target?.closest?.('.cm-dot');
+    if (!dot || !DOM.cmDotsWrap?.contains(dot)) return;
+    const key = dot.dataset.questionId;
+    if (!key) return;
+    const index = state.flatIndexByQuestionId.get(key);
+    if (typeof index === 'number') {
+      gotoQuestionIndex(index);
+    }
+  }
+
+  function handleGlobalKey(event) {
+    if (event.key === 'F4' && event.altKey) {
+      event.preventDefault();
+      showStep1();
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      showStep1();
+      return;
+    }
+    ensureFullscreen();
+  }
+
+  function handleFullscreenChange() {
+    if (document.fullscreenElement || !state.mustStayFullscreen) return;
+
+    if (DOM.answerAllDialog && !DOM.answerAllDialog.hidden) {
+      requestAnimationFrame(() => {
+        if (state.mustStayFullscreen && !document.fullscreenElement) {
+          enterFullscreen();
+        }
+      });
+      return;
+    }
+
+    showStep1();
+    enterFullscreen();
+  }
+
+  function wireUI() {
+    DOM.gateForm?.addEventListener('submit', handleGateSubmit);
+    DOM.gateClose?.addEventListener('click', safeNavigateHome);
+    DOM.gateInput?.addEventListener('input', () => setHidden(DOM.gateError, true));
+
+    DOM.examStart?.addEventListener('click', handleExamStart);
+    DOM.examFinish?.addEventListener('click', showStep1);
+
+    DOM.confirmLeaveNo?.addEventListener('click', hideAll);
+    DOM.confirmLeaveYes?.addEventListener('click', showStep2);
+    DOM.returnToExam?.addEventListener('click', hideAll);
+    DOM.agreeExit?.addEventListener('click', () => {
+      exitFullscreen();
+      safeNavigateHome();
+    });
+
+    DOM.resultsClose?.addEventListener('click', () => {
+      hideResults();
+      exitFullscreen();
+      safeNavigateHome();
+    });
+
+    DOM.answerAllClose?.addEventListener('click', hideAnswerAllDialog);
+
+    DOM.prevBtn?.addEventListener('click', gotoPrevQuestion);
+    DOM.nextBtn?.addEventListener('click', gotoNextQuestion);
+
+    DOM.cmContent?.addEventListener('click', handleAnswerClick);
+    DOM.cmDotsWrap?.addEventListener('click', handleDotClick);
+
+    if (DOM.prestartOverlay) {
+      show(DOM.prestartOverlay);
+    }
+  }
+
+  function wireGlobalGuards() {
+    document.addEventListener('keydown', handleGlobalKey);
+    document.addEventListener('click', () => ensureFullscreen(), { capture: true });
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+  }
+
+  function initializeCountdownDisplay() {
+    remainingMs = state.serverEndsAtMs
+      ? Math.max(0, state.serverEndsAtMs - Date.now())
+      : readDurationMinutes() * 60 * 1000;
     updateCountdownView();
-  })();
-  resultsClose?.addEventListener('click', () => { hideResults(); exitFullscreen(); safeNavigateHome(); });
+  }
 
-  // Handle answer all dialog
-  answerAllClose?.addEventListener('click', () => {
-    // Simply close warning; stay on the same block/question
-    hideAnswerAllDialog();
-  });
+  function initialize() {
+    hideAll();
+    focusTrap.enable();
+    updateUserHeader();
+    updateRightDateTime();
+    setInterval(updateRightDateTime, 30 * 1000);
+    initializeCountdownDisplay();
+    if (DOM.gateInput) DOM.gateInput.focus();
+  }
+
+  function preventZooming() {
+    document.addEventListener('wheel', (event) => {
+      if (event.ctrlKey) event.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && (event.key === '+' || event.key === '-' || event.key === '=')) {
+        event.preventDefault();
+      }
+    }, { passive: false });
+  }
+
+  wireUI();
+  wireGlobalGuards();
+  initialize();
 });
-
-

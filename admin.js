@@ -1,947 +1,1091 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const body = document.body;
-  const burger = document.querySelector('.burger');
-  const overlay = document.querySelector('.overlay');
-  const drawerClose = document.querySelector('.drawer-close');
-  const drawerLinks = document.querySelectorAll('.drawer-nav a');
-  const loginBtn = document.querySelector('.login-btn');
-  const drawerLoginBtn = document.querySelector('.drawer-login');
-  
-  // Admin-only access gate (client-side)
-  const AUTH_KEY = 'authLoggedIn';
-  const SAVED_EMAIL_KEY = 'savedEmail';
-  const CURRENT_USER_KEY = 'currentUser';
+  const API_BASE = 'http://127.0.0.1:8000';
+  const KEYS = {
+    AUTH: 'authLoggedIn',
+    SAVED_EMAIL: 'savedEmail',
+    CURRENT_USER: 'currentUser',
+    EXAM_DURATION: 'examDuration',
+    ADMIN_PWD: 'adminGatePassword',
+    BLOCKS: 'examBlocks_v1',
+    ADMIN_API_KEY: 'adminApiKey',
+  };
   const FOUNDER_EMAIL = 'naormala@gmail.com';
-  const isLoggedIn = () => localStorage.getItem(AUTH_KEY) === 'true';
-  const emailLower = () => (localStorage.getItem(SAVED_EMAIL_KEY) || '').toLowerCase();
-  const getCurrentUser = () => { try { const raw = localStorage.getItem(CURRENT_USER_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
-  const isLocalAdmin = () => !!(getCurrentUser()?.isAdmin);
-  if (!isLoggedIn() || !(emailLower() === FOUNDER_EMAIL.toLowerCase() || isLocalAdmin())) {
-    alert('ადმინისტრატორის გვერდზე დაშვება აქვს მხოლოდ ადმინს');
-    window.location.href = 'index.html';
-    return;
-  }
-  
-  const on = (el, evt, handler) => el && el.addEventListener(evt, handler);
-  
-  const setMenu = (open) => {
-    body.classList.toggle('menu-open', open);
-    if (burger) burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+
+  const DOM = {
+    body: document.body,
+    burger: document.querySelector('.burger'),
+    overlay: document.querySelector('.overlay'),
+    drawerClose: document.querySelector('.drawer-close'),
+    loginBtn: document.querySelector('.login-btn'),
+    drawerLoginBtn: document.querySelector('.drawer-login'),
+    drawerLinks: Array.from(document.querySelectorAll('.drawer-nav a')),
+    navLinks: Array.from(document.querySelectorAll('.nav a, .drawer-nav a')),
+    sections: {
+      exam: document.getElementById('exam-settings'),
+      results: document.getElementById('results-section'),
+      registrations: document.getElementById('registrations-section'),
+    },
+    durationInput: document.getElementById('examDuration'),
+    saveDurationBtn: document.getElementById('saveExamDuration'),
+    durationFlash: document.getElementById('durationFlash'),
+    gatePwdInput: document.getElementById('adminGatePassword'),
+    gatePwdSaveBtn: document.getElementById('saveAdminGatePassword'),
+    blocksGrid: document.querySelector('.exam-blocks-grid'),
+    blocksCount: document.getElementById('adminBlocksCount'),
+    questionsCount: document.getElementById('adminQuestionsCount'),
+    resultsGrid: document.getElementById('resultsGrid'),
+    resultsSearch: document.getElementById('resultsSearch'),
+    resultsApiKeyInput: document.getElementById('resultsApiKey'),
+    saveResultsApiKeyBtn: document.getElementById('saveResultsApiKey'),
+    usersGrid: document.getElementById('usersGrid'),
+    usersSearch: document.getElementById('usersSearch'),
+    usersSort: document.getElementById('usersSort'),
+    onlyAdmins: document.getElementById('onlyAdmins'),
   };
 
-  const openMenu = () => { setMenu(true); };
-  const closeMenu = () => { setMenu(false); };
-  const toggleMenu = () => {
-    if (body.classList.contains('menu-open')) closeMenu(); else openMenu();
-  };
+  const on = (element, event, handler) => element && element.addEventListener(event, handler);
 
-  on(burger, 'click', toggleMenu);
-  on(overlay, 'click', closeMenu);
-  on(drawerClose, 'click', closeMenu);
-  drawerLinks.forEach(link => on(link, 'click', closeMenu));
+  ensureAdminAccess();
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeMenu();
-  });
+  const examSettings = createExamSettingsModule();
+  const blocksModule = createBlocksModule();
+  const resultsModule = createResultsModule();
+  const usersModule = createUsersModule();
 
-  // "მთავარი გვერდი" ღილაკები
-  on(loginBtn, 'click', () => {
-    window.location.href = 'index.html';
-  });
+  wireNavigation({ results: resultsModule, users: usersModule });
 
-  on(drawerLoginBtn, 'click', () => {
-    window.location.href = 'index.html';
-  });
+  examSettings.init();
+  blocksModule.init();
+  resultsModule.init();
+  usersModule.init();
 
-  // Exam settings logic
-  const examSection = document.getElementById('exam-settings');
-  const durationInput = document.getElementById('examDuration');
-  const saveBtn = document.getElementById('saveExamDuration');
-  const flash = document.getElementById('durationFlash');
-  const EXAM_DURATION_KEY = 'examDuration';
-  const ADMIN_PWD_KEY = 'adminGatePassword';
-  const gatePwdInput = document.getElementById('adminGatePassword');
-  const gatePwdSave = document.getElementById('saveAdminGatePassword');
-  const gatePwdFlash = document.getElementById('gatePwdFlash');
+  showSection('exam');
 
-  // Simple toast helper
-  const getToastContainer = () => {
-    let c = document.getElementById('toastContainer');
-    if (!c) {
-      c = document.createElement('div');
-      c.id = 'toastContainer';
-      c.className = 'toast-container';
-      document.body.appendChild(c);
-    }
-    return c;
-  };
-  const showToast = (message, type = 'success') => {
-    const c = getToastContainer();
-    const t = document.createElement('div');
-    t.className = `toast${type === 'error' ? ' error' : ''}`;
-    t.setAttribute('role', 'status');
-    t.setAttribute('aria-live', 'polite');
-    t.textContent = String(message || '');
-    c.appendChild(t);
-    requestAnimationFrame(() => { t.classList.add('show'); });
-    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 220); }, 2600);
-  };
-
-  const navLinks = document.querySelectorAll('.nav a, .drawer-nav a');
-  navLinks.forEach(link => {
-    on(link, 'click', (e) => {
-      const text = (link.textContent || '').trim();
-      if (text === 'გამოცდა') {
-        e.preventDefault();
-        const resultsSection = document.getElementById('results-section');
-        const regsSection = document.getElementById('registrations-section');
-        if (examSection) examSection.style.display = 'block';
-        if (resultsSection) resultsSection.style.display = 'none';
-        if (regsSection) regsSection.style.display = 'none';
-      }
-      if (text === 'შედეგები') {
-        e.preventDefault();
-        const resultsSection = document.getElementById('results-section');
-        const regsSection = document.getElementById('registrations-section');
-        if (examSection) examSection.style.display = 'none';
-        if (regsSection) regsSection.style.display = 'none';
-        if (resultsSection) { resultsSection.style.display = 'block'; renderResults(); }
-      }
-      if (text === 'რეგისტრაციები' || text === 'რეგისტრირებული პირები') {
-        e.preventDefault();
-        const resultsSection = document.getElementById('results-section');
-        const regsSection = document.getElementById('registrations-section');
-        if (examSection) examSection.style.display = 'none';
-        if (resultsSection) resultsSection.style.display = 'none';
-        if (regsSection) { regsSection.style.display = 'block'; renderUsers(); }
-      }
+  function showSection(name) {
+    Object.entries(DOM.sections).forEach(([key, el]) => {
+      if (!el) return;
+      el.style.display = key === name ? 'block' : 'none';
     });
-  });
+  }
 
-  // Load saved exam duration
-  try {
-    const saved = localStorage.getItem(EXAM_DURATION_KEY);
-    if (saved && durationInput) durationInput.value = saved;
-  } catch {}
-
-  // Load saved admin gate password
-  try {
-    const savedPwd = localStorage.getItem(ADMIN_PWD_KEY);
-    if (gatePwdInput) gatePwdInput.value = savedPwd || '';
-  } catch {}
-
-  // Save duration
-  on(saveBtn, 'click', () => {
-    const value = Number(durationInput?.value || 0);
-    if (!value || value < 1) {
-      alert('გთხოვთ შეიყვანოთ სწორი დრო (მინიმუმ 1 წუთი)');
-      return;
-    }
-    try { localStorage.setItem(EXAM_DURATION_KEY, String(value)); } catch {}
-    if (flash) {
-      flash.textContent = `ხანგრძლივობა შეიცვალა: ${value} წუთი`;
-      flash.style.display = 'block';
-      setTimeout(() => { if (flash) flash.style.display = 'none'; }, 3000);
-    }
-  });
-
-  // Save admin gate password
-  on(gatePwdSave, 'click', () => {
-    const value = String(gatePwdInput?.value || '').trim();
-    if (!value) {
-      showToast('გთხოვთ შეიყვანოთ პაროლი', 'error');
-      return;
-    }
-    try { localStorage.setItem(ADMIN_PWD_KEY, value); } catch {}
-    // Use a toast instead of inline flash to avoid layout jumps
-    showToast('ადმინისტრატორის პაროლი შენახულია');
-  });
-
-  // UX: Enter-ზე შენახვა + typing-ისას ავტო-შენახვა (debounced)
-  on(gatePwdInput, 'keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      gatePwdSave?.click();
-    }
-  });
-  let gatePwdSaveTimer = null;
-  on(gatePwdInput, 'input', () => {
-    const v = String(gatePwdInput?.value || '').trim();
-    clearTimeout(gatePwdSaveTimer);
-    gatePwdSaveTimer = setTimeout(() => { try { localStorage.setItem(ADMIN_PWD_KEY, v); } catch {} }, 250);
-  });
-
-  // Blocks grid data + rendering
-  const blocksGrid = document.querySelector('.exam-blocks-grid');
-  const BLOCKS_KEY = 'examBlocks_v1';
-  const blocksCountEl = document.getElementById('adminBlocksCount');
-  const questionsCountEl = document.getElementById('adminQuestionsCount');
-  const generateId = () => `${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
-  const createDefaultAnswers = () => Array.from({ length: 4 }, () => ({ id: generateId(), text: '' }));
-  const generateQuestionCode = () => String(Math.floor(10000 + Math.random() * 90000));
-
-  const loadBlocks = () => {
+  function getCurrentUser() {
     try {
-      const raw = localStorage.getItem(BLOCKS_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
-  };
-  const saveBlocks = (data) => { try { localStorage.setItem(BLOCKS_KEY, JSON.stringify(data)); } catch {} };
+      const raw = localStorage.getItem(KEYS.CURRENT_USER);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
 
-  let blocksData = loadBlocks();
-  // Migration: ensure each block has a questions array and each question has 4 answers
-  blocksData = (Array.isArray(blocksData) ? blocksData : []).map(b => {
-    if (b && typeof b === 'object') {
-      const qs = Array.isArray(b.questions) ? b.questions : [];
-      const migratedQs = qs.map(q => {
-        if (q && typeof q === 'object') {
-          let answers = Array.isArray(q.answers) ? q.answers : [];
-          answers = answers.map(a => (a && typeof a === 'object') ? a : { id: generateId(), text: String(a || '') });
+  function ensureAdminAccess() {
+    const loggedIn = localStorage.getItem(KEYS.AUTH) === 'true';
+    const savedEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').toLowerCase();
+    const isLocalAdmin = !!getCurrentUser()?.isAdmin;
+    if (!loggedIn || !(savedEmail === FOUNDER_EMAIL.toLowerCase() || isLocalAdmin)) {
+      alert('ადმინისტრატორის გვერდზე დაშვება აქვს მხოლოდ ადმინს');
+      window.location.href = 'index.html';
+    }
+  }
+
+  function getToastContainer() {
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toastContainer';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  function showToast(message, type = 'success') {
+    const container = getToastContainer();
+    const toast = document.createElement('div');
+    toast.className = `toast${type === 'error' ? ' error' : ''}`;
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.textContent = String(message || '');
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 220);
+    }, 2600);
+  }
+
+  function formatDateTime(iso) {
+    try {
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return String(iso || '');
+      const pad = (value) => String(value).padStart(2, '0');
+      return `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    } catch {
+      return String(iso || '');
+    }
+  }
+
+  function isFounderActor() {
+    return (localStorage.getItem(KEYS.SAVED_EMAIL) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
+  }
+
+  function getAdminHeaders() {
+    const key = localStorage.getItem(KEYS.ADMIN_API_KEY);
+    return key ? { 'x-admin-key': key } : {};
+  }
+
+  function getActorHeaders() {
+    const actor = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
+    return actor ? { 'x-actor-email': actor } : {};
+  }
+
+  function wireNavigation(modules) {
+    const { results, users } = modules;
+    const setMenu = (open) => {
+      DOM.body?.classList.toggle('menu-open', open);
+      if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    const closeMenu = () => setMenu(false);
+    const openMenu = () => setMenu(true);
+    const toggleMenu = () => setMenu(!DOM.body?.classList.contains('menu-open'));
+
+    on(DOM.burger, 'click', toggleMenu);
+    on(DOM.overlay, 'click', closeMenu);
+    on(DOM.drawerClose, 'click', closeMenu);
+    DOM.drawerLinks.forEach((link) => on(link, 'click', closeMenu));
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeMenu();
+    });
+
+    const goHome = () => { window.location.href = 'index.html'; };
+    on(DOM.loginBtn, 'click', goHome);
+    on(DOM.drawerLoginBtn, 'click', goHome);
+
+    const NAV_ACTIONS = {
+      'გამოცდა': () => { showSection('exam'); },
+      'შედეგები': () => { showSection('results'); results.render(); },
+      'რეგისტრაციები': () => { showSection('registrations'); users.render(); },
+      'რეგისტრირებული პირები': () => { showSection('registrations'); users.render(); },
+    };
+
+    DOM.navLinks.forEach((link) => {
+      on(link, 'click', (event) => {
+        const label = (link.textContent || '').trim();
+        const action = NAV_ACTIONS[label];
+        if (!action) return;
+        event.preventDefault();
+        closeMenu();
+        action();
+      });
+    });
+  }
+
+  function createExamSettingsModule() {
+    const state = { gatePwdTimer: null };
+
+    function loadInitialValues() {
+      try {
+        const savedDuration = localStorage.getItem(KEYS.EXAM_DURATION);
+        if (savedDuration && DOM.durationInput) DOM.durationInput.value = savedDuration;
+      } catch {}
+      try {
+        const savedPwd = localStorage.getItem(KEYS.ADMIN_PWD) || '';
+        if (DOM.gatePwdInput) DOM.gatePwdInput.value = savedPwd;
+      } catch {}
+    }
+
+    function saveDuration() {
+      const value = Number(DOM.durationInput?.value || 0);
+      if (!value || value < 1) {
+        alert('გთხოვთ შეიყვანოთ სწორი დრო (მინიმუმ 1 წუთი)');
+        return;
+      }
+      try { localStorage.setItem(KEYS.EXAM_DURATION, String(value)); } catch {}
+      if (DOM.durationFlash) {
+        DOM.durationFlash.textContent = `ხანგრძლივობა შეიცვალა: ${value} წუთი`;
+        DOM.durationFlash.style.display = 'block';
+        setTimeout(() => {
+          if (DOM.durationFlash) DOM.durationFlash.style.display = 'none';
+        }, 3000);
+      }
+    }
+
+    function saveGatePassword() {
+      const value = String(DOM.gatePwdInput?.value || '').trim();
+      if (!value) {
+        showToast('გთხოვთ შეიყვანოთ პაროლი', 'error');
+        return;
+      }
+      try { localStorage.setItem(KEYS.ADMIN_PWD, value); } catch {}
+      showToast('ადმინისტრატორის პაროლი შენახულია');
+    }
+
+    function handleGatePwdKeydown(event) {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      saveGatePassword();
+    }
+
+    function handleGatePwdInput() {
+      clearTimeout(state.gatePwdTimer);
+      const value = String(DOM.gatePwdInput?.value || '').trim();
+      state.gatePwdTimer = setTimeout(() => {
+        try { localStorage.setItem(KEYS.ADMIN_PWD, value); } catch {}
+      }, 250);
+    }
+
+    function init() {
+      loadInitialValues();
+      on(DOM.saveDurationBtn, 'click', saveDuration);
+      on(DOM.gatePwdSaveBtn, 'click', saveGatePassword);
+      on(DOM.gatePwdInput, 'keydown', handleGatePwdKeydown);
+      on(DOM.gatePwdInput, 'input', handleGatePwdInput);
+    }
+
+    return { init };
+  }
+
+  function createBlocksModule() {
+    const state = { data: [] };
+
+    const generateId = () => `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const createDefaultAnswers = () => Array.from({ length: 4 }, () => ({ id: generateId(), text: '' }));
+    const generateQuestionCode = () => String(Math.floor(10000 + Math.random() * 90000));
+
+    function load() {
+      try {
+        const raw = localStorage.getItem(KEYS.BLOCKS);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function migrate(data) {
+      return (Array.isArray(data) ? data : []).map((block) => {
+        if (!block || typeof block !== 'object') return block;
+        const blockId = typeof block.id === 'string' ? block.id : generateId();
+        const questions = Array.isArray(block.questions) ? block.questions : [];
+        const migratedQuestions = questions.map((question) => {
+          if (!question || typeof question !== 'object') {
+            return {
+              id: generateId(),
+              text: String(question || ''),
+              answers: createDefaultAnswers(),
+              correctAnswerId: null,
+              code: generateQuestionCode(),
+            };
+          }
+          let answers = Array.isArray(question.answers) ? question.answers : [];
+          answers = answers.map((answer) => {
+            if (answer && typeof answer === 'object') return answer;
+            return { id: generateId(), text: String(answer || '') };
+          });
           while (answers.length < 4) answers.push({ id: generateId(), text: '' });
           if (answers.length > 4) answers = answers.slice(0, 4);
-          return { ...q, answers, correctAnswerId: typeof q.correctAnswerId === 'string' ? q.correctAnswerId : null, code: typeof q.code === 'string' ? q.code : generateQuestionCode() };
-        }
-        return { id: generateId(), text: String(q || ''), answers: createDefaultAnswers(), correctAnswerId: null, code: generateQuestionCode() };
+          return {
+            ...question,
+            id: typeof question.id === 'string' ? question.id : generateId(),
+            answers,
+            correctAnswerId: typeof question.correctAnswerId === 'string' ? question.correctAnswerId : null,
+            code: typeof question.code === 'string' ? question.code : generateQuestionCode(),
+          };
+        });
+        return {
+          ...block,
+          id: blockId,
+          questions: migratedQuestions,
+        };
       });
-      return { ...b, questions: migratedQs };
     }
-    return b;
-  });
 
-  const nextNumber = () => {
-    if (!blocksData.length) return 1;
-    const max = Math.max(...blocksData.map(b => Number(b.number) || 0));
-    return (isFinite(max) ? max : 0) + 1;
-  };
+    function save() {
+      try { localStorage.setItem(KEYS.BLOCKS, JSON.stringify(state.data)); } catch {}
+    }
 
-  const updateStats = () => {
-    if (!blocksCountEl || !questionsCountEl) return;
-    const blocksCount = Array.isArray(blocksData) ? blocksData.length : 0;
-    // Sum of questions that will be used in exam: sum(min(qty, availableQuestions)) per block
-    const questionsCount = (Array.isArray(blocksData) ? blocksData : []).reduce((sum, b) => {
-      const available = Array.isArray(b?.questions) ? b.questions.length : 0;
-      const qty = Math.max(0, Number(b?.qty) || 0);
-      return sum + Math.min(qty, available);
-    }, 0);
-    blocksCountEl.textContent = String(blocksCount);
-    questionsCountEl.textContent = String(questionsCount);
-  };
+    function nextNumber() {
+      if (!state.data.length) return 1;
+      const max = Math.max(...state.data.map((block) => Number(block.number) || 0));
+      return (Number.isFinite(max) ? max : 0) + 1;
+    }
 
-  const renderBlocks = () => {
-    if (!blocksGrid) return;
-    // Capture currently open blocks/questions to preserve UI state after re-render
-    const prevOpenBlockIds = Array.from(blocksGrid.querySelectorAll('.block-card.open')).map(el => el.dataset.blockId).filter(Boolean);
-    const prevOpenQuestionIds = Array.from(blocksGrid.querySelectorAll('.question-card.open')).map(el => el.dataset.questionId).filter(Boolean);
-    blocksGrid.innerHTML = '';
+    function updateStats() {
+      if (!DOM.blocksCount || !DOM.questionsCount) return;
+      const blocksCount = state.data.length;
+      const questionsCount = state.data.reduce((sum, block) => {
+        const available = Array.isArray(block?.questions) ? block.questions.length : 0;
+        const qty = Math.max(0, Number(block?.qty) || 0);
+        return sum + Math.min(qty, available);
+      }, 0);
+      DOM.blocksCount.textContent = String(blocksCount);
+      DOM.questionsCount.textContent = String(questionsCount);
+    }
 
-    blocksData.forEach((b, idx) => {
-      const atTop = idx === 0;
-      const atBottom = idx === blocksData.length - 1;
-      const card = document.createElement('div');
-      card.className = 'block-tile block-card';
-      card.dataset.blockId = b.id;
-      card.innerHTML = `
-        <div class="block-head">
-          <div class="block-order">
-            <button class="i-btn up" ${atTop ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
-            <button class="i-btn down" ${atBottom ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
+    function setCardOpen(card, open) {
+      if (!card) return;
+      card.classList.toggle('open', !!open);
+      const questions = card.querySelector('.block-questions');
+      const toggle = card.querySelector('.head-toggle');
+      if (questions) {
+        questions.setAttribute('aria-hidden', open ? 'false' : 'true');
+      }
+      if (!open) {
+        const textareas = card.querySelectorAll('.q-text, .a-text');
+        textareas.forEach((textarea) => {
+          try { textarea.style.height = ''; } catch {}
+        });
+      }
+      if (toggle) {
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.textContent = open ? '▴' : '▾';
+      }
+    }
+
+    function setQuestionOpen(questionCard, open) {
+      if (!questionCard) return;
+      questionCard.classList.toggle('open', !!open);
+      const details = questionCard.querySelector('.q-details');
+      const toggle = questionCard.querySelector('.q-toggle');
+      if (details) {
+        details.setAttribute('aria-hidden', open ? 'false' : 'true');
+      }
+      if (!open) {
+        const textareas = questionCard.querySelectorAll('.q-text, .a-text');
+        textareas.forEach((textarea) => {
+          try { textarea.style.height = ''; } catch {}
+        });
+      }
+      if (toggle) {
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.textContent = open ? '▴' : '▾';
+      }
+    }
+
+    function closeAllOpenQuestions(except) {
+      const opened = DOM.blocksGrid?.querySelectorAll?.('.question-card.open') || [];
+      opened.forEach((card) => {
+        if (!except || card !== except) setQuestionOpen(card, false);
+      });
+    }
+
+    function render() {
+      if (!DOM.blocksGrid) return;
+      const previouslyOpenBlocks = Array.from(DOM.blocksGrid.querySelectorAll('.block-card.open'))
+        .map((card) => card.dataset.blockId)
+        .filter(Boolean);
+      const previouslyOpenQuestions = Array.from(DOM.blocksGrid.querySelectorAll('.question-card.open'))
+        .map((card) => card.dataset.questionId)
+        .filter(Boolean);
+
+      DOM.blocksGrid.innerHTML = '';
+
+      state.data.forEach((block, index) => {
+        const card = document.createElement('div');
+        card.className = 'block-tile block-card';
+        card.dataset.blockId = block.id;
+        const questions = Array.isArray(block.questions) ? block.questions : [];
+        const atTop = index === 0;
+        const atBottom = index === state.data.length - 1;
+        card.innerHTML = `
+          <div class="block-head">
+            <div class="block-order">
+              <button class="i-btn up" ${atTop ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
+              <button class="i-btn down" ${atBottom ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
+            </div>
+            <span class="head-label">ბლოკი</span>
+            <input class="head-number" type="number" inputmode="numeric" min="1" step="1" value="${block.number ?? ''}" aria-label="ბლოკის ნომერი" />
+            <input class="head-name" type="text" placeholder="ბლოკის სახელი" value="${(block.name || '').replace(/"/g, '&quot;')}" aria-label="ბლოკის სახელი" />
+            <span class="head-qty-label">რაოდენობა</span>
+            <input class="head-qty" type="number" inputmode="numeric" min="0" step="1" value="${typeof block.qty === 'number' ? block.qty : ''}" aria-label="რაოდენობა" />
+            <button class="head-delete" type="button" aria-label="ბლოკის წაშლა" title="წაშლა">×</button>
+            <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+            <span class="head-count" title="კითხვების რაოდენობა">${questions.length}</span>
           </div>
-          <span class="head-label">ბლოკი</span>
-          <input class="head-number" type="number" inputmode="numeric" min="1" step="1" value="${b.number ?? ''}" aria-label="ბლოკის ნომერი" />
-          <input class="head-name" type="text" placeholder="ბლოკის სახელი" value="${(b.name || '').replace(/"/g,'&quot;')}" aria-label="ბლოკის სახელი" />
-          <span class="head-qty-label">რაოდენობა</span>
-          <input class="head-qty" type="number" inputmode="numeric" min="0" step="1" value="${typeof b.qty === 'number' ? b.qty : ''}" aria-label="რაოდენობა" />
-          <button class="head-delete" type="button" aria-label="ბლოკის წაშლა" title="წაშლა">×</button>
-          <button class="head-toggle" type="button" aria-expanded="false">▾</button>
-          <span class="head-count" title="კითხვების რაოდენობა">${Array.isArray(b.questions) ? b.questions.length : 0}</span>
-        </div>
-        <div class="block-questions" aria-hidden="true">
-          <div class="questions-list">
-            ${ (b.questions || []).map((q, qIdx, arr) => `
-              <div class="question-card" data-question-id="${q.id}">
-                <div class="q-head">
-                  <div class="q-order">
-                    <button class="i-btn q-up" ${qIdx === 0 ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
-                    <button class="i-btn q-down" ${qIdx === arr.length - 1 ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
-                  </div>
-                  <textarea class="q-text" placeholder="კითხვა" rows="3" aria-label="კითხვა">${String(q.text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                  <div class="q-actions">
-                    <div class="q-actions-row">
-                      <button class="q-delete" type="button" aria-label="კითხვის წაშლა" title="წაშლა">×</button>
-                      <button class="q-toggle" type="button" aria-expanded="false">▾</button>
+          <div class="block-questions" aria-hidden="true">
+            <div class="questions-list">
+              ${questions.map((question, qIndex, arr) => `
+                <div class="question-card" data-question-id="${question.id}">
+                  <div class="q-head">
+                    <div class="q-order">
+                      <button class="i-btn q-up" ${qIndex === 0 ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
+                      <button class="i-btn q-down" ${qIndex === arr.length - 1 ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
                     </div>
-                    <span class="q-code" aria-label="კითხვა კოდი">${q.code}</span>
-                  </div>
-                </div>
-                <div class="q-details" aria-hidden="true">
-                  <div class="q-answers">
-                    ${ (Array.isArray(q.answers) ? q.answers : []).map((a, ai, arrA) => `
-                      <div class="answer-row" data-answer-id="${a.id}">
-                        <div class="a-order">
-                          <button class="i-btn a-up" ${ai === 0 ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
-                          <button class="i-btn a-down" ${ai === arrA.length - 1 ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
-                        </div>
-                        <textarea class="a-text" rows="2" placeholder="პასუხი ${ai+1}" aria-label="პასუხი ${ai+1}">${String(a.text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                        <label class="a-correct-wrap" title="სწორი პასუხი">
-                          <input class="a-correct" type="radio" name="correct-${q.id}" ${q.correctAnswerId === a.id ? 'checked' : ''} />
-                          <span>სწორია</span>
-                        </label>
+                    <textarea class="q-text" placeholder="კითხვა" rows="3" aria-label="კითხვა">${String(question.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+                    <div class="q-actions">
+                      <div class="q-actions-row">
+                        <button class="q-delete" type="button" aria-label="კითხვის წაშლა" title="წაშლა">×</button>
+                        <button class="q-toggle" type="button" aria-expanded="false">▾</button>
                       </div>
-                    `).join('') }
+                      <span class="q-code" aria-label="კითხვა კოდი">${question.code}</span>
+                    </div>
+                  </div>
+                  <div class="q-details" aria-hidden="true">
+                    <div class="q-answers">
+                      ${(Array.isArray(question.answers) ? question.answers : []).map((answer, aIndex, answersArr) => `
+                        <div class="answer-row" data-answer-id="${answer.id}">
+                          <div class="a-order">
+                            <button class="i-btn a-up" ${aIndex === 0 ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
+                            <button class="i-btn a-down" ${aIndex === answersArr.length - 1 ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
+                          </div>
+                          <textarea class="a-text" rows="2" placeholder="პასუხი ${aIndex + 1}" aria-label="პასუხი ${aIndex + 1}">${String(answer.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+                          <label class="a-correct-wrap" title="სწორი პასუხი">
+                            <input class="a-correct" type="radio" name="correct-${question.id}" ${question.correctAnswerId === answer.id ? 'checked' : ''} />
+                            <span>სწორია</span>
+                          </label>
+                        </div>
+                      `).join('')}
+                    </div>
                   </div>
                 </div>
-              </div>
-            `).join('') }
+              `).join('')}
+            </div>
+            <button class="block-tile add-tile q-add-tile" type="button" aria-label="კითხვის დამატება">
+              <span class="add-icon" aria-hidden="true">+</span>
+              <span class="add-text">კითხვის დამატება</span>
+            </button>
           </div>
-          <button class="block-tile add-tile q-add-tile" type="button" aria-label="კითხვის დამატება">
-            <span class="add-icon" aria-hidden="true">+</span>
-            <span class="add-text">კითხვის დამატება</span>
-          </button>
-        </div>
-      `;
-      blocksGrid.appendChild(card);
-      // Restore previously open blocks only (do not auto-open empty ones)
-      if (prevOpenBlockIds.includes(b.id)) setCardOpen(card, true);
-      // Restore open questions within this block
-      const qCards = card.querySelectorAll('.question-card');
-      qCards.forEach(qc => { const qid = qc.dataset.questionId; if (prevOpenQuestionIds.includes(qid)) setQuestionOpen(qc, true); });
-    });
+        `;
+        DOM.blocksGrid.appendChild(card);
+        if (previouslyOpenBlocks.includes(block.id)) setCardOpen(card, true);
+        card.querySelectorAll('.question-card').forEach((questionCard) => {
+          if (previouslyOpenQuestions.includes(questionCard.dataset.questionId)) {
+            setQuestionOpen(questionCard, true);
+          }
+        });
+      });
 
-    const addTile = document.createElement('button');
-    addTile.type = 'button';
-    addTile.id = 'addBlockTile';
-    addTile.className = 'block-tile add-tile';
-    addTile.setAttribute('aria-label', 'ბლოკის დამატება');
-    addTile.innerHTML = '<span class="add-icon" aria-hidden="true">+</span><span class="add-text">ბლოკის დამატება</span>';
-    blocksGrid.appendChild(addTile);
-    updateStats();
-  };
+      const addTile = document.createElement('button');
+      addTile.type = 'button';
+      addTile.id = 'addBlockTile';
+      addTile.className = 'block-tile add-tile';
+      addTile.setAttribute('aria-label', 'ბლოკის დამატება');
+      addTile.innerHTML = '<span class="add-icon" aria-hidden="true">+</span><span class="add-text">ბლოკის დამატება</span>';
+      DOM.blocksGrid.appendChild(addTile);
 
-  const setCardOpen = (card, open) => {
-    if (!card) return;
-    card.classList.toggle('open', !!open);
-    const q = card.querySelector('.block-questions');
-    const btn = card.querySelector('.head-toggle');
-    if (q) {
-      q.setAttribute('aria-hidden', open ? 'false' : 'true');
-      // display სტილს აღარ ვცვლით, CSS transition-ს მივენდობით
-    }
-    // When closing a block, reset any manually resized textarea heights inside
-    if (!open) {
-      const textareas = card.querySelectorAll('.q-text, .a-text');
-      textareas.forEach(t => { try { t.style.height = ''; } catch {} });
-    }
-    if (btn) {
-      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-      btn.textContent = open ? '▴' : '▾';
-    }
-  };
-
-  const setQuestionOpen = (qCard, open) => {
-    if (!qCard) return;
-    qCard.classList.toggle('open', !!open);
-    const details = qCard.querySelector('.q-details');
-    const btn = qCard.querySelector('.q-toggle');
-    if (details) {
-      details.setAttribute('aria-hidden', open ? 'false' : 'true');
-      // CSS transition მართავს გახსნა/დაკეცვას
-    }
-    // When closing a question, reset textarea heights back to default (min-height)
-    if (!open) {
-      const textareas = qCard.querySelectorAll('.q-text, .a-text');
-      textareas.forEach(t => { try { t.style.height = ''; } catch {} });
-    }
-    if (btn) {
-      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-      btn.textContent = open ? '▴' : '▾';
-    }
-  };
-
-  const closeAllOpenQuestions = (except) => {
-    const openQs = blocksGrid?.querySelectorAll?.('.question-card.open') || [];
-    openQs.forEach(qc => { if (!except || qc !== except) setQuestionOpen(qc, false); });
-  };
-
-  const addBlock = () => {
-    const id = generateId();
-    blocksData.push({ id, number: nextNumber(), name: '', questions: [] });
-    saveBlocks(blocksData);
-    renderBlocks();
-    const card = blocksGrid?.querySelector?.(`.block-card[data-block-id="${id}"]`);
-    if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-  };
-
-  // Delegated events
-  on(blocksGrid, 'click', (e) => {
-    const target = e.target;
-    if (!target) return;
-    const addBtn = target.closest?.('#addBlockTile');
-    if (addBtn) { addBlock(); return; }
-
-    const card = target.closest?.('.block-card');
-    if (!card) return;
-    const id = card.dataset.blockId;
-    const idx = blocksData.findIndex(b => b.id === id);
-    if (idx === -1) return;
-
-    if (target.classList.contains('up')) {
-      if (idx > 0) { const t = blocksData[idx-1]; blocksData[idx-1] = blocksData[idx]; blocksData[idx] = t; saveBlocks(blocksData); renderBlocks(); }
-      return;
-    }
-    if (target.classList.contains('down')) {
-      if (idx < blocksData.length - 1) { const t = blocksData[idx+1]; blocksData[idx+1] = blocksData[idx]; blocksData[idx] = t; saveBlocks(blocksData); renderBlocks(); }
-      return;
-    }
-    if (target.classList.contains('head-delete')) {
-      const ok = window.confirm('ნამდვილად გსურთ ბლოკის წაშლა? ბლოკის ყველა კითხვა წაიშლება.');
-      if (!ok) return;
-      blocksData.splice(idx, 1);
-      saveBlocks(blocksData);
-      renderBlocks();
-      return;
+      updateStats();
     }
 
-    // Toggle open/close by clicking the explicit toggle button (robust via closest)
-    const toggleBtn = target.closest?.('.head-toggle');
-    if (toggleBtn) {
-      const isOpen = card.classList.contains('open');
-      if (!isOpen) closeAllOpenQuestions(); // opening another block closes any open question
-      setCardOpen(card, !isOpen);
-      return;
+    function addBlock() {
+      const id = generateId();
+      state.data.push({ id, number: nextNumber(), name: '', qty: 0, questions: [] });
+      save();
+      render();
+      const card = DOM.blocksGrid?.querySelector?.(`.block-card[data-block-id="${id}"]`);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    // Toggle by clicking on head area (but not on buttons/inputs)
-    const head = target.closest?.('.block-head');
-    if (head && !target.closest('button') && target.tagName !== 'INPUT') {
-      const isOpen = card.classList.contains('open');
-      setCardOpen(card, !isOpen);
-      return;
-    }
+    function handleGridClick(event) {
+      const target = event.target;
+      if (!target) return;
 
-    // Add question
-    const qAdd = target.closest?.('.q-add-tile');
-    if (qAdd) {
-      const qid = generateId();
-      if (!Array.isArray(blocksData[idx].questions)) blocksData[idx].questions = [];
-      blocksData[idx].questions.push({ id: qid, text: '', answers: createDefaultAnswers(), correctAnswerId: null, code: generateQuestionCode() });
-      saveBlocks(blocksData);
-      renderBlocks();
-      const newCard = blocksGrid?.querySelector?.(`.block-card[data-block-id="${id}"]`);
-      if (newCard) {
-        setCardOpen(newCard, true); // keep block open, leave new question collapsed by default
+      if (target.closest?.('#addBlockTile')) {
+        addBlock();
+        return;
       }
-      return;
-    }
 
-    // Delete question
-    if (target.classList.contains('q-delete')) {
-      const qEl = target.closest?.('.question-card');
-      const qid = qEl?.dataset.questionId;
-      if (qid) {
-        const ok = window.confirm('ნამდვილად გსურთ ამ კითხვის წაშლა? ქმედება შეუქცევადია.');
-        if (!ok) return;
-        const qs = Array.isArray(blocksData[idx].questions) ? blocksData[idx].questions : [];
-        const qi = qs.findIndex(q => q.id === qid);
-        if (qi !== -1) {
-          qs.splice(qi, 1);
-          blocksData[idx].questions = qs;
-          saveBlocks(blocksData);
-          renderBlocks();
+      const card = target.closest?.('.block-card');
+      if (!card) return;
+      const blockId = card.dataset.blockId;
+      const blockIndex = state.data.findIndex((block) => block.id === blockId);
+      if (blockIndex === -1) return;
+      const block = state.data[blockIndex];
+      block.questions = Array.isArray(block.questions) ? block.questions : [];
+
+      if (target.classList.contains('up')) {
+        if (blockIndex > 0) {
+          [state.data[blockIndex - 1], state.data[blockIndex]] = [state.data[blockIndex], state.data[blockIndex - 1]];
+          save();
+          render();
         }
+        return;
       }
-      return;
-    }
 
-    // Question reordering and toggling
-    const qCardEl = target.closest?.('.question-card');
-    if (qCardEl) {
-      const qid = qCardEl.dataset.questionId;
-      const qs = Array.isArray(blocksData[idx].questions) ? blocksData[idx].questions : [];
-      const qi = qs.findIndex(q => q.id === qid);
-      if (qi !== -1) {
-        // Answer row interactions
-        const aRow = target.closest?.('.answer-row');
-        if (aRow) {
-          const aid = aRow.dataset.answerId;
-          const answers = Array.isArray(qs[qi].answers) ? qs[qi].answers : [];
-          const ai = answers.findIndex(a => a.id === aid);
-          if (ai !== -1) {
+      if (target.classList.contains('down')) {
+        if (blockIndex < state.data.length - 1) {
+          [state.data[blockIndex + 1], state.data[blockIndex]] = [state.data[blockIndex], state.data[blockIndex + 1]];
+          save();
+          render();
+        }
+        return;
+      }
+
+      if (target.classList.contains('head-delete')) {
+        const confirmDelete = window.confirm('ნამდვილად გსურთ ბლოკის წაშლა? ბლოკის ყველა კითხვა წაიშლება.');
+        if (!confirmDelete) return;
+        state.data.splice(blockIndex, 1);
+        save();
+        render();
+        return;
+      }
+
+      const toggleBtn = target.closest?.('.head-toggle');
+      if (toggleBtn) {
+        const isOpen = card.classList.contains('open');
+        if (!isOpen) closeAllOpenQuestions();
+        setCardOpen(card, !isOpen);
+        return;
+      }
+
+      const head = target.closest?.('.block-head');
+      if (head && !target.closest('button') && target.tagName !== 'INPUT') {
+        const isOpen = card.classList.contains('open');
+        setCardOpen(card, !isOpen);
+        return;
+      }
+
+      if (target.closest?.('.q-add-tile')) {
+        const questionId = generateId();
+        block.questions.push({ id: questionId, text: '', answers: createDefaultAnswers(), correctAnswerId: null, code: generateQuestionCode() });
+        save();
+        render();
+        const updatedCard = DOM.blocksGrid?.querySelector?.(`.block-card[data-block-id="${blockId}"]`);
+        if (updatedCard) setCardOpen(updatedCard, true);
+        return;
+      }
+
+      if (target.classList.contains('q-delete')) {
+        const questionEl = target.closest?.('.question-card');
+        const questionId = questionEl?.dataset.questionId;
+        if (!questionId) return;
+        const confirmDelete = window.confirm('ნამდვილად გსურთ ამ კითხვის წაშლა? ქმედება შეუქცევადია.');
+        if (!confirmDelete) return;
+        const questionIndex = block.questions.findIndex((question) => question.id === questionId);
+        if (questionIndex !== -1) {
+          block.questions.splice(questionIndex, 1);
+          save();
+          render();
+        }
+        return;
+      }
+
+      const questionCard = target.closest?.('.question-card');
+      if (questionCard) {
+        const questionId = questionCard.dataset.questionId;
+        const questionIndex = block.questions.findIndex((question) => question.id === questionId);
+        if (questionIndex === -1) return;
+        const answers = Array.isArray(block.questions[questionIndex].answers) ? block.questions[questionIndex].answers : [];
+
+        const answerRow = target.closest?.('.answer-row');
+        if (answerRow) {
+          const answerId = answerRow.dataset.answerId;
+          const answerIndex = answers.findIndex((answer) => answer.id === answerId);
+          if (answerIndex !== -1) {
             if (target.closest?.('.a-up')) {
-              if (ai > 0) { const t = answers[ai-1]; answers[ai-1] = answers[ai]; answers[ai] = t; qs[qi].answers = answers; saveBlocks(blocksData); renderBlocks(); }
+              if (answerIndex > 0) {
+                [answers[answerIndex - 1], answers[answerIndex]] = [answers[answerIndex], answers[answerIndex - 1]];
+                block.questions[questionIndex].answers = answers;
+                save();
+                render();
+              }
               return;
             }
             if (target.closest?.('.a-down')) {
-              if (ai < answers.length - 1) { const t = answers[ai+1]; answers[ai+1] = answers[ai]; answers[ai] = t; qs[qi].answers = answers; saveBlocks(blocksData); renderBlocks(); }
+              if (answerIndex < answers.length - 1) {
+                [answers[answerIndex + 1], answers[answerIndex]] = [answers[answerIndex], answers[answerIndex + 1]];
+                block.questions[questionIndex].answers = answers;
+                save();
+                render();
+              }
               return;
             }
             if (target.classList.contains('a-correct') || target.closest?.('.a-correct')) {
-              qs[qi].correctAnswerId = aid;
-              saveBlocks(blocksData);
-              renderBlocks();
+              block.questions[questionIndex].correctAnswerId = answerId;
+              save();
+              render();
               return;
             }
           }
         }
+
         if (target.closest?.('.q-up')) {
-          if (qi > 0) { const t = qs[qi-1]; qs[qi-1] = qs[qi]; qs[qi] = t; blocksData[idx].questions = qs; saveBlocks(blocksData); renderBlocks(); }
-          return;
-        }
-        if (target.closest?.('.q-down')) {
-          if (qi < qs.length - 1) { const t = qs[qi+1]; qs[qi+1] = qs[qi]; qs[qi] = t; blocksData[idx].questions = qs; saveBlocks(blocksData); renderBlocks(); }
-          return;
-        }
-        if (target.closest?.('.q-toggle')) {
-          const isOpen = qCardEl.classList.contains('open');
-          if (!isOpen) closeAllOpenQuestions(qCardEl);
-          setQuestionOpen(qCardEl, !isOpen);
-          return;
-        }
-
-        const qHead = target.closest?.('.q-head');
-        if (qHead && !target.closest('button') && target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
-          const isOpen = qCardEl.classList.contains('open');
-          if (!isOpen) { closeAllOpenQuestions(qCardEl); setQuestionOpen(qCardEl, true); }
-          return;
-        }
-      }
-    }
-
-    // Fallback: toggle by clicking anywhere on card (except interactive elements or inside questions)
-    const inQuestions = !!target.closest?.('.block-questions');
-    const onInteractive = !!target.closest?.('button, input, select, textarea, a, label');
-    if (!inQuestions && !onInteractive) {
-      const isOpen = card.classList.contains('open');
-      if (!isOpen) closeAllOpenQuestions();
-      setCardOpen(card, !isOpen);
-      return;
-    }
-  });
-
-  on(blocksGrid, 'keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    const target = e.target;
-    if (!target) return;
-    const card = target.closest?.('.block-card');
-    if (!card) return;
-    const id = card.dataset.blockId;
-    const idx = blocksData.findIndex(b => b.id === id);
-    if (idx === -1) return;
-
-    if (target.classList.contains('head-number')) {
-      const val = parseInt(String(target.value || '').trim(), 10);
-      if (!isNaN(val) && val > 0) {
-        blocksData[idx].number = val;
-        saveBlocks(blocksData);
-        renderBlocks();
-      }
-      return;
-    }
-    if (target.classList.contains('head-name')) {
-      const val = String(target.value || '').trim();
-      blocksData[idx].name = val;
-      saveBlocks(blocksData);
-      renderBlocks();
-      return;
-    }
-
-    if (target.classList.contains('head-qty')) {
-      const val = parseInt(String(target.value || '').trim(), 10);
-      blocksData[idx].qty = (!isNaN(val) && val >= 0) ? val : 0;
-      saveBlocks(blocksData);
-      renderBlocks();
-      return;
-    }
-
-    if (target.classList.contains('q-text') && target.tagName !== 'TEXTAREA') {
-      const qEl = target.closest?.('.question-card');
-      const qid = qEl?.dataset.questionId;
-      if (qid) {
-        blocksData[idx].questions = (blocksData[idx].questions || []).map(q => q.id === qid ? { ...q, text: String(target.value || '').trim() } : q);
-        saveBlocks(blocksData);
-        renderBlocks();
-      }
-      return;
-    }
-
-    if (target.classList.contains('a-text') && target.tagName !== 'TEXTAREA') {
-      const qEl = target.closest?.('.question-card');
-      const qid = qEl?.dataset.questionId;
-      const aEl = target.closest?.('.answer-row');
-      const aid = aEl?.dataset.answerId;
-      if (qid && aid) {
-        const qs = Array.isArray(blocksData[idx].questions) ? blocksData[idx].questions : [];
-        const qi = qs.findIndex(q => q.id === qid);
-        if (qi !== -1) {
-          const answers = Array.isArray(qs[qi].answers) ? qs[qi].answers : [];
-          qs[qi].answers = answers.map(a => a.id === aid ? { ...a, text: String(target.value || '').trim() } : a);
-          saveBlocks(blocksData);
-          renderBlocks();
-        }
-      }
-      return;
-    }
-  });
-
-  // Persist question text on blur as well
-  on(blocksGrid, 'focusout', (e) => {
-    const target = e.target;
-    if (!target) return;
-    const card = target.closest?.('.block-card');
-    if (!card) return;
-    const id = card.dataset.blockId;
-    const idx = blocksData.findIndex(b => b.id === id);
-    if (idx === -1) return;
-    if (target.classList.contains('head-number')) {
-      const val = parseInt(String(target.value || '').trim(), 10);
-      if (!isNaN(val) && val > 0) {
-        blocksData[idx].number = val;
-        saveBlocks(blocksData);
-        renderBlocks();
-      }
-    }
-    if (target.classList.contains('head-name')) {
-      const val = String(target.value || '').trim();
-      blocksData[idx].name = val;
-      saveBlocks(blocksData);
-      // name change doesn't affect stats, no rerender required
-    }
-    if (target.classList.contains('head-qty')) {
-      const val = parseInt(String(target.value || '').trim(), 10);
-      blocksData[idx].qty = (!isNaN(val) && val >= 0) ? val : 0;
-      saveBlocks(blocksData);
-      // Update header counters immediately
-      updateStats();
-    }
-    if (target.classList.contains('q-text')) {
-      const qEl = target.closest?.('.question-card');
-      const qid = qEl?.dataset.questionId;
-      if (qid) {
-        blocksData[idx].questions = (blocksData[idx].questions || []).map(q => q.id === qid ? { ...q, text: String(target.value || '').trim() } : q);
-        saveBlocks(blocksData);
-      }
-    }
-    if (target.classList.contains('a-text')) {
-      const qEl = target.closest?.('.question-card');
-      const qid = qEl?.dataset.questionId;
-      const aEl = target.closest?.('.answer-row');
-      const aid = aEl?.dataset.answerId;
-      if (qid && aid) {
-        const qs = Array.isArray(blocksData[idx].questions) ? blocksData[idx].questions : [];
-        const qi = qs.findIndex(q => q.id === qid);
-        if (qi !== -1) {
-          const answers = Array.isArray(qs[qi].answers) ? qs[qi].answers : [];
-          qs[qi].answers = answers.map(a => a.id === aid ? { ...a, text: String(target.value || '').trim() } : a);
-          saveBlocks(blocksData);
-        }
-      }
-    }
-  });
-
-  // Initial render
-  renderBlocks();
-
-  // ================= Results rendering =================
-  const API_BASE = 'http://127.0.0.1:8000';
-  const resultsGrid = document.getElementById('resultsGrid');
-  const resultsSearch = document.getElementById('resultsSearch');
-  const resultsApiKeyInput = document.getElementById('resultsApiKey');
-  const saveResultsApiKeyBtn = document.getElementById('saveResultsApiKey');
-  const ADMIN_API_KEY_LS = 'adminApiKey';
-  try { if (resultsApiKeyInput) resultsApiKeyInput.value = localStorage.getItem(ADMIN_API_KEY_LS) || ''; } catch {}
-  on(saveResultsApiKeyBtn, 'click', () => {
-    const v = String(resultsApiKeyInput?.value || '').trim();
-    try { localStorage.setItem(ADMIN_API_KEY_LS, v); } catch {}
-    showToast('Admin API Key შენახულია');
-  });
-  let lastResults = [];
-
-  const fmtDT = (iso) => {
-    try { const d = new Date(iso); const p = (n)=>String(n).padStart(2,'0'); return `${p(d.getDate())}-${p(d.getMonth()+1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; } catch { return String(iso||''); }
-  };
-
-  const adminHeaders = () => {
-    const key = localStorage.getItem(ADMIN_API_KEY_LS);
-    return key ? { 'x-admin-key': key } : {};
-  };
-
-  const actorHeaders = () => {
-    const actor = (localStorage.getItem(SAVED_EMAIL_KEY) || '').trim();
-    return actor ? { 'x-actor-email': actor } : {};
-  };
-
-  async function fetchResults() {
-    const res = await fetch(`${API_BASE}/admin/results`, { headers: { ...adminHeaders() } });
-    if (!res.ok) throw new Error('results failed');
-    return await res.json();
-  }
-
-  function groupByCandidate(items) {
-    const map = new Map();
-    items.forEach(it => {
-      const key = `${it.candidate_first_name||''}|${it.candidate_last_name||''}|${it.candidate_code||''}`;
-      if (!map.has(key)) map.set(key, { key, firstName: it.candidate_first_name||'', lastName: it.candidate_last_name||'', code: it.candidate_code||'', sessions: [] });
-      map.get(key).sessions.push(it);
-    });
-    return Array.from(map.values());
-  }
-
-  async function renderResults() {
-    if (!resultsGrid) return;
-    resultsGrid.innerHTML = '';
-    try {
-      const data = await fetchResults();
-      lastResults = Array.isArray(data?.items) ? data.items : [];
-      drawResults(lastResults);
-    } catch {
-      resultsGrid.innerHTML = '<div class="block-tile">ვერ ჩაიტვირთა შედეგები</div>';
-    }
-  }
-
-  function drawResults(items) {
-    const groups = groupByCandidate(items);
-    const q = String(resultsSearch?.value || '').trim().toLowerCase();
-    const filtered = groups.filter(g => {
-      const s = `${g.firstName} ${g.lastName} ${g.code}`.toLowerCase();
-      return !q || s.includes(q);
-    });
-    filtered.forEach(g => {
-      const card = document.createElement('div');
-      card.className = 'block-tile block-card';
-      card.innerHTML = `
-        <div class="block-head">
-          <div class="block-order"></div>
-          <span class="head-label">${(g.firstName||'').trim()} ${(g.lastName||'').trim()}</span>
-          <input class="head-name" type="text" value="${(g.code||'').replace(/"/g,'&quot;')}" readonly aria-label="კოდი" />
-          <button class="head-toggle" type="button" aria-expanded="false">▾</button>
-        </div>
-        <div class="block-questions" aria-hidden="true">
-          <div class="questions-list"></div>
-        </div>`;
-      const list = card.querySelector('.questions-list');
-      // sort sessions by started_at desc
-      const sess = g.sessions.slice().sort((a,b)=> new Date(b.started_at)-new Date(a.started_at));
-      sess.forEach(s => {
-        const row = document.createElement('div');
-        row.className = 'question-card';
-        row.dataset.sessionId = s.session_id;
-        row.innerHTML = `
-          <div class="q-head">
-            <div class="q-order"></div>
-            <div class="q-actions">
-              <div class="q-actions-row"></div>
-              <button class="q-toggle" type="button" aria-expanded="false">▾</button>
-              <span class="q-code">${fmtDT(s.started_at)}${s.finished_at ? ' → '+fmtDT(s.finished_at) : ''} • ${Math.round(Number(s.score_percent||0))}%</span>
-            </div>
-          </div>
-          <div class="q-details" aria-hidden="true"></div>`;
-        // Load details on demand
-        const btn = row.querySelector('.q-toggle');
-        btn.addEventListener('click', async () => {
-          const isOpen = row.classList.contains('open');
-          row.classList.toggle('open', !isOpen);
-          const details = row.querySelector('.q-details');
-          if (details) details.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
-          if (!isOpen && details && !details.dataset.loaded) {
-            details.innerHTML = '<div class="block-tile">იტვირთება...</div>';
-            try {
-              const resp = await fetch(`${API_BASE}/admin/results/${s.session_id}`, { headers: { ...adminHeaders() } });
-              const data = await resp.json();
-              renderSessionDetails(details, data);
-              details.dataset.loaded = '1';
-            } catch {
-              details.innerHTML = '<div class="block-tile">ჩატვირთვის შეცდომა</div>';
-            }
+          if (questionIndex > 0) {
+            [block.questions[questionIndex - 1], block.questions[questionIndex]] = [block.questions[questionIndex], block.questions[questionIndex - 1]];
+            save();
+            render();
           }
-        });
-        list.appendChild(row);
-      });
-      // toggle behaviour
-      const toggle = card.querySelector('.head-toggle');
-      toggle.addEventListener('click', () => {
+          return;
+        }
+
+        if (target.closest?.('.q-down')) {
+          if (questionIndex < block.questions.length - 1) {
+            [block.questions[questionIndex + 1], block.questions[questionIndex]] = [block.questions[questionIndex], block.questions[questionIndex + 1]];
+            save();
+            render();
+          }
+          return;
+        }
+
+        if (target.closest?.('.q-toggle')) {
+          const isOpen = questionCard.classList.contains('open');
+          if (!isOpen) closeAllOpenQuestions(questionCard);
+          setQuestionOpen(questionCard, !isOpen);
+          return;
+        }
+
+        const questionHead = target.closest?.('.q-head');
+        if (questionHead && !target.closest('button') && target.tagName !== 'TEXTAREA' && target.tagName !== 'INPUT') {
+          const isOpen = questionCard.classList.contains('open');
+          if (!isOpen) {
+            closeAllOpenQuestions(questionCard);
+            setQuestionOpen(questionCard, true);
+          }
+          return;
+        }
+      }
+
+      const inQuestions = !!target.closest?.('.block-questions');
+      const onInteractive = !!target.closest?.('button, input, select, textarea, a, label');
+      if (!inQuestions && !onInteractive) {
         const isOpen = card.classList.contains('open');
-        card.classList.toggle('open', !isOpen);
-        const q = card.querySelector('.block-questions');
-        if (q) q.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
+        if (!isOpen) closeAllOpenQuestions();
+        setCardOpen(card, !isOpen);
+      }
+    }
+
+    function handleGridKeydown(event) {
+      if (event.key !== 'Enter') return;
+      const target = event.target;
+      if (!target) return;
+      const card = target.closest?.('.block-card');
+      if (!card) return;
+      const blockId = card.dataset.blockId;
+      const blockIndex = state.data.findIndex((block) => block.id === blockId);
+      if (blockIndex === -1) return;
+      const block = state.data[blockIndex];
+      block.questions = Array.isArray(block.questions) ? block.questions : [];
+
+      if (target.classList.contains('head-number')) {
+        const value = parseInt(String(target.value || '').trim(), 10);
+        if (!Number.isNaN(value) && value > 0) {
+          block.number = value;
+          save();
+          render();
+        }
+        return;
+      }
+
+      if (target.classList.contains('head-name')) {
+        block.name = String(target.value || '').trim();
+        save();
+        render();
+        return;
+      }
+
+      if (target.classList.contains('head-qty')) {
+        const value = parseInt(String(target.value || '').trim(), 10);
+        block.qty = (!Number.isNaN(value) && value >= 0) ? value : 0;
+        save();
+        render();
+      }
+    }
+
+    function handleGridFocusout(event) {
+      const target = event.target;
+      if (!target) return;
+      const card = target.closest?.('.block-card');
+      if (!card) return;
+      const blockId = card.dataset.blockId;
+      const blockIndex = state.data.findIndex((block) => block.id === blockId);
+      if (blockIndex === -1) return;
+      const block = state.data[blockIndex];
+      block.questions = Array.isArray(block.questions) ? block.questions : [];
+
+      if (target.classList.contains('head-number')) {
+        const value = parseInt(String(target.value || '').trim(), 10);
+        if (!Number.isNaN(value) && value > 0) {
+          block.number = value;
+          save();
+          render();
+        }
+        return;
+      }
+
+      if (target.classList.contains('head-name')) {
+        block.name = String(target.value || '').trim();
+        save();
+        return;
+      }
+
+      if (target.classList.contains('head-qty')) {
+        const value = parseInt(String(target.value || '').trim(), 10);
+        block.qty = (!Number.isNaN(value) && value >= 0) ? value : 0;
+        save();
+        updateStats();
+        return;
+      }
+
+      if (target.classList.contains('q-text')) {
+        const questionCard = target.closest?.('.question-card');
+        const questionId = questionCard?.dataset.questionId;
+        if (!questionId) return;
+        const questionIndex = block.questions.findIndex((question) => question.id === questionId);
+        if (questionIndex === -1) return;
+        block.questions[questionIndex].text = String(target.value || '').trim();
+        save();
+        return;
+      }
+
+      if (target.classList.contains('a-text')) {
+        const questionCard = target.closest?.('.question-card');
+        const questionId = questionCard?.dataset.questionId;
+        const answerRow = target.closest?.('.answer-row');
+        const answerId = answerRow?.dataset.answerId;
+        if (!questionId || !answerId) return;
+        const questionIndex = block.questions.findIndex((question) => question.id === questionId);
+        if (questionIndex === -1) return;
+        const answers = Array.isArray(block.questions[questionIndex].answers) ? block.questions[questionIndex].answers : [];
+        const answerIndex = answers.findIndex((answer) => answer.id === answerId);
+        if (answerIndex === -1) return;
+        answers[answerIndex] = { ...answers[answerIndex], text: String(target.value || '').trim() };
+        block.questions[questionIndex].answers = answers;
+        save();
+      }
+    }
+
+    function init() {
+      state.data = migrate(load());
+      render();
+      updateStats();
+      on(DOM.blocksGrid, 'click', handleGridClick);
+      on(DOM.blocksGrid, 'keydown', handleGridKeydown);
+      on(DOM.blocksGrid, 'focusout', handleGridFocusout);
+    }
+
+    return {
+      init,
+      render: () => render(),
+    };
+  }
+
+  function createResultsModule() {
+    const state = { items: [] };
+
+    function loadSavedApiKey() {
+      try {
+        if (DOM.resultsApiKeyInput) DOM.resultsApiKeyInput.value = localStorage.getItem(KEYS.ADMIN_API_KEY) || '';
+      } catch {}
+    }
+
+    function saveApiKey() {
+      const value = String(DOM.resultsApiKeyInput?.value || '').trim();
+      try { localStorage.setItem(KEYS.ADMIN_API_KEY, value); } catch {}
+      showToast('Admin API Key შენახულია');
+    }
+
+    function groupByCandidate(items) {
+      const map = new Map();
+      (items || []).forEach((item) => {
+        const key = `${item.candidate_first_name || ''}|${item.candidate_last_name || ''}|${item.candidate_code || ''}`;
+        if (!map.has(key)) {
+          map.set(key, {
+            key,
+            firstName: item.candidate_first_name || '',
+            lastName: item.candidate_last_name || '',
+            code: item.candidate_code || '',
+            sessions: [],
+          });
+        }
+        map.get(key).sessions.push(item);
       });
-      resultsGrid.appendChild(card);
-    });
-  }
+      return Array.from(map.values());
+    }
 
-  function renderSessionDetails(container, data) {
-    const sess = data?.session || {};
-    const blocks = Array.isArray(data?.block_stats) ? data.block_stats : [];
-    const answers = Array.isArray(data?.answers) ? data.answers : [];
-    const top = document.createElement('div');
-    top.className = 'block-tile';
-    top.innerHTML = `<div><strong>${(sess.candidate_first_name||'')} ${(sess.candidate_last_name||'')}</strong> • ${sess.candidate_code||''}</div>
-    <div>${fmtDT(sess.started_at)}${sess.finished_at ? ' → '+fmtDT(sess.finished_at) : ''} • ${Math.round(Number(sess.score_percent||0))}%</div>`;
-    const blocksDiv = document.createElement('div');
-    blocksDiv.style.margin = '8px 0';
-    blocks.forEach(b => {
-      const row = document.createElement('div');
-      row.className = 'result-row';
-      row.innerHTML = `<div class="result-label">ბლოკი ${b.block_id}</div><div class="result-value">${b.percent}%</div>`;
-      blocksDiv.appendChild(row);
-    });
-    const list = document.createElement('div');
-    list.style.display = 'grid'; list.style.gap = '6px';
-    answers.forEach(a => {
-      const r = document.createElement('div');
-      r.className = 'question-card open';
-      r.innerHTML = `<div class="q-head"><div class="q-order"></div><div class="q-actions"><span class="q-code">${a.question_code}</span></div></div>
-      <div class="q-details" aria-hidden="false"><div class="q-answers">${a.question_text}</div><div>${a.option_text} • ${a.is_correct ? 'სწორი' : 'არასწორი'}</div></div>`;
-      list.appendChild(r);
-    });
-    container.innerHTML = '';
-    container.appendChild(top);
-    container.appendChild(blocksDiv);
-    container.appendChild(list);
-  }
+    async function fetchResults() {
+      const response = await fetch(`${API_BASE}/admin/results`, { headers: { ...getAdminHeaders() } });
+      if (!response.ok) throw new Error('results failed');
+      return await response.json();
+    }
 
-  on(resultsSearch, 'input', () => drawResults(lastResults));
+    function renderSessionDetails(container, payload, sessionId) {
+      const session = payload?.session || {};
+      const blockStats = Array.isArray(payload?.block_stats) ? payload.block_stats : [];
+      const answers = Array.isArray(payload?.answers) ? payload.answers : [];
+      const top = document.createElement('div');
+      top.className = 'block-tile';
+      top.innerHTML = `
+        <div><strong>${(session.candidate_first_name || '').trim()} ${(session.candidate_last_name || '').trim()}</strong> • ${session.candidate_code || ''}</div>
+        <div>${formatDateTime(session.started_at)}${session.finished_at ? ' → ' + formatDateTime(session.finished_at) : ''} • ${Math.round(Number(session.score_percent || 0))}%</div>
+      `;
 
-  // ================= Registrations (users) =================
-  const usersGrid = document.getElementById('usersGrid');
-  const usersSearch = document.getElementById('usersSearch');
-  const usersSort = document.getElementById('usersSort');
-  const onlyAdmins = document.getElementById('onlyAdmins');
+      const blocksDiv = document.createElement('div');
+      blocksDiv.style.margin = '8px 0';
+      blockStats.forEach((block) => {
+        const row = document.createElement('div');
+        row.className = 'result-row';
+        row.innerHTML = `<div class="result-label">ბლოკი ${block.block_id}</div><div class="result-value">${block.percent}%</div>`;
+        blocksDiv.appendChild(row);
+      });
 
-  const isFounderActor = () => (localStorage.getItem(SAVED_EMAIL_KEY) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
-
-  function userRowHTML(u) {
-    const full = `${(u.first_name||'').trim()} ${(u.last_name||'').trim()}`.trim();
-    const founderRow = !!u.is_founder;
-    const checked = founderRow ? 'checked' : (u.is_admin ? 'checked' : '');
-    const disabled = founderRow ? 'disabled' : (isFounderActor() ? '' : 'disabled');
-    return `
-      <div class="block-tile block-card" data-id="${u.id}">
-        <div class="block-head" style="grid-template-columns:auto 1fr auto auto auto;">
-          <div class="block-order"></div>
-          <div style="display:flex;flex-direction:column;gap:4px;">
-            <div style="font-size:16px;font-weight:700;color:#0f172a;">${full || '(უსახელო)'}</div>
-            <div style="font-size:13px;color:#525252;">
-              <span style="color:#6d28d9;font-weight:600;">კოდი: ${(u.code||'')}</span> •
-              <span style="color:#065f46;">${(u.email||'')}</span>
-            </div>
+      const answersList = document.createElement('div');
+      answersList.style.display = 'grid';
+      answersList.style.gap = '6px';
+      answers.forEach((answer) => {
+        const item = document.createElement('div');
+        item.className = 'question-card open';
+        item.innerHTML = `
+          <div class="q-head"><div class="q-order"></div><div class="q-actions"><span class="q-code">${answer.question_code}</span></div></div>
+          <div class="q-details" aria-hidden="false">
+            <div class="q-answers">${answer.question_text}</div>
+            <div>${answer.option_text} • ${answer.is_correct ? 'სწორი' : 'არასწორი'}</div>
           </div>
-          <button class="head-toggle" type="button" aria-expanded="false">▾</button>
-        </div>
-        <div class="block-questions" aria-hidden="true">
-          <div class="questions-list">
-            <div class="question-card open">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:12px;">
-                <div>
-                  <div style="font-weight:700;color:#065f46;margin-bottom:8px;">კონტაქტი</div>
-                  <div style="color:#525252;font-size:13px;line-height:1.8;">
-                    <div>პირადი №: <strong>${u.personal_id}</strong></div>
-                    <div>ტელეფონი: <strong>${u.phone}</strong></div>
-                    <div>რეგისტრაცია: <strong>${fmtDT(u.created_at)}</strong></div>
+        `;
+        answersList.appendChild(item);
+      });
+
+      container.innerHTML = '';
+      container.dataset.loaded = '1';
+      container.appendChild(top);
+      container.appendChild(blocksDiv);
+      container.appendChild(answersList);
+    }
+
+    function draw(items) {
+      if (!DOM.resultsGrid) return;
+      DOM.resultsGrid.innerHTML = '';
+      const query = String(DOM.resultsSearch?.value || '').trim().toLowerCase();
+      const groups = groupByCandidate(items).filter((group) => {
+        const haystack = `${group.firstName} ${group.lastName} ${group.code}`.toLowerCase();
+        return !query || haystack.includes(query);
+      });
+
+      if (!groups.length) {
+        DOM.resultsGrid.innerHTML = '<div class="block-tile">მონაცემები ვერ მოიძებნა</div>';
+        return;
+      }
+
+      groups.forEach((group) => {
+        const card = document.createElement('div');
+        card.className = 'block-tile block-card';
+        card.innerHTML = `
+          <div class="block-head">
+            <div class="block-order"></div>
+            <span class="head-label">${(group.firstName || '').trim()} ${(group.lastName || '').trim()}</span>
+            <input class="head-name" type="text" value="${(group.code || '').replace(/"/g, '&quot;')}" readonly aria-label="კოდი" />
+            <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+          </div>
+          <div class="block-questions" aria-hidden="true">
+            <div class="questions-list"></div>
+          </div>
+        `;
+
+        const list = card.querySelector('.questions-list');
+        const sortedSessions = group.sessions.slice().sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+        sortedSessions.forEach((session) => {
+          const row = document.createElement('div');
+          row.className = 'question-card';
+          row.dataset.sessionId = session.session_id;
+          row.innerHTML = `
+            <div class="q-head">
+              <div class="q-order"></div>
+              <div class="q-actions">
+                <div class="q-actions-row"></div>
+                <button class="q-toggle" type="button" aria-expanded="false">▾</button>
+                <span class="q-code">${formatDateTime(session.started_at)}${session.finished_at ? ' → ' + formatDateTime(session.finished_at) : ''} • ${Math.round(Number(session.score_percent || 0))}%</span>
+              </div>
+            </div>
+            <div class="q-details" aria-hidden="true"></div>
+          `;
+          const toggle = row.querySelector('.q-toggle');
+          const details = row.querySelector('.q-details');
+          toggle?.addEventListener('click', async () => {
+            const isOpen = row.classList.contains('open');
+            row.classList.toggle('open', !isOpen);
+            details?.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
+            if (!isOpen && details && !details.dataset.loaded) {
+              details.innerHTML = '<div class="block-tile">იტვირთება...</div>';
+              try {
+                const response = await fetch(`${API_BASE}/admin/results/${session.session_id}`, { headers: { ...getAdminHeaders() } });
+                const data = await response.json();
+                renderSessionDetails(details, data, session.session_id);
+              } catch {
+                details.innerHTML = '<div class="block-tile">ჩატვირთვის შეცდომა</div>';
+              }
+            }
+          });
+          list?.appendChild(row);
+        });
+
+        const headToggle = card.querySelector('.head-toggle');
+        headToggle?.addEventListener('click', () => {
+          const isOpen = card.classList.contains('open');
+          card.classList.toggle('open', !isOpen);
+          card.querySelector('.block-questions')?.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
+        });
+
+        DOM.resultsGrid.appendChild(card);
+      });
+    }
+
+    async function render() {
+      if (!DOM.resultsGrid) return;
+      DOM.resultsGrid.innerHTML = '<div class="block-tile">იტვირთება...</div>';
+      try {
+        const data = await fetchResults();
+        state.items = Array.isArray(data?.items) ? data.items : [];
+        draw(state.items);
+      } catch {
+        DOM.resultsGrid.innerHTML = '<div class="block-tile">ვერ ჩაიტვირთა შედეგები</div>';
+      }
+    }
+
+    function init() {
+      loadSavedApiKey();
+      on(DOM.saveResultsApiKeyBtn, 'click', saveApiKey);
+      on(DOM.resultsSearch, 'input', () => draw(state.items));
+    }
+
+    return {
+      init,
+      render: () => render(),
+    };
+  }
+
+  function createUsersModule() {
+    async function fetchUsers() {
+      if (!DOM.usersGrid) return { items: [] };
+      const params = new URLSearchParams();
+      const search = String(DOM.usersSearch?.value || '').trim();
+      if (search) params.set('search', search);
+      if (DOM.onlyAdmins?.checked) params.set('only_admins', 'true');
+      params.set('sort', DOM.usersSort?.value || 'date_desc');
+      const response = await fetch(`${API_BASE}/admin/users?${params.toString()}`, {
+        headers: { ...getAdminHeaders(), ...getActorHeaders() },
+      });
+      if (!response.ok) throw new Error('users failed');
+      return await response.json();
+    }
+
+    function userRowHTML(user) {
+      const fullName = `${(user.first_name || '').trim()} ${(user.last_name || '').trim()}`.trim() || '(უსახელო)';
+      const founderRow = !!user.is_founder;
+      const checked = founderRow ? 'checked' : (user.is_admin ? 'checked' : '');
+      const disabled = founderRow ? 'disabled' : (isFounderActor() ? '' : 'disabled');
+      return `
+        <div class="block-tile block-card" data-id="${user.id}">
+          <div class="block-head" style="grid-template-columns:auto 1fr auto auto auto;">
+            <div class="block-order"></div>
+            <div style="font-size:16px;font-weight:700;color:#0f172a;">${fullName}</div>
+            <label title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}" style="display:inline-flex;gap:4px;align-items:center;padding:4px 8px;border-radius:6px;border:2px solid #e5e7eb;background:#fff;user-select:none;">
+              <input type="checkbox" class="chk-admin" ${checked} ${disabled} style="width:16px;height:16px;accent-color:#9500FF;" />
+              <span style="font-size:12px;color:#0f172a;font-weight:600;">ადმინი</span>
+            </label>
+            <button class="head-delete" type="button" aria-label="წაშლა" title="წაშლა" ${founderRow || !isFounderActor() ? 'disabled' : ''}>×</button>
+            <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+          </div>
+          <div class="block-questions" aria-hidden="true">
+            <div class="questions-list">
+              <div class="question-card open">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:12px;">
+                  <div>
+                    <div style="font-weight:700;color:#065f46;margin-bottom:8px;">კონტაქტი</div>
+                    <div style="color:#525252;font-size:13px;line-height:1.8;">
+                      <div>პირადი №: <strong>${user.personal_id}</strong></div>
+                      <div>ტელეფონი: <strong>${user.phone}</strong></div>
+                      <div>კოდი: <strong style="color:#6d28d9;">${user.code || ''}</strong></div>
+                      <div>მაილი: <strong style="color:#065f46;">${user.email || ''}</strong></div>
+                      <div>რეგისტრაცია: <strong>${formatDateTime(user.created_at)}</strong></div>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div style="font-weight:700;color:#065f46;margin-bottom:8px;">ქმედებები</div>
-                  <div style="display:flex;flex-direction:column;gap:8px;">
-                    <label class="a-correct-wrap" title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}" style="width:fit-content;">
-                      <input type="checkbox" class="chk-admin" ${checked} ${disabled} />
-                      <span>ადმინი</span>
-                    </label>
-                    <button class="btn-delete" ${founderRow || !isFounderActor() ? 'disabled' : ''} style="width:fit-content;padding:6px 12px;">წაშლა</button>
-                  </div>
-                  <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
-                    <button class="btn-user-announcements" style="padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;" onclick="alert('განცხადებები — მალე დაემატება')">განცხადებები</button>
-                    <button class="btn-user-results" style="padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;" onclick="alert('შედეგები — მალე დაემატება')">შედეგები</button>
+                  <div>
+                    <div style="font-weight:700;color:#065f46;margin-bottom:8px;">ქმედებები</div>
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                      <button class="btn-user-announcements" style="padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;" onclick="alert('განცხადებები — მალე დაემატება')">განცხადებები</button>
+                      <button class="btn-user-results" style="padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;" onclick="alert('შედეგები — მალე დაემატება')">შედეგები</button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>`;
-  }
+        </div>`;
+    }
 
-  async function fetchUsers() {
-    if (!usersGrid) return { items: [] };
-    const params = new URLSearchParams();
-    const q = String(usersSearch?.value||'').trim();
-    if (q) params.set('search', q);
-    if (onlyAdmins?.checked) params.set('only_admins', 'true');
-    params.set('sort', usersSort?.value || 'date_desc');
-    const res = await fetch(`${API_BASE}/admin/users?${params.toString()}`, { headers: { ...adminHeaders(), ...actorHeaders() } });
-    if (!res.ok) throw new Error('users failed');
-    return await res.json();
-  }
+    function mountUserCard(card) {
+      const toggle = card.querySelector('.head-toggle');
+      toggle?.addEventListener('click', () => {
+        const isOpen = card.classList.contains('open');
+        card.classList.toggle('open', !isOpen);
+        card.querySelector('.block-questions')?.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
+      });
 
-  function mountUserCard(card) {
-    const toggle = card.querySelector('.head-toggle');
-    toggle?.addEventListener('click', () => {
-      const isOpen = card.classList.contains('open');
-      card.classList.toggle('open', !isOpen);
-      card.querySelector('.block-questions')?.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
-    });
+      const checkbox = card.querySelector('.chk-admin');
+      if (checkbox) {
+        checkbox.addEventListener('change', async (event) => {
+          const id = card.dataset.id;
+          const desired = !!event.target.checked;
+          if (!confirm('დარწმუნებული ხართ, რომ შეცვალოთ ადმინის სტატუსი?')) {
+            event.target.checked = !desired;
+            return;
+          }
+          try {
+            const response = await fetch(`${API_BASE}/admin/users/${id}/admin`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
+              body: JSON.stringify({ is_admin: desired }),
+            });
+            if (!response.ok) throw new Error('failed');
+          } catch {
+            event.target.checked = !desired;
+            alert('ვერ შეინახა სტატუსი');
+          }
+        });
+      }
 
-    const chk = card.querySelector('.chk-admin');
-    if (chk) {
-      chk.addEventListener('change', async (e) => {
-        const id = card.dataset.id;
-        const want = !!e.target.checked;
-        if (!confirm('დარწმუნებული ხართ, რომ შეცვალოთ ადმინის სტატუსი?')) { e.target.checked = !want; return; }
-        try {
-          const r = await fetch(`${API_BASE}/admin/users/${id}/admin`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', ...adminHeaders(), ...actorHeaders() },
-            body: JSON.stringify({ is_admin: want }),
-          });
-          if (!r.ok) throw 0;
-        } catch {
-          e.target.checked = !want;
-          alert('ვერ შეინახა სტატუსი');
+      const deleteBtn = card.querySelector('.head-delete');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+          const id = card.dataset.id;
+          if (!confirm('დარწმუნებული ხართ, რომ წაშალოთ ჩანაწერი?')) return;
+          try {
+            const response = await fetch(`${API_BASE}/admin/users/${id}`, {
+              method: 'DELETE',
+              headers: { ...getAdminHeaders(), ...getActorHeaders() },
+            });
+            if (!response.ok) throw new Error('failed');
+            card.remove();
+          } catch {
+            alert('წაშლა ვერ შესრულდა');
+          }
+        });
+      }
+    }
+
+    function drawUsers(items) {
+      if (!DOM.usersGrid) return;
+      DOM.usersGrid.innerHTML = '';
+      (items || []).forEach((user) => {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = userRowHTML(user);
+        const card = wrapper.firstElementChild;
+        if (card) {
+          mountUserCard(card);
+          DOM.usersGrid.appendChild(card);
         }
       });
     }
 
-    const del = card.querySelector('.btn-delete');
-    if (del) {
-      del.addEventListener('click', async () => {
-        const id = card.dataset.id;
-        if (!confirm('დარწმუნებული ხართ, რომ წაშალოთ ჩანაწერი?')) return;
-        try {
-          const r = await fetch(`${API_BASE}/admin/users/${id}`, { method: 'DELETE', headers: { ...adminHeaders(), ...actorHeaders() } });
-          if (!r.ok) throw 0;
-          card.remove();
-        } catch {
-          alert('წაშლა ვერ შესრულდა');
-        }
-      });
+    async function render() {
+      if (!DOM.usersGrid) return;
+      DOM.usersGrid.innerHTML = '<div class="block-tile">იტვირთება...</div>';
+      try {
+        const data = await fetchUsers();
+        drawUsers(data.items || []);
+      } catch {
+        DOM.usersGrid.innerHTML = '<div class="block-tile">ჩატვირთვის შეცდომა</div>';
+      }
     }
-  }
 
-  function drawUsers(items) {
-    if (!usersGrid) return;
-    usersGrid.innerHTML = '';
-    (items||[]).forEach(u => {
-      const wrapper = document.createElement('div');
-      wrapper.innerHTML = userRowHTML(u);
-      const card = wrapper.firstElementChild;
-      mountUserCard(card);
-      usersGrid.appendChild(card);
-    });
-  }
-
-  async function renderUsers() {
-    if (!usersGrid) return;
-    usersGrid.innerHTML = '<div class="block-tile">იტვირთება...</div>';
-    try {
-      const data = await fetchUsers();
-      drawUsers(data.items || []);
-    } catch {
-      usersGrid.innerHTML = '<div class="block-tილe">ჩატვირთვის შეცდომა</div>';
+    function init() {
+      on(DOM.usersSearch, 'input', render);
+      on(DOM.usersSort, 'change', render);
+      on(DOM.onlyAdmins, 'change', render);
     }
+
+    return {
+      init,
+      render: () => render(),
+    };
   }
-
-  on(usersSearch, 'input', renderUsers);
-  on(usersSort, 'change', renderUsers);
-  on(onlyAdmins, 'change', renderUsers);
-
 });
