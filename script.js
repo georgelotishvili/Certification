@@ -1,578 +1,707 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const body = document.body;
-  const burger = document.querySelector('.burger');
-  const overlay = document.querySelector('.overlay');
-  const drawerClose = document.querySelector('.drawer-close');
-  const drawerLinks = Array.from(document.querySelectorAll('.drawer-nav a')).filter(a => !a.classList.contains('drawer-exam-trigger'));
-  const on = (el, evt, handler) => el && el.addEventListener(evt, handler);
-  const setMenu = (open) => {
-    body.classList.toggle('menu-open', open);
-    if (burger) burger.setAttribute('aria-expanded', open ? 'true' : 'false');
-  };
-
-  const openMenu = () => { setMenu(true); };
-  const closeMenu = () => { setMenu(false); };
-  const toggleMenu = () => {
-    if (body.classList.contains('menu-open')) closeMenu(); else openMenu();
-  };
-
-  on(burger, 'click', toggleMenu);
-  on(overlay, 'click', closeMenu);
-  on(drawerClose, 'click', closeMenu);
-  drawerLinks.forEach(link => on(link, 'click', closeMenu));
-
-  // Adjust body offset for fixed header (index header with hero image)
-  const headerEl = document.querySelector('header');
-  const setBodyOffset = () => {
-    if (!headerEl) return;
-    const h = headerEl.offsetHeight || 0;
-    document.body.style.paddingTop = h + 'px';
-  };
-  setBodyOffset();
-  on(window, 'load', setBodyOffset);
-  on(window, 'resize', setBodyOffset);
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    if (loginModal && loginModal.classList.contains('show')) closeLoginModal();
-    else closeMenu();
-  });
-
-  // Login Modal functionality
-  const loginBtn = document.querySelector('.login-btn');
-  const drawerLoginBtn = document.querySelector('.drawer-login');
-  const loginModal = document.getElementById('loginModal');
-  const modalClose = document.getElementById('modalClose');
-  const loginOption = document.querySelector('.login-option');
-  const registerOption = document.querySelector('.register-option');
-  const registerForm = document.getElementById('registerForm');
-  const loginForm = document.getElementById('loginForm');
-  const forgotPasswordForm = document.getElementById('forgotPasswordForm');
-  const forgotPasswordLink = document.getElementById('forgotPasswordLink');
-  const modalButtons = document.querySelector('.modal-buttons');
-  const authBanner = document.querySelector('.auth-banner');
-  const drawerAuthBanner = document.querySelector('.drawer-auth-banner');
-  // Fullscreen/isolation helpers
-  const rootEl = document.documentElement;
-  const appRegions = Array.from(document.querySelectorAll('header, .nav-bar, main, footer, .overlay, .drawer, #loginModal'));
-  let previouslyFocused = null;
-  const setIsolated = (on) => {
-    appRegions.forEach(el => {
-      if (!el) return;
-      if (on) { el.setAttribute('inert', ''); el.setAttribute('aria-hidden', 'true'); }
-      else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden'); }
-    });
-  };
-  let trapFocusHandler = null;
-  let mustStayFullscreen = false;
-  const lockKeys = async () => {
-    try { await navigator.keyboard?.lock?.(['Escape','F11','F4']); } catch {}
-  };
-  const unlockKeys = async () => {
-    try { await navigator.keyboard?.unlock?.(); } catch {}
-  };
-  const getVisibleFocusable = () => {
-    if (!fullscreenBlank) return [];
-    const nodes = fullscreenBlank.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-    return Array.from(nodes).filter(el => !el.hasAttribute('disabled') && el.offsetParent !== null && !el.closest('[hidden]'));
-  };
-  // Fullscreen blank overlay
-  const fullscreenBlank = document.getElementById('fullscreenBlank');
-  const blankClose = document.getElementById('blankClose');
-  const AUTH_KEY = 'authLoggedIn';
-  const CURRENT_USER_KEY = 'currentUser';
-  const USED_CODES_KEY = 'usedCodes';
-  const SAVED_EMAIL_KEY = 'savedEmail';
-  const SAVED_PASSWORD_KEY = 'savedPassword';
-  const DEFAULT_BANNER_TEXT = 'გთხოვთ გაიაროთ ავტორიზაცია';
-  const NEED_REGISTER_TEXT = 'გთხოვთ დაასრულოთ რეგისტრაცია';
   const API_BASE = 'http://127.0.0.1:8000';
   const FOUNDER_EMAIL = 'naormala@gmail.com';
-  const isLoggedIn = () => localStorage.getItem(AUTH_KEY) === 'true';
-  const setLoggedIn = (value) => { localStorage.setItem(AUTH_KEY, value ? 'true' : 'false'); };
-  const getTrimmed = (fd, name) => (fd.get(name) || '').toString().trim();
-  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const getUsedCodes = () => new Set(JSON.parse(localStorage.getItem(USED_CODES_KEY) || '[]'));
-  const saveUsedCodes = (codesSet) => localStorage.setItem(USED_CODES_KEY, JSON.stringify(Array.from(codesSet)));
-  const getCurrentUser = () => {
-    try { const raw = localStorage.getItem(CURRENT_USER_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
-  };
-  const saveCurrentUser = (user) => localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
-  const isFounder = () => (localStorage.getItem(SAVED_EMAIL_KEY) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
-  const isLocalAdmin = () => !!(getCurrentUser()?.isAdmin);
-  const adminLink = document.querySelector('.admin-link');
-  const updateAdminLinkVisibility = () => {
-    if (!adminLink) return;
-    const user = getCurrentUser();
-    const visible = isLoggedIn() && ((user && !!user.isAdmin) || isFounder());
-    adminLink.style.display = visible ? '' : 'none';
-  };
-  // Ensure stored profile belongs to the currently logged-in email to avoid showing other person's data
-  const ensureProfileConsistency = () => {
-    if (!isLoggedIn()) return;
-    const savedEmailLower = (localStorage.getItem(SAVED_EMAIL_KEY) || '').toLowerCase();
-    const user = getCurrentUser();
-    if (user && String(user.email || '').toLowerCase() !== savedEmailLower) {
-      try { localStorage.removeItem(CURRENT_USER_KEY); } catch {}
-    }
-  };
-  const generateUniqueCode = () => {
-    const used = getUsedCodes();
-    for (let i = 0; i < 10000; i++) {
-      const code = String(Math.floor(1e9 + Math.random() * 9e9));
-      if (!used.has(code)) return code;
-    }
-    // Fallback (extremely unlikely)
-    return String(Date.now()).slice(-10);
-  };
-  const updateBanner = () => {
-    const user = getCurrentUser();
-    let text = DEFAULT_BANNER_TEXT;
-    if (isLoggedIn()) {
-      text = user ? `${user.firstName} ${user.lastName} — ${user.code}` : NEED_REGISTER_TEXT;
-    }
-    if (authBanner) authBanner.textContent = text;
-    if (drawerAuthBanner) drawerAuthBanner.textContent = text;
+  const KEYS = {
+    AUTH: 'authLoggedIn',
+    CURRENT_USER: 'currentUser',
+    USED_CODES: 'usedCodes',
+    SAVED_EMAIL: 'savedEmail',
+    SAVED_PASSWORD: 'savedPassword',
   };
 
-  const openLoginModal = () => {
-    if (!loginModal) return;
-    loginModal.classList.add('show');
-    document.body.style.overflow = 'hidden';
-    // Restore saved email and password
-    const savedEmail = localStorage.getItem(SAVED_EMAIL_KEY);
-    const savedPassword = localStorage.getItem(SAVED_PASSWORD_KEY);
-    if (loginForm) {
-      const emailInput = loginForm.querySelector('input[name="email"]');
-      const passwordInput = loginForm.querySelector('input[name="password"]');
-      if (emailInput && savedEmail) emailInput.value = savedEmail;
-      if (passwordInput && savedPassword) passwordInput.value = savedPassword;
+  const DOM = {
+    body: document.body,
+    root: document.documentElement,
+    header: document.querySelector('header'),
+    burger: document.querySelector('.burger'),
+    overlay: document.querySelector('.overlay'),
+    drawer: document.querySelector('.drawer'),
+    drawerClose: document.querySelector('.drawer-close'),
+    drawerLinks: Array.from(document.querySelectorAll('.drawer-nav a')).filter((a) => !a.classList.contains('drawer-exam-trigger')),
+    drawerExamTrigger: document.querySelector('.drawer-exam-trigger'),
+    drawerSubmenu: document.querySelector('.drawer-submenu'),
+    drawerAuthBanner: document.querySelector('.drawer-auth-banner'),
+    loginBtn: document.querySelector('.login-btn'),
+    drawerLoginBtn: document.querySelector('.drawer-login'),
+    loginModal: document.getElementById('loginModal'),
+    modalClose: document.getElementById('modalClose'),
+    modalButtons: document.querySelector('.modal-buttons'),
+    loginForm: document.getElementById('loginForm'),
+    registerForm: document.getElementById('registerForm'),
+    forgotPasswordForm: document.getElementById('forgotPasswordForm'),
+    loginOption: document.querySelector('.login-option'),
+    registerOption: document.querySelector('.register-option'),
+    forgotPasswordLink: document.getElementById('forgotPasswordLink'),
+    fullscreenBlank: document.getElementById('fullscreenBlank'),
+    blankClose: document.getElementById('blankClose'),
+    authBanner: document.querySelector('.auth-banner'),
+    adminLink: document.querySelector('.admin-link'),
+    navExam: document.querySelector('.nav-exam'),
+    navExamTrigger: document.querySelector('.nav .exam-trigger'),
+    navDropdown: document.querySelector('.nav .dropdown'),
+    footerForm: document.querySelector('.footer-form'),
+  };
+
+  const regionsForIsolation = Array.from(document.querySelectorAll('header, .nav-bar, main, footer, .overlay, .drawer, #loginModal'));
+
+  const utils = {
+    on: (element, event, handler) => element && element.addEventListener(event, handler),
+    isValidEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+    getTrimmed: (formData, name) => (formData.get(name) || '').toString().trim(),
+  };
+
+  const layoutModule = createLayoutModule();
+  const menuModule = createMenuModule();
+  const fullscreenModule = createFullscreenModule();
+  const examNavigationModule = createExamNavigationModule();
+  const authModule = createAuthModule();
+  const footerFormModule = createFooterFormModule();
+
+  layoutModule.init();
+  menuModule.init();
+  fullscreenModule.init();
+  examNavigationModule.init();
+  authModule.init();
+  footerFormModule.init();
+
+  // Global escape handling (modal first, then menu)
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (authModule.isModalOpen()) {
+      authModule.closeModal();
+      return;
     }
+    if (menuModule.isOpen()) {
+      menuModule.close();
+    }
+  });
+
+  // Expose fullscreen helpers if other scripts need them
+  window.fullscreenOverlay = {
+    open: fullscreenModule.open,
+    close: fullscreenModule.close,
   };
-  const closeLoginModal = () => {
-    if (!loginModal) return;
-    loginModal.classList.remove('show');
-    document.body.style.overflow = '';
-    // Reset forms when closing modal
-    if (loginForm) loginForm.reset();
-    if (registerForm) registerForm.reset();
-    if (forgotPasswordForm) forgotPasswordForm.reset();
-    showOptions(); // Show options when closing
-  };
-  const openBlank = () => {
-    if (!fullscreenBlank) return;
-    fullscreenBlank.classList.add('show');
-    fullscreenBlank.setAttribute('aria-hidden', 'false');
-    document.body.style.overflow = 'hidden';
-    // Ensure mobile drawer is closed under the blank screen
-    setMenu(false);
-    // Isolate rest of the UI
-    setIsolated(true);
-    previouslyFocused = document.activeElement;
-    // Reset any prior confirmation dialogs
-    if (typeof hideAllConfirm === 'function') hideAllConfirm();
-    mustStayFullscreen = true;
-    // Enter browser fullscreen to hide chrome/taskbar
-    try {
-      const req = rootEl.requestFullscreen || rootEl.webkitRequestFullscreen || rootEl.msRequestFullscreen;
-      if (req) {
-        const p = req.call(rootEl, { navigationUI: 'hide' });
-        if (p && typeof p.then === 'function') {
-          p.then(lockKeys).catch(() => {});
+
+  function createLayoutModule() {
+    function setBodyOffset() {
+      if (!DOM.header) return;
+      DOM.body.style.paddingTop = `${DOM.header.offsetHeight || 0}px`;
+    }
+
+    function init() {
+      setBodyOffset();
+      utils.on(window, 'load', setBodyOffset);
+      utils.on(window, 'resize', setBodyOffset);
+    }
+
+    return { init };
+  }
+
+  function createMenuModule() {
+    let isOpen = false;
+
+    const media = {
+      drawerExamTrigger: DOM.drawerExamTrigger,
+      drawerSubmenu: DOM.drawerSubmenu,
+    };
+
+    function setMenu(open) {
+      isOpen = !!open;
+      DOM.body?.classList.toggle('menu-open', !!open);
+      if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (!open) closeDrawerSubmenu();
+    }
+
+    function open() { setMenu(true); }
+    function close() { setMenu(false); }
+    function toggle() { setMenu(!isOpen); }
+
+    function isMenuOpen() { return isOpen; }
+
+    function closeDrawerSubmenu() {
+      if (!media.drawerSubmenu) return;
+      media.drawerSubmenu.setAttribute('hidden', '');
+      media.drawerExamTrigger?.setAttribute('aria-expanded', 'false');
+    }
+
+    function toggleDrawerSubmenu(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!media.drawerSubmenu) return;
+      const hidden = media.drawerSubmenu.hasAttribute('hidden');
+      if (hidden) {
+        media.drawerSubmenu.removeAttribute('hidden');
+        media.drawerExamTrigger?.setAttribute('aria-expanded', 'true');
+      } else {
+        closeDrawerSubmenu();
+      }
+    }
+
+    function init() {
+      utils.on(DOM.burger, 'click', toggle);
+      utils.on(DOM.overlay, 'click', close);
+      utils.on(DOM.drawerClose, 'click', close);
+      DOM.drawerLinks.forEach((link) => utils.on(link, 'click', close));
+      utils.on(DOM.drawerExamTrigger, 'click', toggleDrawerSubmenu);
+    }
+
+    return { init, open, close, toggle, isOpen: isMenuOpen, closeDrawerSubmenu };
+  }
+
+  function createFullscreenModule() {
+    let trapFocusHandler = null;
+    let mustStayFullscreen = false;
+    let previouslyFocused = null;
+    let beforeUnloadHandler = null;
+
+    const keyboardLocks = ['Escape', 'F11', 'F4'];
+
+    function lockKeys() {
+      try { navigator.keyboard?.lock?.(keyboardLocks); } catch {}
+    }
+
+    function unlockKeys() {
+      try { navigator.keyboard?.unlock?.(); } catch {}
+    }
+
+    function enableBeforeUnload() {
+      if (beforeUnloadHandler) return;
+      beforeUnloadHandler = (event) => {
+        if (!(DOM.fullscreenBlank && DOM.fullscreenBlank.classList.contains('show'))) return;
+        event.preventDefault();
+        event.returnValue = '';
+      };
+      window.addEventListener('beforeunload', beforeUnloadHandler);
+    }
+
+    function disableBeforeUnload() {
+      if (!beforeUnloadHandler) return;
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
+      beforeUnloadHandler = null;
+    }
+
+    function setIsolated(value) {
+      regionsForIsolation.forEach((element) => {
+        if (!element) return;
+        if (value) {
+          element.setAttribute('inert', '');
+          element.setAttribute('aria-hidden', 'true');
+        } else {
+          element.removeAttribute('inert');
+          element.removeAttribute('aria-hidden');
+        }
+      });
+    }
+
+    function getVisibleFocusable() {
+      if (!DOM.fullscreenBlank) return [];
+      const nodes = DOM.fullscreenBlank.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      return Array.from(nodes).filter((element) => !element.hasAttribute('disabled') && element.offsetParent !== null && !element.closest('[hidden]'));
+    }
+
+    function open() {
+      if (!DOM.fullscreenBlank) return;
+      DOM.fullscreenBlank.classList.add('show');
+      DOM.fullscreenBlank.setAttribute('aria-hidden', 'false');
+      DOM.body.style.overflow = 'hidden';
+      menuModule.close();
+      setIsolated(true);
+      previouslyFocused = document.activeElement;
+      if (typeof window.hideAllConfirm === 'function') window.hideAllConfirm();
+      mustStayFullscreen = true;
+      try {
+        const request = DOM.root.requestFullscreen || DOM.root.webkitRequestFullscreen || DOM.root.msRequestFullscreen;
+        if (request) {
+          const result = request.call(DOM.root, { navigationUI: 'hide' });
+          if (result && typeof result.then === 'function') {
+            result.then(lockKeys).catch(() => {});
+          } else {
+            lockKeys();
+          }
         } else {
           lockKeys();
         }
-      } else {
-        lockKeys();
+      } catch {}
+      enableBeforeUnload();
+      setTimeout(() => DOM.blankClose?.focus(), 0);
+      trapFocusHandler = (event) => {
+        if (event.key !== 'Tab') return;
+        event.preventDefault();
+        const items = getVisibleFocusable();
+        if (!items.length) return;
+        const index = items.indexOf(document.activeElement);
+        const nextIndex = event.shiftKey
+          ? (index <= 0 ? items.length - 1 : index - 1)
+          : (index === items.length - 1 ? 0 : index + 1);
+        items[nextIndex].focus();
+      };
+      DOM.fullscreenBlank.addEventListener('keydown', trapFocusHandler);
+    }
+
+    function close() {
+      if (!DOM.fullscreenBlank) return;
+      DOM.fullscreenBlank.classList.remove('show');
+      DOM.fullscreenBlank.setAttribute('aria-hidden', 'true');
+      DOM.body.style.overflow = '';
+      if (trapFocusHandler) {
+        DOM.fullscreenBlank.removeEventListener('keydown', trapFocusHandler);
+        trapFocusHandler = null;
       }
-    } catch {}
-    // Enable beforeunload native confirm dialog for hard closes (Alt+F4/tab close)
-    enableBeforeUnload();
-    // Focus trap across visible controls
-    setTimeout(() => { if (blankClose) blankClose.focus(); }, 0);
-    trapFocusHandler = (e) => {
-      if (e.key !== 'Tab') return;
-      e.preventDefault();
-      const items = getVisibleFocusable();
-      if (!items.length) return;
-      const index = items.indexOf(document.activeElement);
-      let nextIndex = e.shiftKey ? (index <= 0 ? items.length - 1 : index - 1) : (index === items.length - 1 ? 0 : index + 1);
-      items[nextIndex].focus();
-    };
-    fullscreenBlank.addEventListener('keydown', trapFocusHandler);
-  };
-  const closeBlank = () => {
-    if (!fullscreenBlank) return;
-    fullscreenBlank.classList.remove('show');
-    fullscreenBlank.setAttribute('aria-hidden', 'true');
-    document.body.style.overflow = '';
-    // Remove focus trap and restore UI
-    if (trapFocusHandler) {
-      fullscreenBlank.removeEventListener('keydown', trapFocusHandler);
-      trapFocusHandler = null;
-    }
-    setIsolated(false);
-    mustStayFullscreen = false;
-    // Disable beforeunload prompt
-    disableBeforeUnload();
-    // Release keyboard lock
-    unlockKeys();
-    // Exit fullscreen if active
-    try {
-      if (document.fullscreenElement) {
-        const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-        if (exit) exit.call(document);
-      }
-    } catch {}
-    // Restore focus
-    try { previouslyFocused && previouslyFocused.focus && previouslyFocused.focus(); } catch {}
-  };
-  const updateAuthUI = () => {
-    const logged = isLoggedIn();
-    const hasProfile = !!getCurrentUser();
-    const label = !logged ? 'ავტორიზაცია' : (hasProfile ? 'გასვლა' : 'რეგისტრაცია');
-    if (loginBtn) loginBtn.textContent = label;
-    if (drawerLoginBtn) drawerLoginBtn.textContent = label;
-  };
-  const performLogout = () => {
-    if (!isLoggedIn()) return;
-    if (!confirm('ნამდვილად გსურთ გასვლა?')) return;
-    setLoggedIn(false);
-    updateAuthUI();
-    updateBanner();
-    updateAdminLinkVisibility();
-    alert('გასვლა შესრულებულია');
-    closeLoginModal();
-  };
-  const handleAuthButtonClick = (fromDrawer) => {
-    const logged = isLoggedIn();
-    const hasProfile = !!getCurrentUser();
-    if (!logged) {
-      if (fromDrawer) closeMenu();
-      openLoginModal();
-      showOptions();
-      return;
-    }
-    // Logged in
-    if (!hasProfile) {
-      if (fromDrawer) closeMenu();
-      openLoginModal();
-      showRegister();
-      return;
-    }
-    // Logged in with profile -> logout
-    performLogout();
-    if (fromDrawer) closeMenu();
-  };
-
-  on(loginBtn, 'click', () => handleAuthButtonClick(false));
-  on(drawerLoginBtn, 'click', () => handleAuthButtonClick(true));
-  on(modalClose, 'click', closeLoginModal);
-  on(loginModal, 'click', (e) => { if (e.target === loginModal) closeLoginModal(); });
-  
-  const setView = (view) => {
-    if (!modalButtons) return;
-    const is = (name) => view === name;
-    modalButtons.style.display = is('options') ? 'flex' : 'none';
-    if (registerForm) registerForm.style.display = is('register') ? 'block' : 'none';
-    if (loginForm) loginForm.style.display = is('login') ? 'block' : 'none';
-    if (forgotPasswordForm) forgotPasswordForm.style.display = is('forgot') ? 'block' : 'none';
-  };
-  const showOptions = () => setView('options');
-  const showLogin = () => setView('login');
-  const showRegister = () => setView('register');
-  const showForgotPassword = () => setView('forgot');
-
-  on(loginOption, 'click', showLogin);
-  on(registerOption, 'click', showRegister);
-  on(forgotPasswordLink, 'click', (e) => { e.preventDefault(); showForgotPassword(); });
-  // Exam dropdown/submenu (desktop + mobile)
-  const navExam = document.querySelector('.nav-exam');
-  const navExamTrigger = document.querySelector('.nav .exam-trigger');
-  const navDropdown = document.querySelector('.nav .dropdown');
-
-  const drawerExam = document.querySelector('.drawer-exam');
-  const drawerExamTrigger = document.querySelector('.drawer-exam-trigger');
-  const drawerSubmenu = document.querySelector('.drawer-submenu');
-
-  const closeNavDropdown = () => {
-    if (!navDropdown) return;
-    navDropdown.classList.remove('show');
-    navDropdown.setAttribute('aria-hidden', 'true');
-    if (navExamTrigger) navExamTrigger.setAttribute('aria-expanded', 'false');
-  };
-
-  const onDocClickCloseNav = (e) => {
-    if (!navExam) return;
-    if (navExam.contains(e.target)) return;
-    closeNavDropdown();
-    document.removeEventListener('click', onDocClickCloseNav);
-  };
-
-  on(navExamTrigger, 'click', (e) => {
-    e.preventDefault();
-    if (!navDropdown) return;
-    const willOpen = !navDropdown.classList.contains('show');
-    if (willOpen) {
-      navDropdown.classList.add('show');
-      navDropdown.setAttribute('aria-hidden', 'false');
-      navExamTrigger.setAttribute('aria-expanded', 'true');
-      setTimeout(() => document.addEventListener('click', onDocClickCloseNav), 0);
-    } else {
-      closeNavDropdown();
-    }
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeNavDropdown();
-      if (drawerSubmenu && !drawerSubmenu.hasAttribute('hidden')) {
-        drawerSubmenu.setAttribute('hidden', '');
-        if (drawerExamTrigger) drawerExamTrigger.setAttribute('aria-expanded', 'false');
-      }
-    }
-  });
-
-  on(drawerExamTrigger, 'click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!drawerSubmenu) return;
-    const isHidden = drawerSubmenu.hasAttribute('hidden');
-    if (isHidden) {
-      drawerSubmenu.removeAttribute('hidden');
-      drawerExamTrigger.setAttribute('aria-expanded', 'true');
-    } else {
-      drawerSubmenu.setAttribute('hidden', '');
-      drawerExamTrigger.setAttribute('aria-expanded', 'false');
-    }
-  });
-
-  const goToExam = () => {
-    closeNavDropdown();
-    if (drawerSubmenu && !drawerSubmenu.hasAttribute('hidden')) {
-      drawerSubmenu.setAttribute('hidden', '');
-      if (drawerExamTrigger) drawerExamTrigger.setAttribute('aria-expanded', 'false');
-    }
-    if (document.body.classList.contains('menu-open')) closeMenu();
-    window.location.href = 'exam.html';
-  };
-
-  const goToReview = () => {
-    closeNavDropdown();
-    if (drawerSubmenu && !drawerSubmenu.hasAttribute('hidden')) {
-      drawerSubmenu.setAttribute('hidden', '');
-      if (drawerExamTrigger) drawerExamTrigger.setAttribute('aria-expanded', 'false');
-    }
-    alert('პროექტის განხილვა — მალე დაემატება');
-  };
-
-  document
-    .querySelectorAll('.dropdown-item.theoretical, .drawer-submenu-item.theoretical')
-    .forEach(el => on(el, 'click', goToExam));
-
-  document
-    .querySelectorAll('.dropdown-item.review, .drawer-submenu-item.review')
-    .forEach(el => on(el, 'click', goToReview));
-
-  // (Removed) inline overlay fullscreen listeners
-
-  // Native beforeunload confirm when trying to close the tab/window (e.g., Alt+F4)
-  let beforeUnloadHandler = null;
-  const enableBeforeUnload = () => {
-    if (beforeUnloadHandler) return;
-    beforeUnloadHandler = (e) => {
-      if (!(fullscreenBlank && fullscreenBlank.classList.contains('show'))) return;
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', beforeUnloadHandler);
-  };
-  const disableBeforeUnload = () => {
-    if (!beforeUnloadHandler) return;
-    window.removeEventListener('beforeunload', beforeUnloadHandler);
-    beforeUnloadHandler = null;
-  };
-
-  // Login form submission
-  on(loginForm, 'submit', (e) => {
-    e.preventDefault();
-    const formData = new FormData(loginForm);
-    const email = getTrimmed(formData, 'email');
-    const password = getTrimmed(formData, 'password');
-    if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
-    if (!isValidEmail(email)) return alert('ელფოსტა არასწორია');
-    if (!password) return alert('გთხოვთ შეიყვანოთ პაროლი');
-    // Save email and password for next time
-    localStorage.setItem(SAVED_EMAIL_KEY, email);
-    localStorage.setItem(SAVED_PASSWORD_KEY, password);
-    setLoggedIn(true);
-    updateAuthUI();
-    const user = getCurrentUser();
-    const loginEmailLower = email.toLowerCase();
-    // If stored profile belongs to different email, clear it to avoid showing another person's data
-    if (user && String(user.email || '').toLowerCase() !== loginEmailLower) {
-      try { localStorage.removeItem(CURRENT_USER_KEY); } catch {}
-    }
-
-    // Try to hydrate profile from backend by email
-    (async () => {
+      setIsolated(false);
+      mustStayFullscreen = false;
+      disableBeforeUnload();
+      unlockKeys();
       try {
-        const resp = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(email)}`);
-        if (resp.ok) {
-          const data = await resp.json();
-          saveCurrentUser({ firstName: data.first_name, lastName: data.last_name, code: data.code, isAdmin: !!data.is_admin, email: data.email });
-          updateBanner();
-          updateAdminLinkVisibility();
-          closeLoginModal();
-          loginForm.reset();
-          showOptions();
-          return;
+        if (document.fullscreenElement) {
+          const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+          if (exit) exit.call(document);
         }
       } catch {}
-      // If no profile on server, ask to register
+      try {
+        if (previouslyFocused && typeof previouslyFocused.focus === 'function') previouslyFocused.focus();
+      } catch {}
+    }
+
+    function init() {
+      utils.on(DOM.blankClose, 'click', close);
+      utils.on(DOM.fullscreenBlank, 'click', (event) => {
+        if (event.target === DOM.fullscreenBlank) close();
+      });
+    }
+
+    return { init, open, close, mustStayFullscreen: () => mustStayFullscreen };
+  }
+
+  function createAuthModule() {
+    const DEFAULT_BANNER_TEXT = 'გთხოვთ გაიაროთ ავტორიზაცია';
+    const NEED_REGISTER_TEXT = 'გთხოვთ დაასრულოთ რეგისტრაცია';
+
+    let activeView = 'options';
+
+    function isLoggedIn() {
+      return localStorage.getItem(KEYS.AUTH) === 'true';
+    }
+
+    function setLoggedIn(value) {
+      localStorage.setItem(KEYS.AUTH, value ? 'true' : 'false');
+    }
+
+    function getCurrentUser() {
+      try {
+        const raw = localStorage.getItem(KEYS.CURRENT_USER);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveCurrentUser(user) {
+      localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(user));
+    }
+
+    function getUsedCodes() {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(KEYS.USED_CODES) || '[]'));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveUsedCodes(set) {
+      localStorage.setItem(KEYS.USED_CODES, JSON.stringify(Array.from(set)));
+    }
+
+    function ensureProfileConsistency() {
+      if (!isLoggedIn()) return;
+      const savedEmailLower = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').toLowerCase();
+      const user = getCurrentUser();
+      if (user && String(user.email || '').toLowerCase() !== savedEmailLower) {
+        try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
+      }
+    }
+
+    function updateAdminLinkVisibility() {
+      if (!DOM.adminLink) return;
+      const user = getCurrentUser();
+      const visible = isLoggedIn() && ((user && !!user.isAdmin) || isFounder());
+      DOM.adminLink.style.display = visible ? '' : 'none';
+    }
+
+    function isFounder() {
+      return (localStorage.getItem(KEYS.SAVED_EMAIL) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
+    }
+
+    function updateBanner() {
+      const user = getCurrentUser();
+      let text = DEFAULT_BANNER_TEXT;
+      if (isLoggedIn()) text = user ? `${user.firstName} ${user.lastName} — ${user.code}` : NEED_REGISTER_TEXT;
+      if (DOM.authBanner) DOM.authBanner.textContent = text;
+      if (DOM.drawerAuthBanner) DOM.drawerAuthBanner.textContent = text;
+    }
+
+    function updateAuthUI() {
+      const logged = isLoggedIn();
+      const hasProfile = !!getCurrentUser();
+      const label = !logged ? 'ავტორიზაცია' : (hasProfile ? 'გასვლა' : 'რეგისტრაცია');
+      if (DOM.loginBtn) DOM.loginBtn.textContent = label;
+      if (DOM.drawerLoginBtn) DOM.drawerLoginBtn.textContent = label;
+    }
+
+    function setView(view) {
+      activeView = view;
+      if (!DOM.modalButtons) return;
+      const is = (name) => activeView === name;
+      DOM.modalButtons.style.display = is('options') ? 'flex' : 'none';
+      if (DOM.registerForm) DOM.registerForm.style.display = is('register') ? 'block' : 'none';
+      if (DOM.loginForm) DOM.loginForm.style.display = is('login') ? 'block' : 'none';
+      if (DOM.forgotPasswordForm) DOM.forgotPasswordForm.style.display = is('forgot') ? 'block' : 'none';
+    }
+
+    function showOptions() { setView('options'); }
+    function showLogin() { setView('login'); }
+    function showRegister() { setView('register'); }
+    function showForgot() { setView('forgot'); }
+
+    function openModal() {
+      if (!DOM.loginModal) return;
+      DOM.loginModal.classList.add('show');
+      DOM.body.style.overflow = 'hidden';
+      const savedEmail = localStorage.getItem(KEYS.SAVED_EMAIL);
+      const savedPassword = localStorage.getItem(KEYS.SAVED_PASSWORD);
+      if (DOM.loginForm) {
+        const emailInput = DOM.loginForm.querySelector('input[name="email"]');
+        const passwordInput = DOM.loginForm.querySelector('input[name="password"]');
+        if (emailInput && savedEmail) emailInput.value = savedEmail;
+        if (passwordInput && savedPassword) passwordInput.value = savedPassword;
+      }
+    }
+
+    function closeModal() {
+      if (!DOM.loginModal) return;
+      DOM.loginModal.classList.remove('show');
+      DOM.body.style.overflow = '';
+      DOM.loginForm?.reset?.();
+      DOM.registerForm?.reset?.();
+      DOM.forgotPasswordForm?.reset?.();
+      showOptions();
+    }
+
+    function isModalOpen() {
+      return DOM.loginModal?.classList.contains('show');
+    }
+
+    function handleAuthButtonClick(fromDrawer) {
+      const logged = isLoggedIn();
+      const hasProfile = !!getCurrentUser();
+      if (!logged) {
+        if (fromDrawer) menuModule.close();
+        openModal();
+        showOptions();
+        return;
+      }
+      if (!hasProfile) {
+        if (fromDrawer) menuModule.close();
+        openModal();
+        showRegister();
+        return;
+      }
+      performLogout();
+      if (fromDrawer) menuModule.close();
+    }
+
+    function performLogout() {
+      if (!isLoggedIn()) return;
+      if (!confirm('ნამდვილად გსურთ გასვლა?')) return;
+      setLoggedIn(false);
+      updateAuthUI();
       updateBanner();
       updateAdminLinkVisibility();
-      showRegister();
-      try {
-        const regEmailInput = registerForm?.querySelector('input[name="email"]');
-        if (regEmailInput) regEmailInput.value = email;
-      } catch {}
-      alert('თქვენ ჯერ არ გაქვთ დასრულებული რეგისტრაცია. გთხოვთ შეავსოთ ველები, რათა გამოჩნდეს თქვენი სახელი/გვარი და უნიკალური კოდი.');
-    })();
-  });
+      alert('გასვლა შესრულებულია');
+      closeModal();
+    }
 
-  // Forgot password form submission
-  on(forgotPasswordForm, 'submit', (e) => {
-    e.preventDefault();
-    const formData = new FormData(forgotPasswordForm);
-    const email = getTrimmed(formData, 'email');
-    if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
-    if (!isValidEmail(email)) return alert('ელფოსტა არასწორია');
-    alert('პაროლის აღდგენის ბმული გამოგზავნილია ელფოსტაზე: ' + email);
-    closeLoginModal();
-    forgotPasswordForm.reset();
-    showOptions();
-  });
+    function generateUniqueCode() {
+      const used = getUsedCodes();
+      for (let i = 0; i < 10000; i += 1) {
+        const code = String(Math.floor(1e9 + Math.random() * 9e9));
+        if (!used.has(code)) return code;
+      }
+      return String(Date.now()).slice(-10);
+    }
 
-  // Back to login button in forgot password form
-  const backToLoginBtn = forgotPasswordForm?.querySelector('.back-to-login');
-  on(backToLoginBtn, 'click', showLogin);
+    function handleLoginSubmit(event) {
+      event.preventDefault();
+      if (!DOM.loginForm) return;
+      const formData = new FormData(DOM.loginForm);
+      const email = utils.getTrimmed(formData, 'email');
+      const password = utils.getTrimmed(formData, 'password');
+      if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
+      if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
+      if (!password) return alert('გთხოვთ შეიყვანოთ პაროლი');
+      localStorage.setItem(KEYS.SAVED_EMAIL, email);
+      localStorage.setItem(KEYS.SAVED_PASSWORD, password);
+      setLoggedIn(true);
+      updateAuthUI();
+      const user = getCurrentUser();
+      const loginEmailLower = email.toLowerCase();
+      if (user && String(user.email || '').toLowerCase() !== loginEmailLower) {
+        try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
+      }
 
-  on(registerForm, 'submit', (e) => {
-    e.preventDefault();
-    const formData = new FormData(registerForm);
-    const personalId = getTrimmed(formData, 'personalId');
-    const firstName = getTrimmed(formData, 'firstName');
-    const lastName = getTrimmed(formData, 'lastName');
-    const phone = getTrimmed(formData, 'phone');
-    const email = getTrimmed(formData, 'email');
-    const password = getTrimmed(formData, 'password');
-    const confirmPassword = getTrimmed(formData, 'confirmPassword');
-    if (personalId.length !== 11 || !/^\d{11}$/.test(personalId)) return alert('პირადი ნომერი უნდა იყოს 11 ციფრი');
-    if (!firstName || !lastName) return alert('გთხოვთ შეიყვანოთ სახელი და გვარი');
-    if (!/^\d{9}$/.test(phone)) return alert('ტელეფონი უნდა იყოს 9 ციფრი (მაგ: 599123456)');
-    if (!isValidEmail(email)) return alert('ელფოსტა არასწორია');
-    if (password.length < 6) return alert('პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო');
-    if (password !== confirmPassword) return alert('პაროლები არ ემთხვევა');
-    // Send to backend
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/users/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            personal_id: personalId,
-            first_name: firstName,
-            last_name: lastName,
-            phone,
-            email,
-            password,
-          }),
-        });
-        if (!res.ok) {
-          const status = res.status;
-          let detail = '';
-          try { const j = await res.json(); if (j && j.detail) detail = j.detail; } catch {}
-          // If personal_id already exists, guide user to login and auto-hydrate profile
-          if (status === 409 || /already registered/i.test(detail || '')) {
-            alert('ეს პირადი ნომერი უკვე რეგისტრირებულია. გადავდივართ ავტორიზაციაზე.');
-            // Prefill and try to auto-complete login by fetching profile
-            try {
-              localStorage.setItem(SAVED_EMAIL_KEY, email);
-              localStorage.setItem(SAVED_PASSWORD_KEY, password);
-            } catch {}
-            setLoggedIn(true);
-            try {
-              const resp = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(email)}`);
-              if (resp.ok) {
-                const data = await resp.json();
-                saveCurrentUser({ firstName: data.first_name, lastName: data.last_name, code: data.code, isAdmin: !!data.is_admin, email: data.email });
-                updateAuthUI();
-                updateBanner();
-                updateAdminLinkVisibility();
-                closeLoginModal();
-                showOptions();
-                return;
-              }
-            } catch {}
-            // Fallback: show login prefilled
-            showLogin();
-            const emailInput = loginForm?.querySelector('input[name="email"]');
-            const pwdInput = loginForm?.querySelector('input[name="password"]');
-            if (emailInput) emailInput.value = email;
-            if (pwdInput) pwdInput.value = password;
-            updateAuthUI();
+      (async () => {
+        try {
+          const response = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(email)}`);
+          if (response.ok) {
+            const data = await response.json();
+            saveCurrentUser({ firstName: data.first_name, lastName: data.last_name, code: data.code, isAdmin: !!data.is_admin, email: data.email });
             updateBanner();
             updateAdminLinkVisibility();
+            closeModal();
+            DOM.loginForm?.reset?.();
+            showOptions();
             return;
           }
-          alert(String(detail || 'რეგისტრაცია ვერ შესრულდა'));
-          return;
-        }
-        const data = await res.json();
-        // Persist for banner and admin visibility
-        saveCurrentUser({ firstName: data.first_name || firstName, lastName: data.last_name || lastName, code: data.code, isAdmin: !!data.is_admin, email: data.email });
-        // Remember credentials locally for convenience
-        localStorage.setItem(SAVED_EMAIL_KEY, email);
-        localStorage.setItem(SAVED_PASSWORD_KEY, password);
-        setLoggedIn(true);
-        updateAuthUI();
+        } catch {}
         updateBanner();
         updateAdminLinkVisibility();
-        alert('რეგისტრაცია მიღებულია!');
-        closeLoginModal();
-        registerForm.reset();
-        showOptions();
-      } catch {
-        alert('ქსელური პრობლემა - სცადეთ მოგვიანებით');
-      }
-    })();
-  });
-  // Initialize auth UI state on load
-  updateAuthUI();
-  ensureProfileConsistency();
-  updateBanner();
-  updateAdminLinkVisibility();
-  // (Escape handled above for both menu and modal)
+        showRegister();
+        try {
+          const registerEmailInput = DOM.registerForm?.querySelector('input[name="email"]');
+          if (registerEmailInput) registerEmailInput.value = email;
+        } catch {}
+        alert('თქვენ ჯერ არ გაქვთ დასრულებული რეგისტრაცია. გთხოვთ შეავსოთ ველები, რათა გამოჩნდეს თქვენი სახელი/გვარი და უნიკალური კოდი.');
+      })();
+    }
 
-  // Footer form submission
-  const footerForm = document.querySelector('.footer-form');
-  if (footerForm) {
-    on(footerForm, 'submit', (e) => {
-      e.preventDefault();
-      const formData = new FormData(footerForm);
-      const name = (formData.get('name') || '').toString().trim();
-      const email = (formData.get('email') || '').toString().trim();
-      const message = (formData.get('message') || '').toString().trim();
-      
+    function handleForgotSubmit(event) {
+      event.preventDefault();
+      if (!DOM.forgotPasswordForm) return;
+      const formData = new FormData(DOM.forgotPasswordForm);
+      const email = utils.getTrimmed(formData, 'email');
+      if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
+      if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
+      alert(`პაროლის აღდგენის ბმული გამოგზავნილია ელფოსტაზე: ${email}`);
+      closeModal();
+      DOM.forgotPasswordForm?.reset?.();
+      showOptions();
+    }
+
+    function handleRegisterSubmit(event) {
+      event.preventDefault();
+      if (!DOM.registerForm) return;
+      const formData = new FormData(DOM.registerForm);
+      const personalId = utils.getTrimmed(formData, 'personalId');
+      const firstName = utils.getTrimmed(formData, 'firstName');
+      const lastName = utils.getTrimmed(formData, 'lastName');
+      const phone = utils.getTrimmed(formData, 'phone');
+      const email = utils.getTrimmed(formData, 'email');
+      const password = utils.getTrimmed(formData, 'password');
+      const confirmPassword = utils.getTrimmed(formData, 'confirmPassword');
+      if (personalId.length !== 11 || !/^[0-9]{11}$/.test(personalId)) return alert('პირადი ნომერი უნდა იყოს 11 ციფრი');
+      if (!firstName || !lastName) return alert('გთხოვთ შეიყვანოთ სახელი და გვარი');
+      if (!/^[0-9]{9}$/.test(phone)) return alert('ტელეფონი უნდა იყოს 9 ციფრი (მაგ: 599123456)');
+      if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
+      if (password.length < 6) return alert('პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო');
+      if (password !== confirmPassword) return alert('პაროლები არ ემთხვევა');
+
+      (async () => {
+        try {
+          const response = await fetch(`${API_BASE}/users/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              personal_id: personalId,
+              first_name: firstName,
+              last_name: lastName,
+              phone,
+              email,
+              password,
+            }),
+          });
+          if (!response.ok) {
+            let detail = '';
+            try {
+              const json = await response.json();
+              if (json && json.detail) detail = json.detail;
+            } catch {}
+            if (response.status === 409 || /already registered/i.test(detail || '')) {
+              alert('ეს პირადი ნომერი უკვე რეგისტრირებულია. გადავდივართ ავტორიზაციაზე.');
+              try {
+                localStorage.setItem(KEYS.SAVED_EMAIL, email);
+                localStorage.setItem(KEYS.SAVED_PASSWORD, password);
+              } catch {}
+              setLoggedIn(true);
+              try {
+                const profileResp = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(email)}`);
+                if (profileResp.ok) {
+                  const data = await profileResp.json();
+                  saveCurrentUser({ firstName: data.first_name, lastName: data.last_name, code: data.code, isAdmin: !!data.is_admin, email: data.email });
+                  updateAuthUI();
+                  updateBanner();
+                  updateAdminLinkVisibility();
+                  closeModal();
+                  showOptions();
+                  return;
+                }
+              } catch {}
+              showLogin();
+              const emailInput = DOM.loginForm?.querySelector('input[name="email"]');
+              const pwdInput = DOM.loginForm?.querySelector('input[name="password"]');
+              if (emailInput) emailInput.value = email;
+              if (pwdInput) pwdInput.value = password;
+              updateAuthUI();
+              updateBanner();
+              updateAdminLinkVisibility();
+              return;
+            }
+            alert(String(detail || 'რეგისტრაცია ვერ შესრულდა'));
+            return;
+          }
+          const data = await response.json();
+          saveCurrentUser({ firstName: data.first_name || firstName, lastName: data.last_name || lastName, code: data.code, isAdmin: !!data.is_admin, email: data.email });
+          localStorage.setItem(KEYS.SAVED_EMAIL, email);
+          localStorage.setItem(KEYS.SAVED_PASSWORD, password);
+          setLoggedIn(true);
+          updateAuthUI();
+          updateBanner();
+          updateAdminLinkVisibility();
+          alert('რეგისტრაცია მიღებულია!');
+          closeModal();
+          DOM.registerForm?.reset?.();
+          showOptions();
+        } catch {
+          alert('ქსელური პრობლემა - სცადეთ მოგვიანებით');
+        }
+      })();
+    }
+
+    function init() {
+      utils.on(DOM.loginBtn, 'click', () => handleAuthButtonClick(false));
+      utils.on(DOM.drawerLoginBtn, 'click', () => handleAuthButtonClick(true));
+      utils.on(DOM.modalClose, 'click', closeModal);
+      utils.on(DOM.loginModal, 'click', (event) => { if (event.target === DOM.loginModal) closeModal(); });
+      utils.on(DOM.loginOption, 'click', showLogin);
+      utils.on(DOM.registerOption, 'click', showRegister);
+      utils.on(DOM.forgotPasswordLink, 'click', (event) => { event.preventDefault(); showForgot(); });
+      utils.on(DOM.loginForm, 'submit', handleLoginSubmit);
+      utils.on(DOM.forgotPasswordForm, 'submit', handleForgotSubmit);
+      const backToLoginBtn = DOM.forgotPasswordForm?.querySelector('.back-to-login');
+      utils.on(backToLoginBtn, 'click', showLogin);
+      utils.on(DOM.registerForm, 'submit', handleRegisterSubmit);
+
+      updateAuthUI();
+      ensureProfileConsistency();
+      updateBanner();
+      updateAdminLinkVisibility();
+    }
+
+    return {
+      init,
+      openModal,
+      closeModal,
+      showRegister,
+      isModalOpen,
+      updateBanner,
+      updateAdminLinkVisibility,
+      getCurrentUser,
+      saveCurrentUser,
+      setLoggedIn,
+      isLoggedIn,
+      generateUniqueCode,
+      getUsedCodes,
+      saveUsedCodes,
+    };
+  }
+
+  function createExamNavigationModule() {
+    function closeNavDropdown() {
+      if (!DOM.navDropdown) return;
+      DOM.navDropdown.classList.remove('show');
+      DOM.navDropdown.setAttribute('aria-hidden', 'true');
+      DOM.navExamTrigger?.setAttribute('aria-expanded', 'false');
+    }
+
+    function openNavDropdown() {
+      if (!DOM.navDropdown) return;
+      DOM.navDropdown.classList.add('show');
+      DOM.navDropdown.setAttribute('aria-hidden', 'false');
+      DOM.navExamTrigger?.setAttribute('aria-expanded', 'true');
+      setTimeout(() => document.addEventListener('click', handleDocClickCloseNav), 0);
+    }
+
+    function handleDocClickCloseNav(event) {
+      if (DOM.navExam && DOM.navExam.contains(event.target)) return;
+      closeNavDropdown();
+      document.removeEventListener('click', handleDocClickCloseNav);
+    }
+
+    function goToExam() {
+      closeNavDropdown();
+      menuModule.closeDrawerSubmenu();
+      if (DOM.body.classList.contains('menu-open')) menuModule.close();
+      window.location.href = 'exam.html';
+    }
+
+    function goToReview() {
+      closeNavDropdown();
+      menuModule.closeDrawerSubmenu();
+      alert('პროექტის განხილვა — მალე დაემატება');
+    }
+
+    function handleNavTrigger(event) {
+      event.preventDefault();
+      if (!DOM.navDropdown) return;
+      if (DOM.navDropdown.classList.contains('show')) {
+        closeNavDropdown();
+      } else {
+        openNavDropdown();
+      }
+    }
+
+    function handleKeydown(event) {
+      if (event.key !== 'Escape') return;
+      closeNavDropdown();
+      if (DOM.drawerSubmenu && !DOM.drawerSubmenu.hasAttribute('hidden')) {
+        DOM.drawerSubmenu.setAttribute('hidden', '');
+        DOM.drawerExamTrigger?.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    function init() {
+      utils.on(DOM.navExamTrigger, 'click', handleNavTrigger);
+      document.addEventListener('keydown', handleKeydown);
+      document
+        .querySelectorAll('.dropdown-item.theoretical, .drawer-submenu-item.theoretical')
+        .forEach((element) => utils.on(element, 'click', goToExam));
+      document
+        .querySelectorAll('.dropdown-item.review, .drawer-submenu-item.review')
+        .forEach((element) => utils.on(element, 'click', goToReview));
+    }
+
+    return { init };
+  }
+
+  function createFooterFormModule() {
+    function handleSubmit(event) {
+      event.preventDefault();
+      if (!DOM.footerForm) return;
+      const formData = new FormData(DOM.footerForm);
+      const name = utils.getTrimmed(formData, 'name');
+      const email = utils.getTrimmed(formData, 'email');
+      const message = utils.getTrimmed(formData, 'message');
       if (!name) return alert('გთხოვთ შეიყვანოთ სახელი');
       if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
-      if (!isValidEmail(email)) return alert('ელფოსტა არასწორია');
+      if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
       if (!message) return alert('გთხოვთ შეიყვანოთ შეტყობინება');
-      
       alert('თქვენი შეტყობინება გაგზავნილია! ჩვენ მალე დაგიკავშირდებით.');
-      footerForm.reset();
-    });
+      DOM.footerForm.reset();
+    }
+
+    function init() {
+      if (DOM.footerForm) utils.on(DOM.footerForm, 'submit', handleSubmit);
+    }
+
+    return { init };
   }
 });
 
