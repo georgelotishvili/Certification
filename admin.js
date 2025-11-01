@@ -157,6 +157,20 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('ადმინისტრატორის პაროლი შენახულია');
   });
 
+  // UX: Enter-ზე შენახვა + typing-ისას ავტო-შენახვა (debounced)
+  on(gatePwdInput, 'keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      gatePwdSave?.click();
+    }
+  });
+  let gatePwdSaveTimer = null;
+  on(gatePwdInput, 'input', () => {
+    const v = String(gatePwdInput?.value || '').trim();
+    clearTimeout(gatePwdSaveTimer);
+    gatePwdSaveTimer = setTimeout(() => { try { localStorage.setItem(ADMIN_PWD_KEY, v); } catch {} }, 250);
+  });
+
   // Blocks grid data + rendering
   const blocksGrid = document.querySelector('.exam-blocks-grid');
   const BLOCKS_KEY = 'examBlocks_v1';

@@ -56,6 +56,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let sessionId = null;
   let sessionToken = null;
   let serverEndsAtMs = null;
+  let isStartingSession = false;
+  let gatePassed = false;
 
   const authHeaders = () => (sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {});
   const asJson = (method, body, extra = {}) => ({
@@ -64,6 +66,28 @@ document.addEventListener('DOMContentLoaded', () => {
     body: body == null ? undefined : JSON.stringify(body),
   });
   const getOpts = (extra = {}) => ({ method: 'GET', headers: { ...authHeaders(), ...(extra.headers || {}) } });
+  // Debug helper
+  const dlog = (...args) => { try { console.debug('[exam]', ...args); } catch {} };
+
+  // Start server session once; safe to call multiple times (guards duplicates)
+  async function beginSession() {
+    if (isStartingSession || (sessionId && sessionToken)) return;
+    isStartingSession = true;
+    try {
+      const user = getCurrentUser() || {};
+      const resp = await apiStartSession(user.firstName, user.lastName, user.code);
+      sessionId = resp.session_id;
+      sessionToken = resp.token;
+      serverEndsAtMs = resp.ends_at ? new Date(resp.ends_at).getTime() : null;
+      updateUserHeader();
+      dlog('session started', { sessionId, hasToken: !!sessionToken });
+    } catch (e) {
+      dlog('session start failed', e);
+    } finally {
+      isStartingSession = false;
+      if (examStart) { examStart.disabled = false; examStart.focus(); }
+    }
+  }
 
   async function apiAuthCode(code) {
     const res = await fetch(`${API_BASE}/auth/code`, asJson('POST', { exam_id: EXAM_ID, code: String(code || '').trim() }));
@@ -71,9 +95,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return await res.json();
   }
   async function apiGetConfig(examId) {
+    dlog('GET config');
     const res = await fetch(`${API_BASE}/exam/${examId}/config`, getOpts());
     if (!res.ok) throw new Error('კონფიგი ვერ ჩაიტვირთა');
-    return await res.json();
+    const j = await res.json();
+    dlog('config ok', j);
+    return j;
   }
   async function apiStartSession(firstName, lastName, code) {
     const res = await fetch(`${API_BASE}/exam/session/start`, asJson('POST', {
@@ -87,9 +114,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   async function apiGetBlockQuestions(blockId) {
     if (!sessionId) throw new Error('სესია არ არის');
+    dlog('GET questions', { sessionId, hasToken: !!sessionToken, blockId });
     const res = await fetch(`${API_BASE}/exam/${sessionId}/questions?block_id=${encodeURIComponent(blockId)}`, getOpts());
     if (!res.ok) throw new Error('კითხვები ვერ ჩაიტვირთა');
-    return await res.json();
+    const j = await res.json();
+    dlog('questions ok', j);
+    return j;
   }
   async function apiAnswer(questionId, optionId) {
     if (!sessionId) throw new Error('სესია არ არის');
@@ -244,12 +274,13 @@ document.addEventListener('DOMContentLoaded', () => {
   updateUserHeader();
   updateRightDateTime();
   setInterval(updateRightDateTime, 1000 * 30);
-  // Disable examStart initially until code is correct
-  if (examStart) examStart.disabled = true;
-  // Gate visible initially
+  // Start button remains enabled; თუ session/token არ არის, Start-ზე დაჭერით გაიხსნება Gate
+  // Gate ხილულია საწყისად
   if (gateInput) gateInput.focus();
   // Before exam start, show blur overlay and keep only Start/Finish usable
   try { show(prestartOverlay); } catch {}
+
+  // (არ არის საჭირო helper-ები Gate-ს დამალვა/დამოწმებისთვის)
 
   // Intercept keys
   document.addEventListener('keydown', (e) => {
@@ -287,20 +318,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (gateError) gateError.hidden = true;
-    // Hide gate and enable Start immediately; start server session in background
+    // Hide gate; mark as passed and start session in background
+    gatePassed = true;
     hide(gateOverlay);
     enterFullscreen();
-    if (examStart) { examStart.disabled = false; examStart.focus(); }
-    (async () => {
-      try {
-        const user = getCurrentUser() || {};
-        const resp = await apiStartSession(user.firstName, user.lastName, user.code);
-        sessionId = resp.session_id;
-        sessionToken = resp.token;
-        serverEndsAtMs = resp.ends_at ? new Date(resp.ends_at).getTime() : null;
-        updateUserHeader();
-      } catch {}
-    })();
+    if (examStart) { examStart.disabled = false; }
+    void beginSession();
   });
 
   // Close button on gate: return to index without entering exam
@@ -371,6 +394,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let answersState = new Map(); // key: questionId -> { chosenAnswerId, correct }
   // removed autoNextTimer (was unused)
   let examStarted = false;
+
+  // (ერთიანი offline სტარტი ამოღებულია — სავალდებულოა Gate-ის გავლა და სერვერის სესია)
 
   const loadBlocks = () => {
     try {
@@ -679,17 +704,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const initExamData = async () => {
-    // Load config
-    try {
-      const cfg = await apiGetConfig(EXAM_ID);
-      blocks = Array.isArray(cfg?.blocks) ? cfg.blocks : [];
-    } catch (err) {
-      console.error('Failed to load exam config:', err);
-      blocks = [];
-    }
-
-    // If no blocks from server → fallback to local immediately (no delay)
-    if (!Array.isArray(blocks) || blocks.length === 0) {
+    // Helper: render using localStorage blocks immediately (fallback)
+    const renderFromLocalStorage = () => {
       const localBlocks = loadBlocks();
       blocks = Array.isArray(localBlocks) ? localBlocks : [];
       selectedByBlock = blocks.map((b) => {
@@ -706,6 +722,26 @@ document.addEventListener('DOMContentLoaded', () => {
       renderDotsForCurrentBlock();
       updateNavButtons();
       updateIndicators();
+    };
+
+    // თუ სესია არ არის (ოფლაინ რეჟიმი) → მყისიერად გადავიდეთ localStorage-ზე
+    if (!sessionId || !sessionToken) {
+      renderFromLocalStorage();
+      return;
+    }
+
+    // Load config
+    try {
+      const cfg = await apiGetConfig(EXAM_ID);
+      blocks = Array.isArray(cfg?.blocks) ? cfg.blocks : [];
+    } catch (err) {
+      console.error('Failed to load exam config:', err);
+      blocks = [];
+    }
+
+    // If no blocks from server → fallback to local immediately (no delay)
+    if (!Array.isArray(blocks) || blocks.length === 0) {
+      renderFromLocalStorage();
       return;
     }
 
@@ -720,6 +756,14 @@ document.addEventListener('DOMContentLoaded', () => {
           selectedByBlock[0] = Array.isArray(r0?.questions) ? r0.questions : [];
         } catch (err0) {
           console.error('Failed to load first block questions', err0);
+          // Hard fallback if first block failed
+          renderFromLocalStorage();
+          return;
+        }
+        // If API responded but returned empty questions, also fallback
+        if (!Array.isArray(selectedByBlock[0]) || selectedByBlock[0].length === 0) {
+          renderFromLocalStorage();
+          return;
         }
       }
 
@@ -748,6 +792,10 @@ document.addEventListener('DOMContentLoaded', () => {
       updateIndicators();
     } catch (err) {
       console.error('Progressive load failed:', err);
+      // Visible hint
+      if (cmContent) {
+        cmContent.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;color:#7f1d1d;font-weight:700;">კითხვები ვერ ჩაიტვირთა</div>';
+      }
     }
   };
 
@@ -756,11 +804,31 @@ document.addEventListener('DOMContentLoaded', () => {
   nextBtn?.addEventListener('click', gotoNextQuestion);
   examStart?.addEventListener('click', async () => {
     if (examStarted) return;
+    // If session not ready →
+    if (!sessionToken || !sessionId) {
+      if (!gatePassed) {
+        // Gate not passed yet → show it
+        if (gateOverlay) show(gateOverlay);
+        try { gateInput?.focus(); } catch {}
+        return;
+      }
+      // Gate passed but session not ready → დაიწყე ოფლაინ რეჟიმით მაშინვე
+      examStarted = true;
+      if (examStart) examStart.disabled = true;
+      if (examFinish) examFinish.disabled = false;
+      if (prestartOverlay) hide(prestartOverlay);
+      preRenderLocalFirstQuestion();
+      void initExamData(); // ეს შიგნით localStorage-ზე გადადის თუ sessionId არაა
+      startCountdown();
+      // პარალელურად სცადე სესიის წამოწყება, რომ გაეშვას სერვერზე თუ აღმოჩნდა ხელმისაწვდომი
+      void beginSession();
+      return;
+    }
+    // სესია მზად არის → დავიწყოთ გამოცდა
     examStarted = true;
     if (examStart) examStart.disabled = true;
     if (examFinish) examFinish.disabled = false;
     if (prestartOverlay) hide(prestartOverlay);
-    // Show local question immediately (if available), then load server data in background
     preRenderLocalFirstQuestion();
     void initExamData();
     startCountdown();

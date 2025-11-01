@@ -568,6 +568,7 @@ body {
     background: rgba(0,0,0,0.45);
     backdrop-filter: blur(6px);
     z-index: 7;
+    pointer-events: none; /* არ დაბლოკოს ღილაკები */
   }
 
   .results-overlay,
@@ -802,6 +803,7 @@ body {
     height: 100%; 
     align-items: center; 
     z-index: 9;
+    pointer-events: auto; /* იძულებით ჩართე კლიკები */
   }
 
   .btn-wide { 
