@@ -97,7 +97,7 @@ class Session(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"))
-    code_id: Mapped[int] = mapped_column(ForeignKey("exam_codes.id", ondelete="SET NULL"))
+    code_id: Mapped[Optional[int]] = mapped_column(ForeignKey("exam_codes.id", ondelete="SET NULL"), nullable=True)
     token: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     ends_at: Mapped[datetime] = mapped_column(DateTime)

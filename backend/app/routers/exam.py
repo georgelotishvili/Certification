@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, status
@@ -42,7 +42,7 @@ def start_session(payload: StartSessionRequest, db: Session = Depends(get_db)):
     exam = db.get(Exam, payload.exam_id)
     if not exam:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam not found")
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     ends_at = now + timedelta(minutes=exam.duration_minutes)
     token = f"sess_{now.timestamp()}_{random.randint(1000,9999)}"
     session = ExamSession(
