@@ -7,7 +7,19 @@ Quick start (one click)
 1) Double–click `start.ps1` (or right–click → Run with PowerShell).
    - Starts backend (FastAPI) at `http://127.0.0.1:8000`
    - Starts static frontend at `http://127.0.0.1:3000`
-   - Opens both URLs in your browser
+   - Opens the landing page automatically
+
+Structure overview
+```
+frontend/
+  assets/ (fonts, svg, future images)
+  pages/  (index, admin, exam, registrations)
+  scripts/
+  styles/
+backend/
+  app/      (FastAPI application)
+  scripts/  (seed, migrations, utilities)
+```
 
 Manual start (optional)
 - Backend
@@ -25,9 +37,9 @@ Manual start (optional)
   ```
 
 How to use
-- Open `http://127.0.0.1:3000/index.html`
+- Open `http://127.0.0.1:3000/frontend/pages/index.html`
 - Authorize (email saved locally). If you use `naormala@gmail.com`, you are the founder admin.
-- Admin page: `admin.html`
+- Admin page: `http://127.0.0.1:3000/frontend/pages/admin.html`
   - „გამოცდა“ — exam settings section
   - „შედეგები“ — results section (Admin API Key optional)
   - „რეგისტრაციები“ — registered users list (search/filter/sort)

@@ -86,6 +86,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const EXAM_ID = 1;
   const DEFAULT_TITLE_TEXT = '';
   const KEYBOARD_LOCKS = ['Escape', 'F11', 'F4'];
+  const getPercentColorClass = (percent) => {
+    if (percent < 70) return 'pct-red';
+    if (percent <= 75) return 'pct-yellow';
+    return 'pct-green';
+  };
 
   const dlog = (...args) => {
     try { console.debug('[exam]', ...args); } catch {}
@@ -628,32 +633,57 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!DOM.resultsOverlay || !DOM.examResults || !DOM.resultsList) return;
 
       DOM.resultsList.innerHTML = '';
-      state.selectedByBlock.forEach((questions, blockIndex) => {
-        const items = questions || [];
-        if (!items.length) return;
-        let correctCount = 0;
-        items.forEach((question) => {
-          const key = String(question?.id ?? '');
-          if (state.answers.get(key)?.correct) correctCount += 1;
-        });
-        const total = items.length || 1;
-        const percent = Math.round((correctCount / total) * 100);
+      const createResultRow = (labelText, correctCount, totalCount) => {
+        const safeTotal = Number(totalCount) || 0;
+        const percent = safeTotal > 0 ? Math.round((correctCount / safeTotal) * 100) : 0;
 
         const row = document.createElement('div');
         row.className = 'result-row';
 
         const label = document.createElement('div');
         label.className = 'result-label';
-        label.textContent = `ბლოკი ${blockIndex + 1}`;
+        label.textContent = labelText;
 
         const value = document.createElement('div');
-        const colorClass = percent < 70 ? 'pct-red' : (percent <= 75 ? 'pct-yellow' : 'pct-green');
+        const colorClass = getPercentColorClass(percent);
         value.className = `result-value ${colorClass}`;
-        value.textContent = `${percent}%`;
+        value.textContent = `${correctCount}/${safeTotal} (${percent}%)`;
 
         row.append(label, value);
-        DOM.resultsList.appendChild(row);
+        return row;
+      };
+
+      const blockRows = [];
+      let totalCorrect = 0;
+      let totalQuestions = 0;
+
+      state.selectedByBlock.forEach((questions, blockIndex) => {
+        const items = Array.isArray(questions) ? questions : [];
+        const total = items.length;
+        let correctCount = 0;
+        items.forEach((question) => {
+          const key = String(question?.id ?? '');
+          if (state.answers.get(key)?.correct) correctCount += 1;
+        });
+
+        totalCorrect += correctCount;
+        totalQuestions += total;
+
+        const row = createResultRow(`ბლოკი ${blockIndex + 1}`, correctCount, total);
+        blockRows.push(row);
       });
+
+      if (totalQuestions > 0 || blockRows.length) {
+        const summaryRow = createResultRow('საერთო შედეგი', totalCorrect, totalQuestions);
+        summaryRow.classList.add('result-row-total');
+        DOM.resultsList.appendChild(summaryRow);
+        blockRows.forEach((row) => DOM.resultsList.appendChild(row));
+      } else {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'result-empty';
+        emptyRow.textContent = 'შედეგების საჩვენებლად მონაცემები არ არის';
+        DOM.resultsList.appendChild(emptyRow);
+      }
 
       show(DOM.resultsOverlay);
       setHidden(DOM.examResults, false);

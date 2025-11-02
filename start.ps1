@@ -42,7 +42,7 @@ $pyCmd -m http.server 3000 --bind 127.0.0.1
 Start-Process powershell -ArgumentList @('-NoExit','-Command', $frontendCmd) | Out-Null
 
 Start-Sleep -Seconds 2
-Start-Process 'http://127.0.0.1:3000/index.html' | Out-Null
+Start-Process 'http://127.0.0.1:3000/frontend/pages/index.html' | Out-Null
 
 Write-Host "Started: Frontend http://127.0.0.1:3000  | Backend http://127.0.0.1:8000" -ForegroundColor Green
 

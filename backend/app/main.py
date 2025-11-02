@@ -6,7 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .database import engine
 from .models import Base
-from .migrate_results_cols import run as run_migrations
+try:
+    # When running from project root (e.g. `python -m backend.app.main`)
+    from backend.scripts.migrate_results_cols import run as run_migrations
+except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.main:app`
+    from scripts.migrate_results_cols import run as run_migrations  # type: ignore
 
 
 def create_app() -> FastAPI:

@@ -604,7 +604,20 @@ body {
   }
 
   .result-label { font-weight: 700; color: #111827; }
-  .result-value { font-weight: 800; }
+  .result-value { font-weight: 800; text-align: right; }
+  .result-row-total {
+    border-color: #cbd5f5;
+    background: #f1f5f9;
+  }
+  .result-empty {
+    text-align: center;
+    color: #6b7280;
+    font-weight: 500;
+    padding: 12px;
+    border: 2px dashed #e5e7eb;
+    border-radius: 6px;
+    background: #f9fafb;
+  }
 
   .pct-red { color: #dc2626; }
   .pct-yellow { color: #d97706; }

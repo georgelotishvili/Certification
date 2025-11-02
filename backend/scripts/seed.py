@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from sqlalchemy.orm import Session
 
-from .database import engine, SessionLocal
-from .models import Base, Exam, Block, Question, Option, ExamCode
-from .security import hash_code
+from backend.app.database import engine, SessionLocal
+from backend.app.models import Base, Exam, Block, Question, Option, ExamCode
+from backend.app.security import hash_code
 
 
 def seed() -> None:

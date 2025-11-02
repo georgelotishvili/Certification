@@ -10,7 +10,7 @@ Backend (FastAPI) ინსტრუქცია
 2) პაკეტების დაყენება
    pip install -r backend/requirements.txt
 3) სიდ მონაცემები (არჩევითი)
-   python -m backend.app.seed
+   python -m backend.scripts.seed
 4) გაშვება
    uvicorn backend.app.main:app --reload
 
