@@ -6,9 +6,16 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..database import get_db
-from ..models import Block, Question, Session as ExamSession, Answer, Option, Question as Q, User
+from ..models import Block, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam
 from ..schemas import (
+    AdminBlocksResponse,
+    AdminBlocksUpdateRequest,
+    AdminBlockPayload,
+    AdminQuestionPayload,
+    AdminAnswerPayload,
     AdminStatsResponse,
+    ExamSettingsResponse,
+    ExamSettingsUpdateRequest,
     ResultListItem,
     ResultListResponse,
     ResultDetailResponse,
@@ -20,6 +27,187 @@ from ..schemas import (
 
 
 router = APIRouter()
+
+
+def _require_admin(x_admin_key: str | None) -> None:
+    settings = get_settings()
+    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
+
+
+def _get_or_create_exam(db: Session, exam_id: int | None = None) -> Exam:
+    exam: Exam | None = None
+    if exam_id:
+        exam = db.get(Exam, exam_id)
+    if not exam:
+        exam = db.scalars(select(Exam).order_by(Exam.id.asc()).limit(1)).first()
+    if not exam:
+        exam = Exam(title="Default Exam", duration_minutes=45, gate_password="cpig")
+        db.add(exam)
+        db.commit()
+        db.refresh(exam)
+        return exam
+    if not exam.gate_password:
+        exam.gate_password = "cpig"
+        db.add(exam)
+        db.commit()
+        db.refresh(exam)
+    return exam
+
+
+def _exam_settings_payload(exam: Exam) -> ExamSettingsResponse:
+    return ExamSettingsResponse(
+        exam_id=exam.id,
+        title=exam.title,
+        duration_minutes=exam.duration_minutes,
+        gate_password=exam.gate_password or "",
+    )
+
+
+def _blocks_payload(exam: Exam) -> AdminBlocksResponse:
+    ordered_blocks = sorted(exam.blocks, key=lambda b: (b.order_index or 0, b.id))
+    blocks: list[AdminBlockPayload] = []
+    for block_index, block in enumerate(ordered_blocks, start=1):
+        ordered_questions = sorted(block.questions, key=lambda q: (q.order_index or 0, q.id))
+        question_payloads: list[AdminQuestionPayload] = []
+        for question_index, question in enumerate(ordered_questions, start=1):
+            options = sorted(question.options, key=lambda o: o.id)
+            answers = [
+                AdminAnswerPayload(id=str(option.id), text=option.text)
+                for option in options
+            ]
+            correct_id = next((str(option.id) for option in options if option.is_correct), None)
+            question_payloads.append(
+                AdminQuestionPayload(
+                    id=str(question.id),
+                    text=question.text,
+                    code=question.code,
+                    answers=answers,
+                    correct_answer_id=correct_id,
+                    enabled=question.enabled,
+                )
+            )
+        blocks.append(
+            AdminBlockPayload(
+                id=str(block.id),
+                number=block.order_index or block_index,
+                name=block.title,
+                qty=block.qty,
+                enabled=block.enabled,
+                questions=question_payloads,
+            )
+        )
+    return AdminBlocksResponse(exam_id=exam.id, blocks=blocks)
+
+
+@router.get("/exam/settings", response_model=ExamSettingsResponse)
+def get_exam_settings(
+    exam_id: int | None = None,
+    x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(x_admin_key)
+    exam = _get_or_create_exam(db, exam_id)
+    return _exam_settings_payload(exam)
+
+
+@router.put("/exam/settings", response_model=ExamSettingsResponse)
+def update_exam_settings(
+    payload: ExamSettingsUpdateRequest,
+    x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(x_admin_key)
+    exam = _get_or_create_exam(db, payload.exam_id)
+
+    if payload.title is not None:
+        candidate = payload.title.strip()
+        if candidate:
+            exam.title = candidate
+
+    if payload.duration_minutes is not None:
+        duration = max(1, payload.duration_minutes)
+        exam.duration_minutes = duration
+
+    if payload.gate_password is not None:
+        exam.gate_password = payload.gate_password.strip()
+
+    db.add(exam)
+    db.commit()
+    db.refresh(exam)
+    return _exam_settings_payload(exam)
+
+
+@router.get("/exam/blocks", response_model=AdminBlocksResponse)
+def get_exam_blocks(
+    exam_id: int | None = None,
+    x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(x_admin_key)
+    exam = _get_or_create_exam(db, exam_id)
+    return _blocks_payload(exam)
+
+
+@router.put("/exam/blocks", response_model=AdminBlocksResponse)
+def update_exam_blocks(
+    payload: AdminBlocksUpdateRequest,
+    x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(x_admin_key)
+    exam = _get_or_create_exam(db, payload.exam_id)
+
+    existing_blocks = db.scalars(select(Block).where(Block.exam_id == exam.id)).all()
+    for block in existing_blocks:
+        db.delete(block)
+    db.flush()
+
+    for block_index, block_payload in enumerate(payload.blocks or [], start=1):
+        questions_payload = block_payload.questions or []
+        qty = max(0, min(block_payload.qty, len(questions_payload)))
+        block = Block(
+            exam_id=exam.id,
+            title=(block_payload.name or "").strip() or f"ბლოკი {block_index}",
+            qty=qty,
+            order_index=block_payload.number or block_index,
+            enabled=block_payload.enabled,
+        )
+        db.add(block)
+        db.flush()
+
+        for question_index, question_payload in enumerate(questions_payload, start=1):
+            question = Question(
+                block_id=block.id,
+                code=question_payload.code or f"Q-{block.id}-{question_index}",
+                text=(question_payload.text or "").strip(),
+                order_index=question_index,
+                enabled=question_payload.enabled,
+            )
+            db.add(question)
+            db.flush()
+
+            created_options: list[Option] = []
+            for answer_payload in question_payload.answers:
+                option = Option(
+                    question_id=question.id,
+                    text=(answer_payload.text or "").strip(),
+                    is_correct=str(answer_payload.id) == str(question_payload.correct_answer_id)
+                    if question_payload.correct_answer_id is not None
+                    else False,
+                )
+                db.add(option)
+                created_options.append(option)
+            db.flush()
+
+            if not any(opt.is_correct for opt in question.options):
+                if created_options:
+                    created_options[0].is_correct = True
+                    db.add(created_options[0])
+
+    db.commit()
+    refreshed_exam = _get_or_create_exam(db, exam.id)
+    return _blocks_payload(refreshed_exam)
 
 
 @router.get("/stats", response_model=AdminStatsResponse)

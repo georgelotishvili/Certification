@@ -55,10 +55,15 @@ document.addEventListener('DOMContentLoaded', () => {
     try { DOM.examFinish.disabled = true; } catch {}
   }
 
+  if (DOM.examStart) {
+    try { DOM.examStart.disabled = true; } catch {}
+  }
+
   const state = {
     sessionId: null,
     sessionToken: null,
     serverEndsAtMs: null,
+    examDurationMinutes: 60,
     isStartingSession: false,
     gatePassed: false,
     examStarted: false,
@@ -79,9 +84,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const API_BASE = 'http://127.0.0.1:8000';
   const EXAM_ID = 1;
-  const BLOCKS_KEY = 'examBlocks_v1';
-  const EXAM_DURATION_KEY = 'examDuration';
-  const ADMIN_PWD_KEY = 'adminGatePassword';
   const DEFAULT_TITLE_TEXT = '';
   const KEYBOARD_LOCKS = ['Escape', 'F11', 'F4'];
 
@@ -109,17 +111,17 @@ document.addEventListener('DOMContentLoaded', () => {
       state.sessionId = resp.session_id;
       state.sessionToken = resp.token;
       state.serverEndsAtMs = resp.ends_at ? new Date(resp.ends_at).getTime() : null;
+      if (typeof resp.duration_minutes === 'number') {
+        state.examDurationMinutes = resp.duration_minutes;
+      }
       updateUserHeader();
       dlog('session started', { sessionId: state.sessionId, hasToken: !!state.sessionToken });
     } catch (err) {
       dlog('session start failed', err);
     } finally {
       state.isStartingSession = false;
-      if (DOM.examStart) {
-        DOM.examStart.disabled = false;
-        if (!state.examStarted) {
-          try { DOM.examStart.focus(); } catch {}
-        }
+      if (DOM.examStart && !state.examStarted) {
+        try { DOM.examStart.disabled = false; DOM.examStart.focus(); } catch {}
       }
     }
   }
@@ -169,12 +171,18 @@ document.addEventListener('DOMContentLoaded', () => {
     try { await fetch(`${API_BASE}/exam/${state.sessionId}/finish`, asJson('POST', {})); } catch {}
   }
 
-  function readAdminPassword() {
+  async function verifyGatePassword(password) {
     try {
-      const value = String(localStorage.getItem(ADMIN_PWD_KEY) || '').trim();
-      return value || 'cpig';
+      const response = await fetch(`${API_BASE}/exam/gate/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exam_id: EXAM_ID, password }),
+      });
+      if (!response.ok) return false;
+      const data = await response.json();
+      return !!data?.valid;
     } catch {
-      return 'cpig';
+      return false;
     }
   }
 
@@ -314,48 +322,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch {}
   }
 
-  function loadBlocks() {
-    try {
-      const raw = localStorage.getItem(BLOCKS_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function pickPerBlock(block) {
-    const questions = Array.isArray(block?.questions) ? block.questions : [];
-    const qty = Math.max(0, Math.min(Number(block?.qty) || 0, questions.length));
-    if (!qty) return [];
-    const indices = Array.from({ length: questions.length }, (_, index) => index);
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]];
-    }
-    const picked = new Set(indices.slice(0, qty));
-    const ordered = [];
-    for (let i = 0; i < questions.length && ordered.length < qty; i++) {
-      if (picked.has(i)) ordered.push(i);
-    }
-    return ordered;
-  }
-
   function resetAnswers() {
     state.answers = new Map();
-  }
-
-  function hydrateSelectedQuestions(blocks, selected, { resetPosition = true, resetAnswersFlag = false } = {}) {
-    state.blocks = Array.isArray(blocks) ? blocks : [];
-    const normalized = Array.isArray(selected) ? selected : [];
-    state.selectedByBlock = state.blocks.map((_, index) => {
-      const blockQuestions = normalized[index];
-      return Array.isArray(blockQuestions) ? blockQuestions.filter(Boolean) : [];
-    });
-    if (resetAnswersFlag) {
-      resetAnswers();
-    }
-    rebuildFlat({ resetPosition });
   }
 
   function rebuildFlat({ resetPosition = false } = {}) {
@@ -698,12 +666,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function readDurationMinutes() {
-    try {
-      const value = Number(localStorage.getItem(EXAM_DURATION_KEY) || 0);
-      return value > 0 ? value : 60;
-    } catch {
-      return 60;
-    }
+    const value = Number(state.examDurationMinutes || 0);
+    return value > 0 ? value : 60;
   }
 
   function formatHMS(ms) {
@@ -748,39 +712,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1000);
   }
 
-  function hydrateFromLocalStorage() {
-    const blocks = loadBlocks();
-    const normalizedBlocks = Array.isArray(blocks) ? blocks : [];
-    const selected = normalizedBlocks.map((block) => {
-      const questions = Array.isArray(block?.questions) ? block.questions : [];
-      const picks = pickPerBlock(block);
-      return picks.map((index) => questions[index]).filter(Boolean);
-    });
-    hydrateSelectedQuestions(normalizedBlocks, selected, { resetPosition: true, resetAnswersFlag: true });
-    renderExamView();
-    return state.flatQuestions.length > 0;
-  }
-
   async function initExamData() {
     if (!state.sessionId || !state.sessionToken) {
-      if (!state.flatQuestions.length) {
-        hydrateFromLocalStorage();
-      }
       return;
     }
 
     try {
       const config = await apiGetConfig(EXAM_ID);
       state.blocks = Array.isArray(config?.blocks) ? config.blocks : [];
+      const cfgDuration = Number(config?.duration_minutes || config?.durationMinutes || 0);
+      if (cfgDuration > 0) state.examDurationMinutes = cfgDuration;
     } catch (err) {
       console.error('Failed to load exam config:', err);
       state.blocks = [];
     }
 
     if (!Array.isArray(state.blocks) || !state.blocks.length) {
-      if (!state.flatQuestions.length) {
-        hydrateFromLocalStorage();
-      }
+      state.selectedByBlock = [];
+      renderExamView();
       return;
     }
 
@@ -791,16 +740,11 @@ document.addEventListener('DOMContentLoaded', () => {
       state.selectedByBlock[0] = Array.isArray(first?.questions) ? first.questions : [];
     } catch (err) {
       console.error('Failed to load first block questions', err);
-      if (!state.flatQuestions.length) {
-        hydrateFromLocalStorage();
-      }
       return;
     }
 
     if (!Array.isArray(state.selectedByBlock[0]) || !state.selectedByBlock[0].length) {
-      if (!state.flatQuestions.length) {
-        hydrateFromLocalStorage();
-      }
+      renderExamView();
       return;
     }
 
@@ -831,22 +775,37 @@ document.addEventListener('DOMContentLoaded', () => {
     updateIndicators();
   }
 
-  function handleGateSubmit(event) {
+  async function handleGateSubmit(event) {
     event.preventDefault();
     const value = (DOM.gateInput?.value || '').trim();
-    const expected = readAdminPassword();
-    if (value !== expected) {
+    if (!value) {
       setHidden(DOM.gateError, false);
       DOM.gateInput?.focus();
       return;
     }
-    setHidden(DOM.gateError, true);
-    state.gatePassed = true;
-    state.mustStayFullscreen = true;
-    hide(DOM.gateOverlay);
-    enterFullscreen();
-    if (DOM.examStart) DOM.examStart.disabled = false;
-    void beginSession();
+
+    const submitBtn = DOM.gateForm?.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const valid = await verifyGatePassword(value);
+      if (!valid) {
+        setHidden(DOM.gateError, false);
+        DOM.gateInput?.focus();
+        DOM.gateInput?.select?.();
+        return;
+      }
+      setHidden(DOM.gateError, true);
+      state.gatePassed = true;
+      state.mustStayFullscreen = true;
+      hide(DOM.gateOverlay);
+      enterFullscreen();
+      if (DOM.examStart) DOM.examStart.disabled = false;
+      if (DOM.examFinish) DOM.examFinish.disabled = false;
+      void beginSession();
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
   }
 
   function activateExamUi() {
@@ -856,7 +815,7 @@ document.addEventListener('DOMContentLoaded', () => {
     hide(DOM.prestartOverlay);
   }
 
-  function handleExamStart() {
+  async function handleExamStart() {
     if (state.examStarted) return;
 
     if (!state.sessionId || !state.sessionToken) {
@@ -866,17 +825,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       activateExamUi();
-      hydrateFromLocalStorage();
       startCountdown();
-      void initExamData();
-      void beginSession();
+      await beginSession();
+      startCountdown();
+      await initExamData();
       return;
     }
 
     activateExamUi();
-    hydrateFromLocalStorage();
     startCountdown();
-    void initExamData();
+    await initExamData();
+    startCountdown();
   }
 
   function handleAnswerClick(event) {
@@ -976,6 +935,19 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCountdownView();
   }
 
+  async function preloadExamMetadata() {
+    try {
+      const config = await apiGetConfig(EXAM_ID);
+      const duration = Number(config?.duration_minutes || config?.durationMinutes || 0);
+      if (duration > 0) {
+        state.examDurationMinutes = duration;
+        initializeCountdownDisplay();
+      }
+    } catch (err) {
+      dlog('preload config failed', err);
+    }
+  }
+
   function initialize() {
     hideAll();
     focusTrap.enable();
@@ -983,6 +955,8 @@ document.addEventListener('DOMContentLoaded', () => {
     updateRightDateTime();
     setInterval(updateRightDateTime, 30 * 1000);
     initializeCountdownDisplay();
+    void preloadExamMetadata();
+    show(DOM.gateOverlay);
     if (DOM.gateInput) DOM.gateInput.focus();
   }
 

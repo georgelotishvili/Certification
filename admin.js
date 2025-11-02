@@ -189,17 +189,72 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function createExamSettingsModule() {
-    const state = { gatePwdTimer: null };
+    const state = {
+      gatePwdTimer: null,
+      settings: null,
+    };
 
-    function loadInitialValues() {
+    function populateFields(settings) {
+      if (!settings) return;
+      if (DOM.durationInput) {
+        const value = Number(settings.durationMinutes || 0);
+        DOM.durationInput.value = value ? String(value) : '';
+      }
+      if (DOM.gatePwdInput) DOM.gatePwdInput.value = settings.gatePassword || '';
+    }
+
+    async function fetchSettings() {
+      const response = await fetch(`${API_BASE}/admin/exam/settings`, {
+        headers: { ...getAdminHeaders(), ...getActorHeaders() },
+      });
+      if (!response.ok) throw new Error('failed');
+      return await response.json();
+    }
+
+    async function persistSettings(patch = {}, { notifyDuration = false, notifyPassword = false } = {}) {
+      const current = state.settings || {};
+      const payload = {
+        examId: patch.examId ?? current.examId ?? 1,
+        title: patch.title ?? current.title ?? '',
+        durationMinutes: patch.durationMinutes ?? current.durationMinutes ?? 60,
+        gatePassword: patch.gatePassword ?? current.gatePassword ?? '',
+      };
       try {
-        const savedDuration = localStorage.getItem(KEYS.EXAM_DURATION);
-        if (savedDuration && DOM.durationInput) DOM.durationInput.value = savedDuration;
-      } catch {}
+        const response = await fetch(`${API_BASE}/admin/exam/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error('failed');
+        const data = await response.json();
+        state.settings = data;
+        populateFields(state.settings);
+        if (notifyDuration && DOM.durationFlash) {
+          const value = Number(state.settings.durationMinutes || 0);
+          DOM.durationFlash.textContent = `ხანგრძლივობა შეიცვალა: ${value} წუთი`;
+          DOM.durationFlash.style.display = 'block';
+          setTimeout(() => {
+            if (DOM.durationFlash) DOM.durationFlash.style.display = 'none';
+          }, 3000);
+        }
+        if (notifyPassword) {
+          showToast('ადმინისტრატორის პაროლი შენახულია');
+        }
+      } catch (err) {
+        console.error('Failed to save settings', err);
+        showToast('პარამეტრების შენახვა ვერ მოხერხდა', 'error');
+      }
+    }
+
+    async function loadSettings() {
       try {
-        const savedPwd = localStorage.getItem(KEYS.ADMIN_PWD) || '';
-        if (DOM.gatePwdInput) DOM.gatePwdInput.value = savedPwd;
-      } catch {}
+        state.settings = await fetchSettings();
+      } catch (err) {
+        console.error('Failed to load exam settings', err);
+        showToast('პარამეტრების ჩატვირთვა ვერ მოხერხდა', 'error');
+        state.settings = { examId: 1, title: '', durationMinutes: 60, gatePassword: '' };
+      }
+      populateFields(state.settings);
     }
 
     function saveDuration() {
@@ -208,14 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('გთხოვთ შეიყვანოთ სწორი დრო (მინიმუმ 1 წუთი)');
         return;
       }
-      try { localStorage.setItem(KEYS.EXAM_DURATION, String(value)); } catch {}
-      if (DOM.durationFlash) {
-        DOM.durationFlash.textContent = `ხანგრძლივობა შეიცვალა: ${value} წუთი`;
-        DOM.durationFlash.style.display = 'block';
-        setTimeout(() => {
-          if (DOM.durationFlash) DOM.durationFlash.style.display = 'none';
-        }, 3000);
-      }
+      void persistSettings({ durationMinutes: value }, { notifyDuration: true });
     }
 
     function saveGatePassword() {
@@ -224,8 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('გთხოვთ შეიყვანოთ პაროლი', 'error');
         return;
       }
-      try { localStorage.setItem(KEYS.ADMIN_PWD, value); } catch {}
-      showToast('ადმინისტრატორის პაროლი შენახულია');
+      void persistSettings({ gatePassword: value }, { notifyPassword: true });
     }
 
     function handleGatePwdKeydown(event) {
@@ -236,14 +283,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleGatePwdInput() {
       clearTimeout(state.gatePwdTimer);
-      const value = String(DOM.gatePwdInput?.value || '').trim();
       state.gatePwdTimer = setTimeout(() => {
-        try { localStorage.setItem(KEYS.ADMIN_PWD, value); } catch {}
-      }, 250);
+        const value = String(DOM.gatePwdInput?.value || '').trim();
+        if (!value) return;
+        void persistSettings({ gatePassword: value });
+      }, 600);
     }
 
     function init() {
-      loadInitialValues();
+      void loadSettings();
       on(DOM.saveDurationBtn, 'click', saveDuration);
       on(DOM.gatePwdSaveBtn, 'click', saveGatePassword);
       on(DOM.gatePwdInput, 'keydown', handleGatePwdKeydown);
@@ -254,29 +302,26 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function createBlocksModule() {
-    const state = { data: [] };
+    const state = { data: [], examId: 1, saveTimer: null, pendingNotify: false };
 
     const generateId = () => `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const createDefaultAnswers = () => Array.from({ length: 4 }, () => ({ id: generateId(), text: '' }));
     const generateQuestionCode = () => String(Math.floor(10000 + Math.random() * 90000));
 
-    function load() {
-      try {
-        const raw = localStorage.getItem(KEYS.BLOCKS);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
+    async function fetchBlocksFromServer() {
+      const response = await fetch(`${API_BASE}/admin/exam/blocks`, {
+        headers: { ...getAdminHeaders(), ...getActorHeaders() },
+      });
+      if (!response.ok) throw new Error('failed');
+      return await response.json();
     }
 
     function migrate(data) {
-      return (Array.isArray(data) ? data : []).map((block) => {
+      return (Array.isArray(data) ? data : []).map((block, blockIndex) => {
         if (!block || typeof block !== 'object') return block;
-        const blockId = typeof block.id === 'string' ? block.id : generateId();
+        const blockId = block?.id != null ? String(block.id) : generateId();
         const questions = Array.isArray(block.questions) ? block.questions : [];
-        const migratedQuestions = questions.map((question) => {
+        const migratedQuestions = questions.map((question, questionIndex) => {
           if (!question || typeof question !== 'object') {
             return {
               id: generateId(),
@@ -288,29 +333,94 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           let answers = Array.isArray(question.answers) ? question.answers : [];
           answers = answers.map((answer) => {
-            if (answer && typeof answer === 'object') return answer;
-            return { id: generateId(), text: String(answer || '') };
+            if (!answer || typeof answer !== 'object') {
+              return { id: generateId(), text: String(answer || '') };
+            }
+            return {
+              ...answer,
+              id: answer.id != null ? String(answer.id) : generateId(),
+              text: String(answer.text || ''),
+            };
           });
           while (answers.length < 4) answers.push({ id: generateId(), text: '' });
           if (answers.length > 4) answers = answers.slice(0, 4);
+          const fallback = answers[0] ? answers[0].id : null;
+          let correctId = question.correctAnswerId != null ? String(question.correctAnswerId) : fallback;
+          if (!answers.some((answer) => answer.id === correctId)) {
+            correctId = fallback;
+          }
           return {
             ...question,
-            id: typeof question.id === 'string' ? question.id : generateId(),
+            id: question.id != null ? String(question.id) : generateId(),
+            text: String(question.text || ''),
             answers,
-            correctAnswerId: typeof question.correctAnswerId === 'string' ? question.correctAnswerId : null,
-            code: typeof question.code === 'string' ? question.code : generateQuestionCode(),
+            correctAnswerId: correctId,
+            code: question.code ? String(question.code) : generateQuestionCode(),
+            enabled: typeof question.enabled === 'boolean' ? question.enabled : true,
           };
         });
         return {
           ...block,
           id: blockId,
+          number: Number(block.number) || blockIndex + 1,
+          qty: Number(block.qty) || 0,
+          name: String(block.name || block.title || `ბლოკი ${blockIndex + 1}`),
+          enabled: typeof block.enabled === 'boolean' ? block.enabled : true,
           questions: migratedQuestions,
         };
       });
     }
 
-    function save() {
-      try { localStorage.setItem(KEYS.BLOCKS, JSON.stringify(state.data)); } catch {}
+    function save(options = {}) {
+      state.pendingNotify = state.pendingNotify || !!options.notify;
+      clearTimeout(state.saveTimer);
+      state.saveTimer = setTimeout(() => {
+        state.saveTimer = null;
+        void persistBlocks();
+      }, 400);
+    }
+
+    async function persistBlocks() {
+      const payload = {
+        examId: state.examId || 1,
+        blocks: state.data,
+      };
+      try {
+        const response = await fetch(`${API_BASE}/admin/exam/blocks`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error('failed');
+        const data = await response.json();
+        state.examId = data.examId || state.examId || 1;
+        state.data = migrate(data.blocks);
+        render();
+        updateStats();
+        if (state.pendingNotify) showToast('ბლოკები შენახულია');
+      } catch (err) {
+        console.error('Failed to save blocks', err);
+        showToast('ბლოკების შენახვა ვერ მოხერხდა', 'error');
+      } finally {
+        state.pendingNotify = false;
+      }
+    }
+
+    async function loadInitialBlocks() {
+      if (DOM.blocksGrid) {
+        DOM.blocksGrid.innerHTML = '<div class="blocks-loading">იტვირთება...</div>';
+      }
+      try {
+        const payload = await fetchBlocksFromServer();
+        state.examId = payload.examId || state.examId || 1;
+        state.data = migrate(payload.blocks);
+      } catch (err) {
+        console.error('Failed to load blocks', err);
+        showToast('ბლოკების ჩატვირთვა ვერ მოხერხდა', 'error');
+        state.data = migrate([]);
+      }
+      render();
+      updateStats();
     }
 
     function nextNumber() {
@@ -753,9 +863,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function init() {
-      state.data = migrate(load());
-      render();
-      updateStats();
+      void loadInitialBlocks();
       on(DOM.blocksGrid, 'click', handleGridClick);
       on(DOM.blocksGrid, 'keydown', handleGridKeydown);
       on(DOM.blocksGrid, 'focusout', handleGridFocusout);

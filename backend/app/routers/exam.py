@@ -15,6 +15,8 @@ from ..schemas import (
     AnswerRequest,
     AnswerResponse,
     ExamConfigResponse,
+    ExamGateVerifyRequest,
+    ExamGateVerifyResponse,
     OptionOut,
     QuestionOut,
     QuestionsResponse,
@@ -24,6 +26,17 @@ from ..schemas import (
 
 
 router = APIRouter()
+
+
+@router.post("/gate/verify", response_model=ExamGateVerifyResponse)
+def verify_gate_password(payload: ExamGateVerifyRequest, db: Session = Depends(get_db)):
+    exam = db.get(Exam, payload.exam_id)
+    if not exam:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam not found")
+    valid = bool(exam.gate_password) and exam.gate_password == payload.password
+    return ExamGateVerifyResponse(valid=valid)
+
+
 @router.post("/session/start", response_model=StartSessionResponse)
 def start_session(payload: StartSessionRequest, db: Session = Depends(get_db)):
     exam = db.get(Exam, payload.exam_id)

@@ -26,6 +26,7 @@ class Exam(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(255), default="Default Exam")
     duration_minutes: Mapped[int] = mapped_column(Integer, default=45)
+    gate_password: Mapped[str] = mapped_column(String(128), default="cpig")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     blocks: Mapped[List[Block]] = relationship("Block", back_populates="exam", cascade="all, delete-orphan")

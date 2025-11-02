@@ -21,6 +21,7 @@ def run() -> None:
     safe_add("ALTER TABLE sessions ADD COLUMN candidate_code VARCHAR(64)")
     safe_add("ALTER TABLE sessions ADD COLUMN block_stats TEXT")
     safe_add("ALTER TABLE sessions ADD COLUMN score_percent FLOAT DEFAULT 0.0")
+    safe_add("ALTER TABLE exams ADD COLUMN gate_password VARCHAR(128)")
 
 
 if __name__ == "__main__":

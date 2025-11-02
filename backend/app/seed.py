@@ -15,7 +15,7 @@ def seed() -> None:
 
     db: Session = SessionLocal()
     try:
-        exam = Exam(title="Default Exam", duration_minutes=45)
+        exam = Exam(title="Default Exam", duration_minutes=45, gate_password="cpig")
         db.add(exam)
         db.flush()
 

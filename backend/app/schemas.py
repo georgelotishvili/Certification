@@ -7,6 +7,15 @@ from pydantic import BaseModel, ConfigDict
 from pydantic import EmailStr
 
 
+def to_camel(value: str) -> str:
+    parts = value.split("_")
+    return parts[0] + "".join(word.capitalize() for word in parts[1:])
+
+
+class CamelModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
 class BlockOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -20,6 +29,53 @@ class ExamConfigResponse(BaseModel):
     title: str
     duration_minutes: int
     blocks: List[BlockOut]
+
+
+class ExamSettingsResponse(CamelModel):
+    exam_id: int
+    title: str
+    duration_minutes: int
+    gate_password: str
+
+
+class ExamSettingsUpdateRequest(CamelModel):
+    exam_id: Optional[int] = None
+    title: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    gate_password: Optional[str] = None
+
+
+class AdminAnswerPayload(CamelModel):
+    id: str
+    text: str
+
+
+class AdminQuestionPayload(CamelModel):
+    id: str
+    text: str
+    code: str
+    answers: List[AdminAnswerPayload]
+    correct_answer_id: Optional[str] = None
+    enabled: bool = True
+
+
+class AdminBlockPayload(CamelModel):
+    id: str
+    number: int
+    name: str
+    qty: int
+    enabled: bool = True
+    questions: List[AdminQuestionPayload]
+
+
+class AdminBlocksResponse(CamelModel):
+    exam_id: int
+    blocks: List[AdminBlockPayload]
+
+
+class AdminBlocksUpdateRequest(CamelModel):
+    exam_id: Optional[int] = None
+    blocks: List[AdminBlockPayload]
 
 
 class AuthCodeRequest(BaseModel):
@@ -88,6 +144,15 @@ class FinishResponse(BaseModel):
     correct: int
     score_percent: float
     block_stats: List[dict]
+
+
+class ExamGateVerifyRequest(BaseModel):
+    exam_id: int
+    password: str
+
+
+class ExamGateVerifyResponse(BaseModel):
+    valid: bool
 
 
 class AdminStatsResponse(BaseModel):
