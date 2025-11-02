@@ -72,6 +72,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const activeOverlays = new Set();
 
+  function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    return window.btoa(binary);
+  }
+
+  function loadExternalScript(src) {
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[data-dynamic-src="${src}"]`);
+      if (existing) {
+        if (existing.dataset.loaded === 'true') {
+          resolve();
+        } else {
+          existing.addEventListener('load', () => resolve(), { once: true });
+          existing.addEventListener('error', (error) => reject(error), { once: true });
+        }
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.defer = true;
+      script.dataset.dynamicSrc = src;
+      script.addEventListener('load', () => {
+        script.dataset.loaded = 'true';
+        resolve();
+      }, { once: true });
+      script.addEventListener('error', (error) => reject(error), { once: true });
+      document.head.appendChild(script);
+    });
+  }
+
   function openOverlay(element) {
     if (!element) return;
     activeOverlays.add(element);
@@ -1229,17 +1266,67 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    function downloadCurrentPdf() {
-      if (!state.detail) return;
-      downloadPdf(state.detail);
+    let jsPdfLoader = null;
+    let fontLoader = null;
+
+    async function ensurePdfFont(doc) {
+      const fontName = 'DejaVuSansUnicode';
+      const hasFont = doc.getFontList?.()?.[fontName];
+      if (hasFont) {
+        doc.setFont(fontName, 'normal');
+        return fontName;
+      }
+
+      if (!fontLoader) {
+        const fontUrl = new URL('../assets/fonts/dejavu-sans.ttf', window.location.href).toString();
+        fontLoader = fetch(fontUrl)
+          .then((response) => {
+            if (!response.ok) throw new Error('Font download failed');
+            return response.arrayBuffer();
+          })
+          .then((buffer) => arrayBufferToBase64(buffer))
+          .catch((error) => {
+            fontLoader = null;
+            throw error;
+          });
+      }
+
+      const base64 = await fontLoader;
+      doc.addFileToVFS('DejaVuSans.ttf', base64);
+      doc.addFont('DejaVuSans.ttf', fontName, 'normal');
+      doc.addFont('DejaVuSans.ttf', fontName, 'bold');
+      doc.addFont('DejaVuSans.ttf', fontName, 'italic');
+      doc.addFont('DejaVuSans.ttf', fontName, 'bolditalic');
+      doc.setFont(fontName, 'normal');
+      return fontName;
     }
 
-    function downloadPdf(detail) {
+    async function ensureJsPdf() {
+      if (window.jspdf?.jsPDF) return window.jspdf.jsPDF;
+      if (!jsPdfLoader) {
+        const CDN_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        jsPdfLoader = loadExternalScript(CDN_SRC).catch((error) => {
+          jsPdfLoader = null;
+          throw error;
+        });
+      }
+      await jsPdfLoader;
+      if (!window.jspdf?.jsPDF) {
+        throw new Error('jsPDF unavailable after loading');
+      }
+      return window.jspdf.jsPDF;
+    }
+
+    async function downloadCurrentPdf() {
+      if (!state.detail) return;
+      await downloadPdf(state.detail);
+    }
+
+    async function downloadPdf(detail) {
       try {
-        const jspdf = window.jspdf || {};
-        const { jsPDF } = jspdf;
-        if (!jsPDF) throw new Error('jsPDF missing');
+        const jsPDF = await ensureJsPdf();
         const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
+        const fontName = await ensurePdfFont(doc);
         const margin = 48;
         const pageWidth = doc.internal.pageSize.getWidth();
         const usableWidth = pageWidth - margin * 2;
@@ -1251,13 +1338,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const status = statusMeta(session.status);
         const durationBase = session.finished_at || session.ends_at;
 
-        doc.setFont('Helvetica', 'bold');
+        doc.setFont(fontName, 'bold');
         doc.setFontSize(18);
         doc.text('გამოცდის შედეგი', margin, cursorY);
         cursorY += lineHeight * 1.5;
 
         doc.setFontSize(12);
-        doc.setFont('Helvetica', 'normal');
+        doc.setFont(fontName, 'normal');
 
         const infoLines = [
           `კანდიდატი: ${(session.candidate_first_name || '')} ${(session.candidate_last_name || '')}`.trim(),
@@ -1292,10 +1379,10 @@ document.addEventListener('DOMContentLoaded', () => {
             doc.addPage();
             cursorY = margin;
           }
-          doc.setFont('Helvetica', 'bold');
+          doc.setFont(fontName, 'bold');
           doc.text('ბლოკების შედეგები', margin, cursorY);
           cursorY += lineHeight;
-          doc.setFont('Helvetica', 'normal');
+          doc.setFont(fontName, 'normal');
           detail.block_stats.forEach((stat) => {
             const title = stat.block_title || `ბლოკი ${stat.block_id}`;
             splitAndWrite(`${title}: ${stat.correct}/${stat.total} (${Number(stat.percent || 0).toFixed(2)}%)`);
@@ -1308,10 +1395,10 @@ document.addEventListener('DOMContentLoaded', () => {
             doc.addPage();
             cursorY = margin;
           }
-          doc.setFont('Helvetica', 'bold');
+          doc.setFont(fontName, 'bold');
           doc.text('კითხვების დეტალური შედეგები', margin, cursorY);
           cursorY += lineHeight;
-          doc.setFont('Helvetica', 'normal');
+          doc.setFont(fontName, 'normal');
           detail.answers.forEach((answer, index) => {
             const statusData = answerStatusMeta(answer);
             const header = `${index + 1}. ${answer.question_code || ''} — ${answer.block_title || ''}`.trim();
@@ -1361,7 +1448,9 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.resultDetailOverlay?.addEventListener('click', (event) => {
         if (event.target === DOM.resultDetailOverlay) closeDetail();
       });
-      on(DOM.resultDetailDownload, 'click', downloadCurrentPdf);
+      on(DOM.resultDetailDownload, 'click', () => {
+        void downloadCurrentPdf();
+      });
       on(DOM.resultDetailDelete, 'click', () => {
         const sessionId = state.detail?.session?.session_id;
         if (sessionId) void handleDelete(sessionId);
