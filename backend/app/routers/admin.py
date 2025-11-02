@@ -20,6 +20,7 @@ from ..schemas import (
     ResultListResponse,
     ResultDetailResponse,
     AnswerDetail,
+    BlockStatDetail,
     UsersListResponse,
     UserOut,
     ToggleAdminRequest,
@@ -232,33 +233,96 @@ def admin_stats(
     )
 
 
+def _session_status(session: ExamSession) -> str:
+    if session.finished_at:
+        return "completed"
+    if session.active:
+        return "in_progress"
+    return "aborted"
+
+
+def _build_result_item(session: ExamSession, personal_id: str | None = None) -> ResultListItem:
+    return ResultListItem(
+        session_id=session.id,
+        started_at=session.started_at,
+        finished_at=session.finished_at,
+        candidate_first_name=session.candidate_first_name,
+        candidate_last_name=session.candidate_last_name,
+        candidate_code=session.candidate_code,
+        score_percent=session.score_percent or 0.0,
+        exam_id=session.exam_id,
+        ends_at=session.ends_at,
+        status=_session_status(session),
+        personal_id=personal_id,
+    )
+
+
 # Results list
 @router.get("/results", response_model=ResultListResponse)
 def results_list(
     page: int = 1,
     size: int = 50,
+    candidate_code: str | None = None,
+    personal_id: str | None = None,
     x_admin_key: str | None = Header(None, alias="x-admin-key"),
     db: Session = Depends(get_db),
 ):
     settings = get_settings()
     if settings.admin_api_key and x_admin_key != settings.admin_api_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
-    offset = max(0, (page - 1) * size)
-    q = select(ExamSession).order_by(ExamSession.started_at.desc()).offset(offset).limit(size)
-    sessions = db.scalars(q).all()
-    total = db.scalar(select(func.count()).select_from(ExamSession)) or 0
-    items = [
-        ResultListItem(
-            session_id=s.id,
-            started_at=s.started_at,
-            finished_at=s.finished_at,
-            candidate_first_name=s.candidate_first_name,
-            candidate_last_name=s.candidate_last_name,
-            candidate_code=s.candidate_code,
-            score_percent=s.score_percent or 0.0,
-        )
+
+    candidate_code_norm = (candidate_code or "").strip().lower() or None
+    personal_id_norm = (personal_id or "").strip().lower() or None
+
+    stmt = select(ExamSession).order_by(ExamSession.started_at.desc())
+
+    code_filters: list[str] = []
+    if personal_id_norm:
+        codes_stmt = select(User.code).where(func.lower(User.personal_id) == personal_id_norm)
+        codes_for_personal = [code for code in db.scalars(codes_stmt).all() if code]
+        if not codes_for_personal:
+            return ResultListResponse(items=[], total=0)
+        code_filters.extend([code.strip().lower() for code in codes_for_personal if code])
+
+    if candidate_code_norm:
+        code_filters.append(candidate_code_norm)
+
+    if code_filters:
+        stmt = stmt.where(func.lower(ExamSession.candidate_code).in_(code_filters))
+
+    filtered = bool(candidate_code_norm or personal_id_norm)
+
+    if filtered:
+        sessions = db.scalars(stmt).all()
+        total = len(sessions)
+    else:
+        offset = max(0, (page - 1) * size)
+        paged_stmt = stmt.offset(offset).limit(size)
+        sessions = db.scalars(paged_stmt).all()
+        total = db.scalar(select(func.count()).select_from(ExamSession)) or 0
+
+    candidate_codes = {
+        (s.candidate_code or "").strip().lower()
         for s in sessions
-    ]
+        if s.candidate_code
+    }
+    user_by_code: dict[str, User] = {}
+    if candidate_codes:
+        users = db.scalars(
+            select(User).where(func.lower(User.code).in_(list(candidate_codes)))
+        ).all()
+        user_by_code = {
+            (u.code or "").strip().lower(): u
+            for u in users
+            if u.code
+        }
+
+    items: list[ResultListItem] = []
+    for s in sessions:
+        code_key = (s.candidate_code or "").strip().lower()
+        personal_id_value = user_by_code.get(code_key).personal_id if code_key in user_by_code else None
+        items.append(_build_result_item(s, personal_id_value))
+
     return ResultListResponse(items=items, total=total)
 
 
@@ -275,42 +339,230 @@ def result_detail(
     s = db.get(ExamSession, session_id)
     if not s:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-    stmt = (
-        select(Answer, Option, Q)
-        .join(Option, Option.id == Answer.option_id)
-        .join(Q, Q.id == Answer.question_id)
-        .where(Answer.session_id == s.id)
-        .order_by(Q.order_index)
-    )
-    rows = db.execute(stmt).all()
-    answers = [
-        AnswerDetail(
-            question_id=q.id,
-            question_code=q.code,
-            question_text=q.text,
-            option_id=o.id,
-            option_text=o.text,
-            is_correct=a.is_correct,
-            answered_at=a.answered_at,
+    personal_id_value: str | None = None
+    if s.candidate_code:
+        personal_id_value = db.scalar(
+            select(User.personal_id)
+            .where(func.lower(User.code) == func.lower(s.candidate_code))
+            .limit(1)
         )
-        for (a, o, q) in rows
-    ]
-    sess_item = ResultListItem(
-        session_id=s.id,
-        started_at=s.started_at,
-        finished_at=s.finished_at,
-        candidate_first_name=s.candidate_first_name,
-        candidate_last_name=s.candidate_last_name,
-        candidate_code=s.candidate_code,
-        score_percent=s.score_percent or 0.0,
-    )
+
+    exam_title: str | None = None
+    if s.exam_id:
+        exam = db.get(Exam, s.exam_id)
+        if exam:
+            exam_title = exam.title
+
+    answers = db.scalars(select(Answer).where(Answer.session_id == s.id)).all()
+    answer_by_question = {ans.question_id: ans for ans in answers}
+
     import json as _json
-    block_stats = []
-    try:
-        block_stats = _json.loads(s.block_stats or "[]")
-    except Exception:
-        block_stats = []
-    return ResultDetailResponse(session=sess_item, block_stats=block_stats, answers=answers)
+
+    selected_map: dict[str, list[int]] = {}
+    if s.selected_map:
+        try:
+            raw_map = _json.loads(s.selected_map)
+            if isinstance(raw_map, dict):
+                for key, value in raw_map.items():
+                    try:
+                        int_key = int(key)
+                    except (TypeError, ValueError):
+                        continue
+                    cleaned: list[int] = []
+                    for item in value or []:
+                        try:
+                            cleaned.append(int(item))
+                        except (TypeError, ValueError):
+                            continue
+                    selected_map[str(int_key)] = cleaned
+        except Exception:
+            selected_map = {}
+
+    ordered_question_ids: list[int] = []
+    for _, qids in selected_map.items():
+        for qid in qids:
+            if qid not in ordered_question_ids:
+                ordered_question_ids.append(qid)
+
+    answers_sorted = sorted(answers, key=lambda a: a.answered_at or s.started_at)
+    if not ordered_question_ids:
+        ordered_question_ids = [ans.question_id for ans in answers_sorted]
+
+    question_ids = set(ordered_question_ids) | {ans.question_id for ans in answers}
+    questions = (
+        db.scalars(select(Q).where(Q.id.in_(question_ids))).all()
+        if question_ids
+        else []
+    )
+    question_map = {q.id: q for q in questions}
+
+    block_ids = {q.block_id for q in questions}
+    for key in selected_map.keys():
+        try:
+            block_ids.add(int(key))
+        except (TypeError, ValueError):
+            continue
+
+    blocks = (
+        db.scalars(select(Block).where(Block.id.in_(block_ids))).all()
+        if block_ids
+        else []
+    )
+    block_map = {b.id: b for b in blocks}
+
+    options = (
+        db.scalars(select(Option).where(Option.question_id.in_(question_ids))).all()
+        if question_ids
+        else []
+    )
+    options_by_id = {opt.id: opt for opt in options}
+    correct_option_map: dict[int, Option] = {}
+    for opt in options:
+        if opt.is_correct:
+            correct_option_map[opt.question_id] = opt
+
+    question_sequence: list[int] = []
+    seen_questions: set[int] = set()
+    for qid in ordered_question_ids:
+        if qid not in seen_questions:
+            question_sequence.append(qid)
+            seen_questions.add(qid)
+    for ans in answers_sorted:
+        if ans.question_id not in seen_questions:
+            question_sequence.append(ans.question_id)
+            seen_questions.add(ans.question_id)
+
+    block_sequence: list[int] = []
+    seen_blocks: set[int] = set()
+    for key in selected_map.keys():
+        try:
+            block_id = int(key)
+        except (TypeError, ValueError):
+            continue
+        if block_id not in seen_blocks:
+            block_sequence.append(block_id)
+            seen_blocks.add(block_id)
+    if not block_sequence and block_map:
+        block_sequence = [
+            b.id for b in sorted(block_map.values(), key=lambda blk: ((blk.order_index or 0), blk.id))
+        ]
+        seen_blocks = set(block_sequence)
+    for block_id in block_ids:
+        if block_id not in seen_blocks:
+            block_sequence.append(block_id)
+            seen_blocks.add(block_id)
+
+    raw_block_stats = []
+    if s.block_stats:
+        try:
+            raw_block_stats = _json.loads(s.block_stats)
+        except Exception:
+            raw_block_stats = []
+    raw_block_map = {}
+    for entry in raw_block_stats:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            block_id = int(entry.get("block_id"))
+        except (TypeError, ValueError):
+            continue
+        raw_block_map[block_id] = entry
+
+    block_stats_payload: list[BlockStatDetail] = []
+    for block_id in block_sequence:
+        entry = raw_block_map.get(block_id)
+        if entry:
+            total = int(entry.get("total", 0) or 0)
+            correct = int(entry.get("correct", 0) or 0)
+            percent = float(entry.get("percent", 0.0) or 0.0)
+        else:
+            question_ids_in_block = selected_map.get(str(block_id), [])
+            if not question_ids_in_block and block_id in block_map:
+                question_ids_in_block = [
+                    q.id for q in question_map.values() if q.block_id == block_id
+                ]
+            total = len(question_ids_in_block)
+            answers_for_block = [
+                answer_by_question[qid]
+                for qid in question_ids_in_block
+                if qid in answer_by_question
+            ]
+            correct = sum(1 for ans in answers_for_block if ans.is_correct)
+            percent = round((correct / total) * 100.0, 2) if total else 0.0
+
+        block_stats_payload.append(
+            BlockStatDetail(
+                block_id=block_id,
+                block_title=block_map.get(block_id).title if block_id in block_map else None,
+                total=total,
+                correct=correct,
+                percent=percent,
+            )
+        )
+
+    answers_payload: list[AnswerDetail] = []
+    for qid in question_sequence:
+        question = question_map.get(qid)
+        if not question:
+            continue
+        answer = answer_by_question.get(qid)
+        selected_option = options_by_id.get(answer.option_id) if answer else None
+        correct_option = correct_option_map.get(qid)
+        block = block_map.get(question.block_id)
+        answers_payload.append(
+            AnswerDetail(
+                question_id=question.id,
+                question_code=question.code,
+                question_text=question.text,
+                block_id=question.block_id,
+                block_title=block.title if block else None,
+                selected_option_id=selected_option.id if selected_option else None,
+                selected_option_text=selected_option.text if selected_option else None,
+                is_correct=answer.is_correct if answer else None,
+                answered_at=answer.answered_at if answer else None,
+                correct_option_id=correct_option.id if correct_option else None,
+                correct_option_text=correct_option.text if correct_option else None,
+            )
+        )
+
+    total_questions = len(question_sequence)
+    answered_questions = sum(1 for qid in question_sequence if qid in answer_by_question)
+    correct_answers = sum(1 for ans in answer_by_question.values() if ans.is_correct)
+
+    session_payload = _build_result_item(s, personal_id_value)
+
+    return ResultDetailResponse(
+        session=session_payload,
+        exam_title=exam_title,
+        total_questions=total_questions,
+        answered_questions=answered_questions,
+        correct_answers=correct_answers,
+        block_stats=block_stats_payload,
+        answers=answers_payload,
+    )
+
+
+@router.delete("/results/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_result(
+    session_id: int = Path(...),
+    x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    settings = get_settings()
+    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
+
+    founder_email = (settings.founder_admin_email or "").lower()
+    if founder_email != (x_actor_email or "").lower():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete results")
+
+    session_obj = db.get(ExamSession, session_id)
+    if not session_obj:
+        return
+    db.delete(session_obj)
+    db.commit()
+    return
 
 
 

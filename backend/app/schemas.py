@@ -171,6 +171,10 @@ class ResultListItem(BaseModel):
     candidate_last_name: str | None
     candidate_code: str | None
     score_percent: float
+    exam_id: int | None = None
+    ends_at: datetime | None = None
+    status: str = "unknown"
+    personal_id: str | None = None
 
 
 class ResultListResponse(BaseModel):
@@ -182,15 +186,31 @@ class AnswerDetail(BaseModel):
     question_id: int
     question_code: str
     question_text: str
-    option_id: int
-    option_text: str
-    is_correct: bool
-    answered_at: datetime
+    block_id: int | None = None
+    block_title: str | None = None
+    selected_option_id: int | None = None
+    selected_option_text: str | None = None
+    is_correct: bool | None = None
+    answered_at: datetime | None = None
+    correct_option_id: int | None = None
+    correct_option_text: str | None = None
+
+
+class BlockStatDetail(BaseModel):
+    block_id: int
+    block_title: str | None = None
+    total: int
+    correct: int
+    percent: float
 
 
 class ResultDetailResponse(BaseModel):
     session: ResultListItem
-    block_stats: List[dict]
+    exam_title: str | None = None
+    total_questions: int
+    answered_questions: int
+    correct_answers: int
+    block_stats: List[BlockStatDetail]
     answers: List[AnswerDetail]
 
 
