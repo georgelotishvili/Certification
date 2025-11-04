@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
     EXAM_DURATION: 'examDuration',
     ADMIN_PWD: 'adminGatePassword',
     BLOCKS: 'examBlocks_v1',
-    ADMIN_API_KEY: 'adminApiKey',
   };
   const FOUNDER_EMAIL = 'naormala@gmail.com';
 
@@ -29,8 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
     durationFlash: document.getElementById('durationFlash'),
     gatePwdInput: document.getElementById('adminGatePassword'),
     gatePwdSaveBtn: document.getElementById('saveAdminGatePassword'),
-    adminApiKeyInput: document.getElementById('adminApiKey'),
-    adminApiKeySaveBtn: document.getElementById('saveAdminApiKey'),
     blocksGrid: document.querySelector('.exam-blocks-grid'),
     blocksCount: document.getElementById('adminBlocksCount'),
     questionsCount: document.getElementById('adminQuestionsCount'),
@@ -250,12 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     let status = response.status;
     if (response.status === 401) {
-      showToast('ადმინის კოდი არასწორია ან არ არის მითითებული', 'error');
-      if (DOM.adminApiKeyInput) {
-        DOM.adminApiKeyInput.classList.add('input-error');
-        try { DOM.adminApiKeyInput.focus(); } catch {}
-        setTimeout(() => DOM.adminApiKeyInput?.classList.remove('input-error'), 1600);
-      }
+      showToast('ადმინის სესია არ არის ავტორიზებული', 'error');
       console.error('Admin API auth error', status);
       return;
     }
@@ -279,8 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function getAdminHeaders() {
-    const key = localStorage.getItem(KEYS.ADMIN_API_KEY);
-    return key ? { 'x-admin-key': key } : {};
+    return {};
   }
 
   function getActorHeaders() {
@@ -339,13 +330,6 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.durationInput.value = value ? String(value) : '';
       }
       if (DOM.gatePwdInput) DOM.gatePwdInput.value = settings.gatePassword || '';
-      populateAdminKeyField();
-    }
-
-    function populateAdminKeyField() {
-      if (!DOM.adminApiKeyInput) return;
-      const stored = localStorage.getItem(KEYS.ADMIN_API_KEY) || '';
-      DOM.adminApiKeyInput.value = stored;
     }
 
     async function fetchSettings() {
@@ -420,26 +404,6 @@ document.addEventListener('DOMContentLoaded', () => {
       void persistSettings({ gatePassword: value }, { notifyPassword: true });
     }
 
-    function saveAdminApiKey() {
-      const value = String(DOM.adminApiKeyInput?.value || '').trim();
-      if (!value) {
-        showToast('გთხოვთ მიუთითოთ ადმინის კოდი', 'error');
-        if (DOM.adminApiKeyInput) DOM.adminApiKeyInput.classList.add('input-error');
-        setTimeout(() => DOM.adminApiKeyInput?.classList.remove('input-error'), 1600);
-        return;
-      }
-      try {
-        localStorage.setItem(KEYS.ADMIN_API_KEY, value);
-      } catch (err) {
-        console.error('Failed to store admin api key', err);
-        showToast('კოდის შენახვა ვერ მოხერხდა', 'error');
-        return;
-      }
-      showToast('ადმინის კოდი შენახულია');
-      void loadSettings();
-      try { blocksModule?.reload?.(); } catch {}
-    }
-
     function handleGatePwdKeydown(event) {
       if (event.key !== 'Enter') return;
       event.preventDefault();
@@ -461,15 +425,6 @@ document.addEventListener('DOMContentLoaded', () => {
       on(DOM.gatePwdSaveBtn, 'click', saveGatePassword);
       on(DOM.gatePwdInput, 'keydown', handleGatePwdKeydown);
       on(DOM.gatePwdInput, 'input', handleGatePwdInput);
-      populateAdminKeyField();
-      on(DOM.adminApiKeySaveBtn, 'click', saveAdminApiKey);
-      on(DOM.adminApiKeyInput, 'keydown', (event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          saveAdminApiKey();
-        }
-      });
-      on(DOM.adminApiKeyInput, 'input', () => DOM.adminApiKeyInput?.classList.remove('input-error'));
     }
 
     return { init };

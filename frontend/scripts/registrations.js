@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
   const API_BASE = 'http://127.0.0.1:8000';
-  const ADMIN_API_KEY_LS = 'adminApiKey';
   const SAVED_EMAIL_KEY = 'savedEmail';
   const FOUNDER_EMAIL = 'naormala@gmail.com';
 
@@ -36,12 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return (localStorage.getItem(SAVED_EMAIL_KEY) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
     },
     adminHeaders() {
-      const key = localStorage.getItem(ADMIN_API_KEY_LS);
       const actor = (localStorage.getItem(SAVED_EMAIL_KEY) || '').trim();
-      return {
-        ...(key ? { 'x-admin-key': key } : {}),
-        ...(actor ? { 'x-actor-email': actor } : {}),
-      };
+      return actor ? { 'x-actor-email': actor } : {};
     },
   };
 

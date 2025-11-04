@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Path
 from sqlalchemy import func, select, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
@@ -32,13 +32,9 @@ router = APIRouter()
 
 def _require_admin(
     db: Session,
-    x_admin_key: str | None,
     x_actor_email: str | None = None,
 ) -> None:
     settings = get_settings()
-    expected_key = (settings.admin_api_key or "").strip()
-    if expected_key and x_admin_key == expected_key:
-        return
 
     actor_email = (x_actor_email or "").strip().lower()
     founder_email = (settings.founder_admin_email or "").lower()
@@ -122,11 +118,10 @@ def _blocks_payload(exam: Exam) -> AdminBlocksResponse:
 @router.get("/exam/settings", response_model=ExamSettingsResponse)
 def get_exam_settings(
     exam_id: int | None = None,
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_admin_key, x_actor_email)
+    _require_admin(db, x_actor_email)
     exam = _get_or_create_exam(db, exam_id)
     return _exam_settings_payload(exam)
 
@@ -134,11 +129,10 @@ def get_exam_settings(
 @router.put("/exam/settings", response_model=ExamSettingsResponse)
 def update_exam_settings(
     payload: ExamSettingsUpdateRequest,
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_admin_key, x_actor_email)
+    _require_admin(db, x_actor_email)
     exam = _get_or_create_exam(db, payload.exam_id)
 
     if payload.title is not None:
@@ -162,11 +156,10 @@ def update_exam_settings(
 @router.get("/exam/blocks", response_model=AdminBlocksResponse)
 def get_exam_blocks(
     exam_id: int | None = None,
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_admin_key, x_actor_email)
+    _require_admin(db, x_actor_email)
     exam = _get_or_create_exam(db, exam_id)
     return _blocks_payload(exam)
 
@@ -174,59 +167,131 @@ def get_exam_blocks(
 @router.put("/exam/blocks", response_model=AdminBlocksResponse)
 def update_exam_blocks(
     payload: AdminBlocksUpdateRequest,
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_admin_key, x_actor_email)
+    _require_admin(db, x_actor_email)
     exam = _get_or_create_exam(db, payload.exam_id)
 
-    existing_blocks = db.scalars(select(Block).where(Block.exam_id == exam.id)).all()
-    for block in existing_blocks:
-        db.delete(block)
-    db.flush()
+    existing_blocks = db.scalars(
+        select(Block)
+        .where(Block.exam_id == exam.id)
+        .options(
+            selectinload(Block.questions).selectinload(Question.options),
+            selectinload(Block.questions).selectinload(Question.answers),
+        )
+    ).all()
+
+    block_index_default = 0
+    processed_block_ids: set[int] = set()
+    block_by_id = {str(block.id): block for block in existing_blocks}
+
+    def _parse_int(value: str | int | None) -> int | None:
+        try:
+            if value is None:
+                return None
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     for block_index, block_payload in enumerate(payload.blocks or [], start=1):
         questions_payload = block_payload.questions or []
         qty = max(0, min(block_payload.qty, len(questions_payload)))
-        block = Block(
-            exam_id=exam.id,
-            title=(block_payload.name or "").strip() or f"ბლოკი {block_index}",
-            qty=qty,
-            order_index=block_payload.number or block_index,
-            enabled=block_payload.enabled,
-        )
-        db.add(block)
-        db.flush()
+
+        block_id_int = _parse_int(block_payload.id)
+        if block_id_int is not None and str(block_id_int) in block_by_id:
+            block = block_by_id[str(block_id_int)]
+        else:
+            block = Block(exam_id=exam.id)
+            db.add(block)
+            db.flush()
+            exam.blocks.append(block)
+            block_by_id[str(block.id)] = block
+
+        block_index_default += 1
+        block.title = (block_payload.name or "").strip() or f"ბლოკი {block_index_default}"
+        block.qty = qty
+        block.order_index = block_payload.number or block_index_default
+        block.enabled = block_payload.enabled
+        processed_block_ids.add(block.id)
+
+        existing_questions = {str(question.id): question for question in block.questions}
+        processed_question_ids: set[int] = set()
 
         for question_index, question_payload in enumerate(questions_payload, start=1):
-            question = Question(
-                block_id=block.id,
-                code=question_payload.code or f"Q-{block.id}-{question_index}",
-                text=(question_payload.text or "").strip(),
-                order_index=question_index,
-                enabled=question_payload.enabled,
-            )
-            db.add(question)
-            db.flush()
+            question_id_int = _parse_int(question_payload.id)
+            if question_id_int is not None and str(question_id_int) in existing_questions:
+                question = existing_questions[str(question_id_int)]
+            else:
+                question = Question(block_id=block.id)
+                db.add(question)
+                db.flush()
+                block.questions.append(question)
+                existing_questions[str(question.id)] = question
 
-            created_options: list[Option] = []
-            for answer_payload in question_payload.answers:
-                option = Option(
-                    question_id=question.id,
-                    text=(answer_payload.text or "").strip(),
-                    is_correct=str(answer_payload.id) == str(question_payload.correct_answer_id)
+            question.code = question_payload.code or f"Q-{block.id}-{question_index}"
+            question.text = (question_payload.text or "").strip()
+            question.order_index = question_index
+            question.enabled = question_payload.enabled
+            processed_question_ids.add(question.id)
+
+            existing_options = {str(option.id): option for option in question.options}
+            processed_option_ids: set[int] = set()
+
+            for answer_payload in question_payload.answers or []:
+                option_id_int = _parse_int(answer_payload.id)
+                if option_id_int is not None and str(option_id_int) in existing_options:
+                    option = existing_options[str(option_id_int)]
+                else:
+                    option = Option(question_id=question.id)
+                    db.add(option)
+                    db.flush()
+                    question.options.append(option)
+                    existing_options[str(option.id)] = option
+
+                option.text = (answer_payload.text or "").strip()
+                option.is_correct = (
+                    str(answer_payload.id) == str(question_payload.correct_answer_id)
                     if question_payload.correct_answer_id is not None
-                    else False,
+                    else False
                 )
-                db.add(option)
-                created_options.append(option)
-            db.flush()
+                processed_option_ids.add(option.id)
 
-            if not any(opt.is_correct for opt in question.options):
-                if created_options:
-                    created_options[0].is_correct = True
-                    db.add(created_options[0])
+            if question.options and not any(opt.is_correct for opt in question.options):
+                first_option = min(question.options, key=lambda opt: opt.id)
+                first_option.is_correct = True
+
+            if existing_options:
+                for option in list(existing_options.values()):
+                    if option.id not in processed_option_ids:
+                        has_answers = db.scalar(
+                            select(func.count()).select_from(Answer).where(Answer.option_id == option.id)
+                        )
+                        if has_answers:
+                            raise HTTPException(
+                                status_code=status.HTTP_409_CONFLICT,
+                                detail="ვერ წაშლით პასუხს, რადგან უკვე არსებობს შედეგები",
+                            )
+                        db.delete(option)
+
+        for question in list(existing_questions.values()):
+            if question.id not in processed_question_ids:
+                if question.answers:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="ვერ წაშლით შეკითხვას, რადგან უკვე არსებობს შედეგები",
+                    )
+                db.delete(question)
+
+    for block in existing_blocks:
+        if block.id not in processed_block_ids:
+            has_answers = any(question.answers for question in block.questions)
+            if has_answers:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="ვერ წაშლით ბლოკს, რადგან უკვე არსებობს შედეგები",
+                )
+            db.delete(block)
 
     db.commit()
     refreshed_exam = _get_or_create_exam(db, exam.id)
@@ -235,11 +300,10 @@ def update_exam_blocks(
 
 @router.get("/stats", response_model=AdminStatsResponse)
 def admin_stats(
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_admin_key, x_actor_email)
+    _require_admin(db, x_actor_email)
 
     total_blocks = db.scalar(select(func.count()).select_from(Block)) or 0
     total_questions = db.scalar(select(func.count()).select_from(Question)) or 0
@@ -285,10 +349,10 @@ def results_list(
     size: int = 50,
     candidate_code: str | None = None,
     personal_id: str | None = None,
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_admin_key, x_actor_email)
+    _require_admin(db, x_actor_email)
 
     candidate_code_norm = (candidate_code or "").strip().lower() or None
     personal_id_norm = (personal_id or "").strip().lower() or None
@@ -349,10 +413,10 @@ def results_list(
 @router.get("/results/{session_id}", response_model=ResultDetailResponse)
 def result_detail(
     session_id: int = Path(...),
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_admin_key, x_actor_email)
+    _require_admin(db, x_actor_email)
     s = db.get(ExamSession, session_id)
     if not s:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
@@ -562,12 +626,12 @@ def result_detail(
 @router.delete("/results/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_result(
     session_id: int = Path(...),
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_admin_key, x_actor_email)
+    _require_admin(db, x_actor_email)
 
+    settings = get_settings()
     founder_email = (settings.founder_admin_email or "").lower()
     if founder_email != (x_actor_email or "").lower():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete results")
@@ -590,10 +654,11 @@ def admin_users(
     search: str | None = None,
     only_admins: bool = False,
     sort: str = "date_desc",  # date_desc|date_asc|name_asc|name_desc
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_admin_key, x_actor_email)
+    _require_admin(db, x_actor_email)
+    settings = get_settings()
 
     stmt = select(User)
     if search:
@@ -646,13 +711,10 @@ def admin_users(
 def admin_toggle_user(
     user_id: int,
     payload: ToggleAdminRequest,
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
     settings = get_settings()
-    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
     if (settings.founder_admin_email or "").lower() != (x_actor_email or "").lower():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can modify admin status")
 
@@ -671,13 +733,10 @@ def admin_toggle_user(
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_user(
     user_id: int,
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
     settings = get_settings()
-    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
     if (settings.founder_admin_email or "").lower() != (x_actor_email or "").lower():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete")
 
@@ -695,13 +754,10 @@ def admin_delete_user(
 # Bulk delete all non-founder users
 @router.delete("/users", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_all_users(
-    x_admin_key: str | None = Header(None, alias="x-admin-key"),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
     settings = get_settings()
-    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
     # Only founder can delete all users
     founder_email = (settings.founder_admin_email or "").lower()
     if founder_email != (x_actor_email or "").lower():
