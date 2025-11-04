@@ -30,10 +30,28 @@ from ..schemas import (
 router = APIRouter()
 
 
-def _require_admin(x_admin_key: str | None) -> None:
+def _require_admin(
+    db: Session,
+    x_admin_key: str | None,
+    x_actor_email: str | None = None,
+) -> None:
     settings = get_settings()
-    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
+    expected_key = (settings.admin_api_key or "").strip()
+    if expected_key and x_admin_key == expected_key:
+        return
+
+    actor_email = (x_actor_email or "").strip().lower()
+    founder_email = (settings.founder_admin_email or "").lower()
+
+    if actor_email and actor_email == founder_email:
+        return
+
+    if actor_email:
+        user = db.scalar(select(User).where(func.lower(User.email) == actor_email))
+        if user and user.is_admin:
+            return
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin credentials")
 
 
 def _get_or_create_exam(db: Session, exam_id: int | None = None) -> Exam:
@@ -105,9 +123,10 @@ def _blocks_payload(exam: Exam) -> AdminBlocksResponse:
 def get_exam_settings(
     exam_id: int | None = None,
     x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(x_admin_key)
+    _require_admin(db, x_admin_key, x_actor_email)
     exam = _get_or_create_exam(db, exam_id)
     return _exam_settings_payload(exam)
 
@@ -116,9 +135,10 @@ def get_exam_settings(
 def update_exam_settings(
     payload: ExamSettingsUpdateRequest,
     x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(x_admin_key)
+    _require_admin(db, x_admin_key, x_actor_email)
     exam = _get_or_create_exam(db, payload.exam_id)
 
     if payload.title is not None:
@@ -143,9 +163,10 @@ def update_exam_settings(
 def get_exam_blocks(
     exam_id: int | None = None,
     x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(x_admin_key)
+    _require_admin(db, x_admin_key, x_actor_email)
     exam = _get_or_create_exam(db, exam_id)
     return _blocks_payload(exam)
 
@@ -154,9 +175,10 @@ def get_exam_blocks(
 def update_exam_blocks(
     payload: AdminBlocksUpdateRequest,
     x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(x_admin_key)
+    _require_admin(db, x_admin_key, x_actor_email)
     exam = _get_or_create_exam(db, payload.exam_id)
 
     existing_blocks = db.scalars(select(Block).where(Block.exam_id == exam.id)).all()
@@ -214,11 +236,10 @@ def update_exam_blocks(
 @router.get("/stats", response_model=AdminStatsResponse)
 def admin_stats(
     x_admin_key: str | None = Header(None, alias="x-admin-key"),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    settings = get_settings()
-    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
+    _require_admin(db, x_admin_key, x_actor_email)
 
     total_blocks = db.scalar(select(func.count()).select_from(Block)) or 0
     total_questions = db.scalar(select(func.count()).select_from(Question)) or 0
@@ -267,9 +288,7 @@ def results_list(
     x_admin_key: str | None = Header(None, alias="x-admin-key"),
     db: Session = Depends(get_db),
 ):
-    settings = get_settings()
-    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
+    _require_admin(db, x_admin_key, x_actor_email)
 
     candidate_code_norm = (candidate_code or "").strip().lower() or None
     personal_id_norm = (personal_id or "").strip().lower() or None
@@ -333,9 +352,7 @@ def result_detail(
     x_admin_key: str | None = Header(None, alias="x-admin-key"),
     db: Session = Depends(get_db),
 ):
-    settings = get_settings()
-    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
+    _require_admin(db, x_admin_key, x_actor_email)
     s = db.get(ExamSession, session_id)
     if not s:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
@@ -549,9 +566,7 @@ def delete_result(
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    settings = get_settings()
-    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
+    _require_admin(db, x_admin_key, x_actor_email)
 
     founder_email = (settings.founder_admin_email or "").lower()
     if founder_email != (x_actor_email or "").lower():
@@ -578,9 +593,7 @@ def admin_users(
     x_admin_key: str | None = Header(None, alias="x-admin-key"),
     db: Session = Depends(get_db),
 ):
-    settings = get_settings()
-    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
+    _require_admin(db, x_admin_key, x_actor_email)
 
     stmt = select(User)
     if search:

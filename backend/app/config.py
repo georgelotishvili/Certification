@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     app_name: str = "Exam Backend"
     secret_key: str = "dev-secret-key"
-    admin_api_key: Optional[str] = None
+    admin_api_key: Optional[str] = "cpig"
     cors_origins: List[str] = ["*"]
     founder_admin_email: Optional[str] = "naormala@gmail.com"
 

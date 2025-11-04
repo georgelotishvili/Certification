@@ -273,8 +273,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function createAuthModule() {
-    const DEFAULT_BANNER_TEXT = 'გთხოვთ გაიაროთ ავტორიზაცია';
-    const NEED_REGISTER_TEXT = 'გთხოვთ დაასრულოთ რეგისტრაცია';
+    const DEFAULT_BANNER_TEXT = 'გთხოვთ შეხვიდეთ სისტემაში';
+    const NEED_REGISTER_TEXT = 'გთხოვთ შეხვიდეთ სისტემაში';
 
     let activeView = 'options';
 
@@ -320,6 +320,17 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    function normalizeAuthState() {
+      const logged = isLoggedIn();
+      const user = getCurrentUser();
+      if (logged && !user) {
+        setLoggedIn(false);
+      }
+      if (!logged && user) {
+        try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
+      }
+    }
+
     function updateAdminLinkVisibility() {
       if (!DOM.adminLink) return;
       const user = getCurrentUser();
@@ -341,10 +352,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateAuthUI() {
       const logged = isLoggedIn();
-      const hasProfile = !!getCurrentUser();
-      const label = !logged ? 'ავტორიზაცია' : (hasProfile ? 'გასვლა' : 'რეგისტრაცია');
-      if (DOM.loginBtn) DOM.loginBtn.textContent = label;
-      if (DOM.drawerLoginBtn) DOM.drawerLoginBtn.textContent = label;
+      if (DOM.loginBtn) DOM.loginBtn.textContent = logged ? 'გასვლა' : 'შესვლა';
+      if (DOM.drawerLoginBtn) DOM.drawerLoginBtn.textContent = logged ? 'გასვლა' : 'შესვლა';
     }
 
     function setView(view) {
@@ -391,18 +400,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleAuthButtonClick(fromDrawer) {
+      normalizeAuthState();
       const logged = isLoggedIn();
-      const hasProfile = !!getCurrentUser();
       if (!logged) {
         if (fromDrawer) menuModule.close();
         openModal();
         showOptions();
-        return;
-      }
-      if (!hasProfile) {
-        if (fromDrawer) menuModule.close();
-        openModal();
-        showRegister();
         return;
       }
       performLogout();
@@ -413,6 +416,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!isLoggedIn()) return;
       if (!confirm('ნამდვილად გსურთ გასვლა?')) return;
       setLoggedIn(false);
+      try {
+        localStorage.removeItem(KEYS.CURRENT_USER);
+      } catch {}
       updateAuthUI();
       updateBanner();
       updateAdminLinkVisibility();
@@ -454,6 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (response.ok) {
             const data = await response.json();
             saveCurrentUser({ firstName: data.first_name, lastName: data.last_name, code: data.code, isAdmin: !!data.is_admin, email: data.email });
+            updateAuthUI();
             updateBanner();
             updateAdminLinkVisibility();
             closeModal();
@@ -464,12 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch {}
         updateBanner();
         updateAdminLinkVisibility();
-        showRegister();
-        try {
-          const registerEmailInput = DOM.registerForm?.querySelector('input[name="email"]');
-          if (registerEmailInput) registerEmailInput.value = email;
-        } catch {}
-        alert('თქვენ ჯერ არ გაქვთ დასრულებული რეგისტრაცია. გთხოვთ შეავსოთ ველები, რათა გამოჩნდეს თქვენი სახელი/გვარი და უნიკალური კოდი.');
+        alert('ელფოსტა/პაროლი ვერ გადამოწმდა. გთხოვთ გადაამოწმოთ მონაცემები ან გაიაროთ რეგისტრაცია.');
       })();
     }
 
@@ -530,28 +532,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem(KEYS.SAVED_EMAIL, email);
                 localStorage.setItem(KEYS.SAVED_PASSWORD, password);
               } catch {}
-              setLoggedIn(true);
-              try {
-                const profileResp = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(email)}`);
-                if (profileResp.ok) {
-                  const data = await profileResp.json();
-                  saveCurrentUser({ firstName: data.first_name, lastName: data.last_name, code: data.code, isAdmin: !!data.is_admin, email: data.email });
-                  updateAuthUI();
-                  updateBanner();
-                  updateAdminLinkVisibility();
-                  closeModal();
-                  showOptions();
-                  return;
-                }
-              } catch {}
-              showLogin();
-              const emailInput = DOM.loginForm?.querySelector('input[name="email"]');
-              const pwdInput = DOM.loginForm?.querySelector('input[name="password"]');
-              if (emailInput) emailInput.value = email;
-              if (pwdInput) pwdInput.value = password;
-              updateAuthUI();
-              updateBanner();
-              updateAdminLinkVisibility();
+              alert('ეს პირადი ნომერი უკვე რეგისტრირებულია. გაიარეთ ავტორიზაცია თქვენს ელფოსტასა და პაროლზე.');
+              closeModal();
+              setLoggedIn(false);
               return;
             }
             alert(String(detail || 'რეგისტრაცია ვერ შესრულდა'));
@@ -589,6 +572,7 @@ document.addEventListener('DOMContentLoaded', () => {
       utils.on(backToLoginBtn, 'click', showLogin);
       utils.on(DOM.registerForm, 'submit', handleRegisterSubmit);
 
+      normalizeAuthState();
       updateAuthUI();
       ensureProfileConsistency();
       updateBanner();

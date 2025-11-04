@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
     durationFlash: document.getElementById('durationFlash'),
     gatePwdInput: document.getElementById('adminGatePassword'),
     gatePwdSaveBtn: document.getElementById('saveAdminGatePassword'),
+    adminApiKeyInput: document.getElementById('adminApiKey'),
+    adminApiKeySaveBtn: document.getElementById('saveAdminApiKey'),
     blocksGrid: document.querySelector('.exam-blocks-grid'),
     blocksCount: document.getElementById('adminBlocksCount'),
     questionsCount: document.getElementById('adminQuestionsCount'),
@@ -241,6 +243,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function handleAdminErrorResponse(response, fallbackMessage) {
+    if (!response) {
+      showToast(fallbackMessage, 'error');
+      return;
+    }
+    let status = response.status;
+    if (response.status === 401) {
+      showToast('ადმინის კოდი არასწორია ან არ არის მითითებული', 'error');
+      if (DOM.adminApiKeyInput) {
+        DOM.adminApiKeyInput.classList.add('input-error');
+        try { DOM.adminApiKeyInput.focus(); } catch {}
+        setTimeout(() => DOM.adminApiKeyInput?.classList.remove('input-error'), 1600);
+      }
+      console.error('Admin API auth error', status);
+      return;
+    }
+    let detail = '';
+    try {
+      const clone = response.clone();
+      const data = await clone.json();
+      detail = data?.detail || data?.message || '';
+    } catch {
+      try {
+        const text = await response.clone().text();
+        detail = (text || '').trim();
+      } catch {}
+    }
+    console.error('Admin API error', status, detail || fallbackMessage);
+    showToast(detail || fallbackMessage, 'error');
+  }
+
   function isFounderActor() {
     return (localStorage.getItem(KEYS.SAVED_EMAIL) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
   }
@@ -306,6 +339,13 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.durationInput.value = value ? String(value) : '';
       }
       if (DOM.gatePwdInput) DOM.gatePwdInput.value = settings.gatePassword || '';
+      populateAdminKeyField();
+    }
+
+    function populateAdminKeyField() {
+      if (!DOM.adminApiKeyInput) return;
+      const stored = localStorage.getItem(KEYS.ADMIN_API_KEY) || '';
+      DOM.adminApiKeyInput.value = stored;
     }
 
     async function fetchSettings() {
@@ -380,6 +420,26 @@ document.addEventListener('DOMContentLoaded', () => {
       void persistSettings({ gatePassword: value }, { notifyPassword: true });
     }
 
+    function saveAdminApiKey() {
+      const value = String(DOM.adminApiKeyInput?.value || '').trim();
+      if (!value) {
+        showToast('გთხოვთ მიუთითოთ ადმინის კოდი', 'error');
+        if (DOM.adminApiKeyInput) DOM.adminApiKeyInput.classList.add('input-error');
+        setTimeout(() => DOM.adminApiKeyInput?.classList.remove('input-error'), 1600);
+        return;
+      }
+      try {
+        localStorage.setItem(KEYS.ADMIN_API_KEY, value);
+      } catch (err) {
+        console.error('Failed to store admin api key', err);
+        showToast('კოდის შენახვა ვერ მოხერხდა', 'error');
+        return;
+      }
+      showToast('ადმინის კოდი შენახულია');
+      void loadSettings();
+      try { blocksModule?.reload?.(); } catch {}
+    }
+
     function handleGatePwdKeydown(event) {
       if (event.key !== 'Enter') return;
       event.preventDefault();
@@ -401,6 +461,15 @@ document.addEventListener('DOMContentLoaded', () => {
       on(DOM.gatePwdSaveBtn, 'click', saveGatePassword);
       on(DOM.gatePwdInput, 'keydown', handleGatePwdKeydown);
       on(DOM.gatePwdInput, 'input', handleGatePwdInput);
+      populateAdminKeyField();
+      on(DOM.adminApiKeySaveBtn, 'click', saveAdminApiKey);
+      on(DOM.adminApiKeyInput, 'keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          saveAdminApiKey();
+        }
+      });
+      on(DOM.adminApiKeyInput, 'input', () => DOM.adminApiKeyInput?.classList.remove('input-error'));
     }
 
     return { init };
@@ -417,7 +486,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const response = await fetch(`${API_BASE}/admin/exam/blocks`, {
         headers: { ...getAdminHeaders(), ...getActorHeaders() },
       });
-      if (!response.ok) throw new Error('failed');
+      if (!response.ok) {
+        await handleAdminErrorResponse(response, 'ბლოკების ჩატვირთვა ვერ მოხერხდა');
+        throw new Error('handled');
+      }
       return await response.json();
     }
 
@@ -496,7 +568,10 @@ document.addEventListener('DOMContentLoaded', () => {
           headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
           body: JSON.stringify(payload),
         });
-        if (!response.ok) throw new Error('failed');
+        if (!response.ok) {
+          await handleAdminErrorResponse(response, 'ბლოკების შენახვა ვერ მოხერხდა');
+          return;
+        }
         const data = await response.json();
         state.examId = data.examId || state.examId || 1;
         state.data = migrate(data.blocks);
@@ -521,8 +596,10 @@ document.addEventListener('DOMContentLoaded', () => {
         state.data = migrate(payload.blocks);
       } catch (err) {
         console.error('Failed to load blocks', err);
+        if ((err?.message || '') !== 'handled') {
         showToast('ბლოკების ჩატვირთვა ვერ მოხერხდა', 'error');
         state.data = migrate([]);
+        }
       }
       render();
       updateStats();
@@ -977,6 +1054,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return {
       init,
       render: () => render(),
+      reload: () => void loadInitialBlocks(),
     };
   }
 
