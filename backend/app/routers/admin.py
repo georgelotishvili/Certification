@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status, Path
+from fastapi import APIRouter, Depends, Header, HTTPException, status, Path, Response
 from sqlalchemy import func, select, or_
 from sqlalchemy.orm import Session, selectinload
 
@@ -113,6 +113,15 @@ def _blocks_payload(exam: Exam) -> AdminBlocksResponse:
             )
         )
     return AdminBlocksResponse(exam_id=exam.id, blocks=blocks)
+
+
+@router.get("/auth/verify", status_code=status.HTTP_204_NO_CONTENT)
+def verify_admin_access(
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+) -> Response:
+    _require_admin(db, x_actor_email)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/exam/settings", response_model=ExamSettingsResponse)

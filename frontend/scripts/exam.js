@@ -82,7 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const timers = { countdown: null };
   let remainingMs = 0;
 
-  const API_BASE = 'http://127.0.0.1:8000';
+  const API_BASE = (window.APP_CONFIG && typeof window.APP_CONFIG.API_BASE === 'string')
+    ? window.APP_CONFIG.API_BASE
+    : 'http://127.0.0.1:8000';
   const EXAM_ID = 1;
   const DEFAULT_TITLE_TEXT = '';
   const KEYBOARD_LOCKS = ['Escape', 'F11', 'F4'];
