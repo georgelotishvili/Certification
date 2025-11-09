@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     answerAllOverlay: byId('answerAllOverlay'),
     answerAllDialog: byId('answerAllDialog'),
     answerAllClose: byId('answerAllClose'),
+    cameraSlot: qs('.camera-slot'),
   };
 
   if (DOM.examFinish) {
@@ -77,10 +78,190 @@ document.addEventListener('DOMContentLoaded', () => {
     currentBlockIndex: 0,
     pendingBlockTransition: null,
     trapFocusHandler: null,
+    cameraStream: null,
+    cameraVideo: null,
   };
 
   const timers = { countdown: null };
   let remainingMs = 0;
+  let cameraStartPromise = null;
+  function showCameraMessage(message, options = {}) {
+    if (!DOM.cameraSlot) return;
+    DOM.cameraSlot.innerHTML = '';
+
+    const placeholder = document.createElement('div');
+    placeholder.className = 'camera-placeholder';
+    placeholder.style.display = 'flex';
+    placeholder.style.flexDirection = 'column';
+    placeholder.style.alignItems = 'center';
+    placeholder.style.justifyContent = 'center';
+    placeholder.style.textAlign = 'center';
+    placeholder.style.padding = '12px';
+    placeholder.style.height = '100%';
+    placeholder.style.color = '#1d2744';
+    placeholder.style.fontWeight = '600';
+    placeholder.style.fontSize = '14px';
+    placeholder.style.lineHeight = '1.4';
+    placeholder.style.background = 'rgba(29, 39, 68, 0.08)';
+    placeholder.style.boxSizing = 'border-box';
+    placeholder.style.gap = '12px';
+
+    const text = document.createElement('div');
+    text.textContent = String(message || '');
+    placeholder.appendChild(text);
+
+    if (options.retry) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'კამერის ხელახლა ჩართვა';
+      btn.className = 'btn primary camera-retry-btn';
+      btn.style.padding = '8px 14px';
+      btn.style.fontSize = '13px';
+      btn.addEventListener('click', () => {
+        btn.disabled = true;
+        showCameraMessage('კამერის ჩართვა მიმდინარეობს...');
+        startCamera()?.finally?.(() => {
+          btn.disabled = false;
+        });
+      });
+      placeholder.appendChild(btn);
+    }
+
+    DOM.cameraSlot.appendChild(placeholder);
+  }
+
+  function getCameraErrorMessage(error) {
+    if (!error) {
+      return 'კამერა ვერ ჩაირთო. გთხოვთ შეამოწმოთ მოწყობილობა და ბრაუზერის უფლებები.';
+    }
+    switch (error.name) {
+      case 'NotAllowedError':
+      case 'PermissionDeniedError':
+        return 'კამერის ჩართვა მოითხოვს ნებართვას. გთხოვთ დაადასტუროთ კამერის გამოყენება ბრაუზერის შეტყობინებაში.';
+      case 'NotFoundError':
+      case 'DevicesNotFoundError':
+        return 'კამერა ვერ მოიძებნა. შეაერთეთ კამერა და სცადეთ თავიდან.';
+      case 'NotReadableError':
+      case 'TrackStartError':
+        return 'კამერა უკვე გამოიყენება სხვა აპლიკაციაში. გათიშეთ სხვა პროგრამა და სცადეთ ხელახლა.';
+      case 'OverconstrainedError':
+      case 'ConstraintNotSatisfiedError':
+        return 'კამერა არ შეესაბამება მოთხოვნილ პარამეტრებს. სცადეთ სტანდარტული კამერის გამოყენება.';
+      case 'SecurityError':
+        return 'ბრაუზერმა დაბლოკა კამერის ჩართვა უსაფრთხოების მიზეზით. გთხოვთ გახსნათ გვერდი უსაფრთხო (https) კავშირით.';
+      default:
+        return 'კამერა ვერ ჩაირთო. გთხოვთ შეამოწმოთ მოწყობილობა და ბრაუზერის უფლებები.';
+    }
+  }
+
+  function attachStreamToCameraSlot(stream) {
+    if (!DOM.cameraSlot) return;
+    DOM.cameraSlot.innerHTML = '';
+    if (!state.cameraVideo) {
+      state.cameraVideo = document.createElement('video');
+      state.cameraVideo.setAttribute('playsinline', '');
+      state.cameraVideo.autoplay = true;
+      state.cameraVideo.muted = true;
+      state.cameraVideo.controls = false;
+    }
+    if (!DOM.cameraSlot.contains(state.cameraVideo)) {
+      DOM.cameraSlot.appendChild(state.cameraVideo);
+    }
+    try {
+      state.cameraVideo.srcObject = stream;
+      const playPromise = state.cameraVideo.play?.();
+      if (playPromise?.catch) {
+        playPromise.catch(() => {});
+      }
+    } catch (err) {
+      dlog('camera play failed', err);
+    }
+  }
+
+  async function startCamera() {
+    if (!DOM.cameraSlot) return null;
+    if (state.cameraStream) return state.cameraStream;
+    if (cameraStartPromise) return cameraStartPromise;
+
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.getUserMedia) {
+      showCameraMessage('თქვენი ბრაუზერი არ უჭერს მხარს კამერის ჩართვას.');
+      return null;
+    }
+
+    const hostname = window.location?.hostname || '';
+    const isLocalHost = ['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(hostname);
+    if (window.isSecureContext === false && !isLocalHost) {
+      showCameraMessage('კამერის გამოსაყენებლად გახსენით გვერდი უსაფრთხო (https) კავშირით ან localhost-იდან.', { retry: true });
+      return null;
+    }
+
+    showCameraMessage('კამერის ჩართვა მიმდინარეობს...');
+    const constraints = {
+      video: {
+        facingMode: { ideal: 'user' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    };
+
+    // Attempt to prefer any available camera if facingMode ideal fails
+    cameraStartPromise = mediaDevices.getUserMedia(constraints)
+      .then((stream) => {
+        state.cameraStream = stream;
+        attachStreamToCameraSlot(stream);
+        return stream;
+      })
+      .catch((err) => {
+        console.error('Failed to start camera with ideal constraints', err);
+        if (err?.name === 'OverconstrainedError' || err?.name === 'ConstraintNotSatisfiedError') {
+          const relaxedConstraints = {
+            video: true,
+            audio: false,
+          };
+          return mediaDevices.getUserMedia(relaxedConstraints)
+            .then((stream) => {
+              state.cameraStream = stream;
+              attachStreamToCameraSlot(stream);
+              return stream;
+            })
+            .catch((retryErr) => {
+              console.error('Failed to start camera with relaxed constraints', retryErr);
+              showCameraMessage(getCameraErrorMessage(retryErr), { retry: true });
+              return null;
+            });
+        }
+        showCameraMessage(getCameraErrorMessage(err), { retry: true });
+        return null;
+      })
+      .finally(() => {
+        cameraStartPromise = null;
+      });
+
+    return cameraStartPromise;
+  }
+
+  function stopCamera() {
+    if (state.cameraStream) {
+      try {
+        state.cameraStream.getTracks().forEach((track) => {
+          try { track.stop(); } catch {}
+        });
+      } catch {}
+    }
+    state.cameraStream = null;
+    if (state.cameraVideo) {
+      try { state.cameraVideo.srcObject = null; } catch {}
+      if (state.cameraVideo.parentElement) {
+        state.cameraVideo.parentElement.removeChild(state.cameraVideo);
+      }
+    }
+    if (DOM.cameraSlot) {
+      DOM.cameraSlot.innerHTML = '';
+    }
+  }
+
 
   const API_BASE = (window.APP_CONFIG && typeof window.APP_CONFIG.API_BASE === 'string')
     ? window.APP_CONFIG.API_BASE
@@ -257,6 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.mustStayFullscreen = false;
     focusTrap.disable();
     unlockKeys();
+    stopCamera();
     try {
       if (document.fullscreenElement) {
         (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen)?.call(document);
@@ -828,6 +1010,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       setHidden(DOM.gateError, true);
+      const stream = await startCamera().catch(() => null);
+      if (!stream) {
+        state.gatePassed = false;
+        state.mustStayFullscreen = false;
+        return;
+      }
       state.gatePassed = true;
       state.mustStayFullscreen = true;
       hide(DOM.gateOverlay);
@@ -845,6 +1033,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (DOM.examStart) DOM.examStart.disabled = true;
     if (DOM.examFinish) DOM.examFinish.disabled = false;
     hide(DOM.prestartOverlay);
+    void startCamera();
   }
 
   async function handleExamStart() {
@@ -856,6 +1045,8 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.gateInput?.focus();
         return;
       }
+      const stream = await startCamera().catch(() => null);
+      if (!stream) return;
       activateExamUi();
       startCountdown();
       await beginSession();
@@ -864,6 +1055,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    const stream = await startCamera().catch(() => null);
+    if (!stream) return;
     activateExamUi();
     startCountdown();
     await initExamData();
@@ -992,6 +1185,8 @@ document.addEventListener('DOMContentLoaded', () => {
     void preloadExamMetadata();
     show(DOM.gateOverlay);
     if (DOM.gateInput) DOM.gateInput.focus();
+    showCameraMessage('კამერა ჩაირთვება ადმინისტრატორის პაროლის შეყვანის და გამოცდის დაწყების შემდეგ.');
+    window.addEventListener('beforeunload', stopCamera);
   }
 
   function preventZooming() {
