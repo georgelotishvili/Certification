@@ -1,3 +1,36 @@
+.result-media-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface-elevated);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 18px rgba(47, 91, 168, 0.12);
+}
+
+.result-media-trigger:hover:not(.disabled),
+.result-media-trigger:focus-visible {
+  background: rgba(47, 91, 168, 0.1);
+  transform: translateY(-1px);
+}
+
+.result-media-trigger.disabled,
+.result-media-trigger[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.result-media-trigger svg {
+  width: 18px;
+  height: 18px;
+}
 * {
   box-sizing: border-box;
   margin: 0;
@@ -1135,6 +1168,38 @@ body.modal-open {
 
 .danger-btn:hover {
   filter: brightness(0.95);
+}
+
+.result-media {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.result-media-player video {
+  width: 100%;
+  max-height: 420px;
+  border-radius: 8px;
+  background: #0f172a;
+}
+
+.result-media-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.result-media-info {
+  font-size: 14px;
+  color: #475569;
+}
+
+.result-media-download.disabled,
+.result-media-download[aria-disabled="true"],
+.secondary-btn.disabled {
+  pointer-events: none;
+  opacity: 0.5;
 }
 
 .hidden {

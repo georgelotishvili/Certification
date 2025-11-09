@@ -146,6 +146,11 @@ class FinishResponse(BaseModel):
     block_stats: List[dict]
 
 
+class MediaUploadResponse(BaseModel):
+    next_chunk_index: int
+    completed: bool
+
+
 class ExamGateVerifyRequest(BaseModel):
     exam_id: int
     password: str
@@ -212,6 +217,16 @@ class ResultDetailResponse(BaseModel):
     correct_answers: int
     block_stats: List[BlockStatDetail]
     answers: List[AnswerDetail]
+
+
+class ResultMediaResponse(BaseModel):
+    available: bool
+    download_url: str | None = None
+    filename: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    duration_seconds: int | None = None
+    updated_at: datetime | None = None
 
 
 # Users (registration and admin listing)

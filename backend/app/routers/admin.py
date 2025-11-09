@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status, Path, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, status, Path, Response, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select, or_
 from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
-from ..models import Block, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam
+from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -19,12 +20,14 @@ from ..schemas import (
     ResultListItem,
     ResultListResponse,
     ResultDetailResponse,
+    ResultMediaResponse,
     AnswerDetail,
     BlockStatDetail,
     UsersListResponse,
     UserOut,
     ToggleAdminRequest,
 )
+from ..services.media_storage import resolve_storage_path
 
 
 router = APIRouter()
@@ -629,6 +632,56 @@ def result_detail(
         correct_answers=correct_answers,
         block_stats=block_stats_payload,
         answers=answers_payload,
+    )
+
+
+@router.get("/results/{session_id}/media", response_model=ResultMediaResponse)
+def result_media_meta(
+    session_id: int = Path(...),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    actor: str | None = Query(None, alias="actor"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, actor or x_actor_email)
+    media = db.scalar(select(ExamMedia).where(ExamMedia.session_id == session_id))
+    if not media or not media.completed:
+        return ResultMediaResponse(available=False)
+
+    return ResultMediaResponse(
+        available=True,
+        download_url=f"/admin/results/{session_id}/media/file",
+        filename=media.filename,
+        mime_type=media.mime_type,
+        size_bytes=media.size_bytes,
+        duration_seconds=media.duration_seconds,
+        updated_at=media.updated_at,
+    )
+
+
+@router.get("/results/{session_id}/media/file")
+def result_media_file(
+    session_id: int = Path(...),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    actor: str | None = Query(None, alias="actor"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, actor or x_actor_email)
+    media = db.scalar(select(ExamMedia).where(ExamMedia.session_id == session_id))
+    if not media or not media.completed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
+
+    try:
+        path = resolve_storage_path(media.storage_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found") from exc
+
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file missing")
+
+    return FileResponse(
+        path,
+        media_type=media.mime_type or "video/webm",
+        filename=media.filename or path.name,
     )
 
 

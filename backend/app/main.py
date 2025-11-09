@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .database import engine
 from .models import Base
+from .services.media_storage import ensure_media_root
 try:
     # When running from project root (e.g. `python -m backend.app.main`)
     from backend.scripts.migrate_results_cols import run as run_migrations
@@ -22,6 +23,8 @@ def create_app() -> FastAPI:
         run_migrations()
     except Exception:
         pass
+
+    ensure_media_root()
 
     app = FastAPI(title=settings.app_name)
 

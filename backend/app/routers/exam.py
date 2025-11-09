@@ -5,16 +5,28 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Path,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Answer, Block, Exam, Option, Question, Session as ExamSession
+from ..models import Answer, Block, Exam, ExamMedia, Option, Question, Session as ExamSession
 from ..schemas import (
     AnswerRequest,
     AnswerResponse,
     ExamConfigResponse,
+    MediaUploadResponse,
     ExamGateVerifyRequest,
     ExamGateVerifyResponse,
     OptionOut,
@@ -22,6 +34,12 @@ from ..schemas import (
     QuestionsResponse,
     StartSessionRequest,
     StartSessionResponse,
+)
+from ..services.media_storage import (
+    relative_storage_path,
+    resolve_storage_path,
+    write_chunk,
+    ensure_file_path,
 )
 
 
@@ -170,6 +188,109 @@ def get_block_questions(
         block_title=block.title,
         qty=block.qty,
         questions=out_questions,
+    )
+
+
+def _parse_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "t", "on"}
+
+
+def _parse_int(value: object) -> Optional[int]:
+    try:
+        if value is None:
+            return None
+        return int(str(value).strip() or "0")
+    except (TypeError, ValueError):
+        return None
+
+
+@router.post("/{session_id}/media", response_model=MediaUploadResponse)
+def upload_exam_media(
+    session_id: int = Path(...),
+    chunk_index: int = Form(...),
+    chunk: UploadFile = File(...),
+    is_last: bool = Form(False),
+    duration_ms: Optional[str] = Form(None),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    session = _get_session_or_401(session_id, db, authorization)
+
+    if chunk is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing chunk data")
+
+    index = _parse_int(chunk_index)
+    if index is None or index < 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid chunk index")
+
+    duration_value = _parse_int(duration_ms)
+    duration_seconds = None
+    if duration_value is not None:
+        duration_seconds = max(0, duration_value // 1000)
+
+    media = db.scalar(select(ExamMedia).where(ExamMedia.session_id == session.id))
+    default_filename = f"session_{session.id}.webm"
+
+    if media is None:
+        if index != 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Expected first chunk index 0",
+            )
+        target_path = ensure_file_path(session.id, default_filename)
+        media = ExamMedia(
+            session_id=session.id,
+            storage_path=relative_storage_path(target_path),
+            filename=default_filename,
+            mime_type=chunk.content_type or "video/webm",
+            chunk_count=0,
+            completed=False,
+        )
+        db.add(media)
+        db.flush()
+    else:
+        try:
+            target_path = resolve_storage_path(media.storage_path)
+        except ValueError:
+            target_path = ensure_file_path(session.id, media.filename or default_filename)
+            media.storage_path = relative_storage_path(target_path)
+
+    expected_index = media.chunk_count
+    if index < expected_index:
+        return MediaUploadResponse(next_chunk_index=expected_index, completed=media.completed)
+    if index != expected_index:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Unexpected chunk index {index}, expected {expected_index}",
+        )
+
+    chunk.file.seek(0)
+    data = chunk.file.read()
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty chunk")
+
+    reset = index == 0
+    destination = write_chunk(session.id, media.filename or default_filename, data, reset=reset)
+    media.chunk_count = expected_index + 1
+    media.mime_type = chunk.content_type or media.mime_type or "video/webm"
+    media.size_bytes = destination.stat().st_size
+
+    if _parse_bool(is_last):
+        media.completed = True
+        media.completed_at = datetime.utcnow()
+        if duration_seconds is not None:
+            media.duration_seconds = duration_seconds
+
+    db.add(media)
+    db.commit()
+
+    return MediaUploadResponse(
+        next_chunk_index=media.chunk_count,
+        completed=media.completed,
     )
 
 

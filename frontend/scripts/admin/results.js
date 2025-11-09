@@ -11,6 +11,7 @@
       loadExternalScript,
       isFounderActor,
       getAdminHeaders,
+      getActorEmail,
       getActorHeaders,
       openOverlay,
       closeOverlay,
@@ -23,6 +24,8 @@
       detail: null,
       loading: false,
       detailLoading: false,
+      mediaMeta: null,
+      mediaLoading: false,
     };
 
     const STATUS_MAP = {
@@ -33,6 +36,33 @@
 
     function statusMeta(status) {
       return STATUS_MAP[status] || { label: 'უცნობია', tag: 'neutral' };
+    }
+
+    function formatBytesValue(size) {
+      const value = Number(size);
+      if (!value || Number.isNaN(value) || value <= 0) return 'ზომა უცნობია';
+      const units = ['ბაიტ', 'კბ', 'მბ', 'გბ', 'ტბ'];
+      let unitIndex = 0;
+      let current = value;
+      while (current >= 1024 && unitIndex < units.length - 1) {
+        current /= 1024;
+        unitIndex += 1;
+      }
+      const digits = unitIndex === 0 ? 0 : current >= 100 ? 0 : current >= 10 ? 1 : 2;
+      return `${current.toFixed(digits)} ${units[unitIndex]}`;
+    }
+
+    function formatSecondsValue(seconds) {
+      const total = Number(seconds);
+      if (!total || Number.isNaN(total) || total <= 0) return 'ხანგრძლივობა უცნობია';
+      const hrs = Math.floor(total / 3600);
+      const mins = Math.floor((total % 3600) / 60);
+      const secs = Math.floor(total % 60);
+      const parts = [];
+      if (hrs) parts.push(`${hrs}სთ`);
+      if (hrs || mins) parts.push(`${mins}წთ`);
+      parts.push(`${secs}წმ`);
+      return parts.join(' ');
     }
 
     function answerStatusMeta(answer) {
@@ -74,6 +104,26 @@
       });
       DOM.candidateResultsList.innerHTML = '';
       DOM.candidateResultsList.appendChild(fragment);
+    }
+
+    function resetMediaSection() {
+      state.mediaMeta = null;
+      if (DOM.resultMediaSection) DOM.resultMediaSection.hidden = true;
+      if (DOM.resultMediaPlayer) {
+        try {
+          DOM.resultMediaPlayer.pause();
+        } catch {}
+        DOM.resultMediaPlayer.removeAttribute('src');
+        DOM.resultMediaPlayer.load?.();
+      }
+      if (DOM.resultMediaDownload) {
+        DOM.resultMediaDownload.href = '#';
+        DOM.resultMediaDownload.setAttribute('aria-disabled', 'true');
+        DOM.resultMediaDownload.classList.add('disabled');
+        DOM.resultMediaDownload.removeAttribute('download');
+        DOM.resultMediaDownload.removeAttribute('target');
+      }
+      if (DOM.resultMediaInfo) DOM.resultMediaInfo.textContent = '';
     }
 
     function createAttemptCard(item) {
@@ -146,7 +196,16 @@
       return await response.json();
     }
 
+    async function fetchResultMediaMeta(sessionId) {
+      const response = await fetch(`${API_BASE}/admin/results/${sessionId}/media`, {
+        headers: { ...getAdminHeaders(), ...getActorHeaders() },
+      });
+      if (!response.ok) throw new Error('failed');
+      return await response.json();
+    }
+
     function renderDetailLoading() {
+      resetMediaSection();
       if (DOM.resultDetailExamTitle) DOM.resultDetailExamTitle.textContent = 'იტვირთება...';
       if (DOM.resultDetailStatus) DOM.resultDetailStatus.innerHTML = '';
       if (DOM.resultDetailCandidate) DOM.resultDetailCandidate.textContent = '';
@@ -160,10 +219,16 @@
       if (DOM.resultBlockStats) DOM.resultBlockStats.innerHTML = '';
       const tbody = DOM.resultQuestionTable?.querySelector('tbody');
       if (tbody) tbody.innerHTML = '';
+      if (DOM.resultDetailMedia) {
+        DOM.resultDetailMedia.disabled = true;
+        DOM.resultDetailMedia.classList.add('disabled');
+        DOM.resultDetailMedia.setAttribute('aria-disabled', 'true');
+      }
     }
 
     function renderDetail(detail) {
       if (!detail) return;
+      resetMediaSection();
       const session = detail.session || {};
       const status = statusMeta(session.status);
 
@@ -188,6 +253,13 @@
       }
       if (DOM.resultDetailSummary) {
         DOM.resultDetailSummary.textContent = `სულ: ${detail.total_questions} • პასუხი: ${detail.answered_questions} • სწორია: ${detail.correct_answers}`;
+      }
+
+      if (DOM.resultDetailMedia) {
+        const disableMedia = session.status !== 'completed';
+        DOM.resultDetailMedia.disabled = disableMedia;
+        DOM.resultDetailMedia.classList.toggle('disabled', disableMedia);
+        DOM.resultDetailMedia.setAttribute('aria-disabled', disableMedia ? 'true' : 'false');
       }
 
       if (DOM.resultBlockStats) {
@@ -260,9 +332,50 @@
       }
     }
 
+    function renderMedia(meta, sessionId) {
+      if (!meta?.available || !sessionId) {
+        showToast('ვიდეო ჩანაწერი არ არის ხელმისაწვდომი', 'warning');
+        return;
+      }
+      if (!DOM.resultMediaSection) return;
+
+      const params = new URLSearchParams();
+      const actorEmail = typeof getActorEmail === 'function' ? (getActorEmail() || '') : '';
+      if (actorEmail) params.set('actor', actorEmail);
+      params.set('t', String(Date.now()));
+      const fileUrl = `${API_BASE}/admin/results/${sessionId}/media/file?${params.toString()}`;
+      DOM.resultMediaSection.hidden = false;
+
+      if (DOM.resultMediaPlayer) {
+        DOM.resultMediaPlayer.src = `${fileUrl}?t=${Date.now()}`;
+        DOM.resultMediaPlayer.load?.();
+      }
+
+      if (DOM.resultMediaDownload) {
+        DOM.resultMediaDownload.href = fileUrl;
+        DOM.resultMediaDownload.setAttribute('aria-disabled', 'false');
+        DOM.resultMediaDownload.classList.remove('disabled');
+        DOM.resultMediaDownload.setAttribute('target', '_blank');
+        DOM.resultMediaDownload.setAttribute('download', meta.filename || `session-${sessionId}.webm`);
+      }
+
+      if (DOM.resultMediaInfo) {
+        const infoParts = [
+          `ზომა: ${formatBytesValue(meta.size_bytes)}`,
+          `ხანგრძლივობა: ${formatSecondsValue(meta.duration_seconds)}`,
+        ];
+        if (meta.updated_at) {
+          infoParts.push(`განახლებული: ${formatDateTime(meta.updated_at)}`);
+        }
+        DOM.resultMediaInfo.textContent = infoParts.join(' • ');
+      }
+    }
+
     function closeDetail() {
       closeOverlay(DOM.resultDetailOverlay);
       state.detail = null;
+      state.mediaLoading = false;
+      resetMediaSection();
     }
 
     async function handleView(sessionId) {
@@ -306,6 +419,44 @@
       } catch (err) {
         console.error('Failed to delete result', err);
         showToast('შედეგის წაშლა ვერ მოხერხდა', 'error');
+      }
+    }
+
+    async function handleMediaClick() {
+      const sessionId = state.detail?.session?.session_id;
+      const sessionStatus = state.detail?.session?.status;
+      const allowMedia = sessionStatus === 'completed';
+      if (!sessionId || !allowMedia) {
+        showToast('ვიდეო ჩანაწერი ხელმისაწვდომია მხოლოდ დასრულებული გამოცდისთვის', 'warning');
+        return;
+      }
+      if (state.mediaLoading) return;
+
+      state.mediaLoading = true;
+      if (DOM.resultDetailMedia) {
+        DOM.resultDetailMedia.disabled = true;
+        DOM.resultDetailMedia.classList.add('disabled');
+      }
+
+      try {
+        const meta = await fetchResultMediaMeta(sessionId);
+        state.mediaMeta = meta;
+        if (!meta?.available) {
+          resetMediaSection();
+          showToast('ვიდეო ჩანაწერი არ არის ხელმისაწვდომი', 'warning');
+          return;
+        }
+        renderMedia(meta, sessionId);
+      } catch (error) {
+        console.error('Failed to load media meta', error);
+        showToast('ვიდეო ჩანაწერი ვერ ჩაიტვირთა', 'error');
+      } finally {
+        state.mediaLoading = false;
+        if (DOM.resultDetailMedia) {
+          DOM.resultDetailMedia.disabled = !allowMedia;
+          DOM.resultDetailMedia.classList.toggle('disabled', !allowMedia);
+          DOM.resultDetailMedia.setAttribute('aria-disabled', !allowMedia ? 'true' : 'false');
+        }
       }
     }
 
@@ -493,6 +644,14 @@
       });
       on(DOM.resultDetailDownload, 'click', () => {
         void downloadCurrentPdf();
+      });
+      on(DOM.resultDetailMedia, 'click', () => {
+        void handleMediaClick();
+      });
+      on(DOM.resultMediaDownload, 'click', (event) => {
+        if (DOM.resultMediaDownload?.getAttribute('aria-disabled') === 'true') {
+          event.preventDefault();
+        }
       });
       on(DOM.resultDetailDelete, 'click', () => {
         const sessionId = state.detail?.session?.session_id;

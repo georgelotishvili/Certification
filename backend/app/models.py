@@ -115,6 +115,12 @@ class Session(Base):
     exam: Mapped[Exam] = relationship("Exam", back_populates="sessions")
     code: Mapped[ExamCode] = relationship("ExamCode", back_populates="sessions")
     answers: Mapped[List[Answer]] = relationship("Answer", back_populates="session", cascade="all, delete-orphan")
+    media: Mapped["ExamMedia"] = relationship(
+        "ExamMedia",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
 
 class Answer(Base):
@@ -149,3 +155,22 @@ class User(Base):
     code: Mapped[str] = mapped_column(String(10), index=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ExamMedia(Base):
+    __tablename__ = "exam_media"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), unique=True)
+    storage_path: Mapped[str] = mapped_column(String(1024))
+    filename: Mapped[str] = mapped_column(String(255))
+    mime_type: Mapped[str] = mapped_column(String(128), default="video/webm")
+    size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    session: Mapped["Session"] = relationship("Session", back_populates="media")

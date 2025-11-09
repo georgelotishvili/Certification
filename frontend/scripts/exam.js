@@ -83,6 +83,15 @@ document.addEventListener('DOMContentLoaded', () => {
     cameraDevices: [],
     cameraDeviceId: null,
     cameraDeviceLabel: '',
+    mediaRecorder: null,
+    mediaChunkIndex: 0,
+    mediaUploadQueue: [],
+    mediaUploading: false,
+    mediaUploadTimer: null,
+    mediaStopRequested: false,
+    mediaRecordingActive: false,
+    mediaUploadError: false,
+    recordingStartedAt: null,
   };
 
   const timers = { countdown: null };
@@ -243,7 +252,11 @@ document.addEventListener('DOMContentLoaded', () => {
         width: { ideal: 1280 },
         height: { ideal: 720 },
       },
-      audio: false,
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
     };
 
     if (deviceId) {
@@ -257,8 +270,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
       if (error?.name === 'OverconstrainedError' || error?.name === 'ConstraintNotSatisfiedError' || error?.name === 'NotReadableError') {
         const relaxedConstraints = deviceId
-          ? { video: { deviceId: { exact: deviceId } }, audio: false }
-          : { video: true, audio: false };
+          ? { video: { deviceId: { exact: deviceId } }, audio: true }
+          : { video: true, audio: true };
         return await mediaDevices.getUserMedia(relaxedConstraints);
       }
       throw error;
@@ -267,12 +280,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function getCameraErrorMessage(error) {
     if (!error) {
-      return 'კამერა ვერ ჩაირთო. გთხოვთ შეამოწმოთ მოწყობილობა და ბრაუზერის უფლებები.';
+      return 'კამერა/მიკროფონი ვერ ჩაირთო. გთხოვთ შეამოწმოთ მოწყობილობა და ბრაუზერის უფლებები.';
     }
     switch (error.name) {
       case 'NotAllowedError':
       case 'PermissionDeniedError':
-        return 'კამერის ჩართვა მოითხოვს ნებართვას. გთხოვთ დაადასტუროთ კამერის გამოყენება ბრაუზერის შეტყობინებაში.';
+        return 'კამერისა და მიკროფონის ჩართვა მოითხოვს ნებართვას. გთხოვთ დაადასტუროთ მათი გამოყენება ბრაუზერის შეტყობინებაში.';
       case 'NotFoundError':
       case 'DevicesNotFoundError':
         return 'კამერა ვერ მოიძებნა. შეაერთეთ კამერა და სცადეთ თავიდან.';
@@ -285,7 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'SecurityError':
         return 'ბრაუზერმა დაბლოკა კამერის ჩართვა უსაფრთხოების მიზეზით. გთხოვთ გახსნათ გვერდი უსაფრთხო (https) კავშირით.';
       default:
-        return 'კამერა ვერ ჩაირთო. გთხოვთ შეამოწმოთ მოწყობილობა და ბრაუზერის უფლებები.';
+        return 'კამერა/მიკროფონი ვერ ჩაირთო. გთხოვთ შეამოწმოთ მოწყობილობა და ბრაუზერის უფლებები.';
     }
   }
 
@@ -459,6 +472,214 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function isMediaRecorderSupported() {
+    return typeof window.MediaRecorder === 'function';
+  }
+
+  function getPreferredMimeType() {
+    if (!isMediaRecorderSupported()) return '';
+    const candidates = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=vp8',
+      'video/webm',
+    ];
+    for (const candidate of candidates) {
+      try {
+        if (!candidate) continue;
+        if (!window.MediaRecorder.isTypeSupported || window.MediaRecorder.isTypeSupported(candidate)) {
+          return candidate;
+        }
+      } catch {
+        continue;
+      }
+    }
+    return '';
+  }
+
+  function handleRecorderData(event) {
+    if (!event?.data || !event.data.size) return;
+    const isRecorderInactive = !state.mediaRecorder || state.mediaRecorder.state === 'inactive';
+    const item = {
+      index: state.mediaChunkIndex,
+      blob: event.data,
+      isLast: state.mediaStopRequested && isRecorderInactive,
+      retries: 0,
+    };
+    state.mediaChunkIndex += 1;
+    state.mediaUploadQueue.push(item);
+    void processMediaUploadQueue();
+  }
+
+  function handleRecorderStop() {
+    state.mediaRecordingActive = false;
+    state.mediaRecorder = null;
+    state.mediaStopRequested = false;
+    void processMediaUploadQueue();
+  }
+
+  function handleRecorderError(event) {
+    state.mediaUploadError = true;
+    dlog('media recorder error', event?.error || event);
+    try {
+      if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+        state.mediaRecorder.stop();
+      }
+    } catch {}
+  }
+
+  async function startRecording() {
+    if (!isMediaRecorderSupported()) {
+      dlog('MediaRecorder unsupported in this browser');
+      return;
+    }
+    if (!state.cameraStream) return;
+    if (state.mediaRecorder && state.mediaRecorder.state === 'recording') return;
+
+    const hasAudioTrack = typeof state.cameraStream.getAudioTracks === 'function'
+      ? state.cameraStream.getAudioTracks().some((track) => track.kind === 'audio')
+      : false;
+    if (!hasAudioTrack) {
+      dlog('No audio track available on stream');
+    }
+
+    const mimeType = getPreferredMimeType();
+    let recorder;
+    try {
+      recorder = mimeType
+        ? new MediaRecorder(state.cameraStream, { mimeType })
+        : new MediaRecorder(state.cameraStream);
+    } catch (error) {
+      dlog('MediaRecorder init failed', error);
+      return;
+    }
+
+    state.mediaRecorder = recorder;
+    state.mediaChunkIndex = 0;
+    state.mediaUploadQueue = [];
+    state.mediaUploading = false;
+    state.mediaUploadError = false;
+    state.mediaRecordingActive = true;
+    state.recordingStartedAt = Date.now();
+    state.mediaStopRequested = false;
+    if (state.mediaUploadTimer) {
+      clearTimeout(state.mediaUploadTimer);
+      state.mediaUploadTimer = null;
+    }
+
+    recorder.addEventListener('dataavailable', handleRecorderData);
+    recorder.addEventListener('stop', handleRecorderStop);
+    recorder.addEventListener('error', handleRecorderError);
+
+    try {
+      recorder.start(MEDIA_TIMESLICE_MS);
+      dlog('MediaRecorder started', { mimeType });
+    } catch (error) {
+      dlog('MediaRecorder start failed', error);
+      state.mediaRecordingActive = false;
+    }
+  }
+
+  async function processMediaUploadQueue() {
+    if (state.mediaUploading) return;
+    if (!state.mediaUploadQueue.length) return;
+    if (!state.sessionId || !state.sessionToken) {
+      if (!state.mediaUploadTimer) {
+        state.mediaUploadTimer = setTimeout(() => {
+          state.mediaUploadTimer = null;
+          void processMediaUploadQueue();
+        }, 1000);
+      }
+      return;
+    }
+
+    const item = state.mediaUploadQueue[0];
+    if (!item || !item.blob) {
+      state.mediaUploadQueue.shift();
+      void processMediaUploadQueue();
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('chunk_index', String(item.index));
+    formData.append('is_last', item.isLast ? 'true' : 'false');
+    const durationMs = state.recordingStartedAt ? Math.max(Date.now() - state.recordingStartedAt, 0) : 0;
+    formData.append('duration_ms', String(durationMs));
+    formData.append('chunk', item.blob, `chunk-${item.index}.webm`);
+
+    const headers = { ...authHeaders() };
+    state.mediaUploading = true;
+    try {
+      const response = await fetch(`${API_BASE}/exam/${state.sessionId}/media`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error(`upload failed: ${response.status}`);
+      }
+      const payload = await response.json().catch(() => ({}));
+      state.mediaUploadQueue.shift();
+      item.blob = null;
+      if (typeof payload?.next_chunk_index === 'number') {
+        state.mediaChunkIndex = payload.next_chunk_index;
+      }
+      if (state.mediaUploadTimer) {
+        clearTimeout(state.mediaUploadTimer);
+        state.mediaUploadTimer = null;
+      }
+    } catch (error) {
+      dlog('media chunk upload error', error);
+      item.retries = (item.retries || 0) + 1;
+      if (item.retries > MEDIA_UPLOAD_MAX_RETRIES) {
+        state.mediaUploadError = true;
+        state.mediaUploading = false;
+        return;
+      }
+      state.mediaUploading = false;
+      const delay = MEDIA_UPLOAD_RETRY_DELAY * item.retries;
+      if (state.mediaUploadTimer) {
+        clearTimeout(state.mediaUploadTimer);
+      }
+      state.mediaUploadTimer = setTimeout(() => {
+        state.mediaUploadTimer = null;
+        void processMediaUploadQueue();
+      }, delay);
+      return;
+    }
+    state.mediaUploading = false;
+    void processMediaUploadQueue();
+  }
+
+  async function stopRecorder() {
+    if (!state.mediaRecorder) return;
+    if (state.mediaRecorder.state === 'inactive') return;
+    state.mediaStopRequested = true;
+    await new Promise((resolve) => {
+      const handleStop = () => {
+        state.mediaRecorder?.removeEventListener('stop', handleStop);
+        resolve();
+      };
+      state.mediaRecorder.addEventListener('stop', handleStop, { once: true });
+      try {
+        state.mediaRecorder.stop();
+      } catch {
+        resolve();
+      }
+    });
+  }
+
+  async function finalizeRecording(opts = {}) {
+    const waitForUploads = !!opts.waitForUploads;
+    await stopRecorder();
+    if (waitForUploads) {
+      const started = Date.now();
+      while ((state.mediaUploadQueue.length || state.mediaUploading) && Date.now() - started < MEDIA_UPLOAD_WAIT_MS) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+  }
+
 
   const API_BASE = (window.APP_CONFIG && typeof window.APP_CONFIG.API_BASE === 'string')
     ? window.APP_CONFIG.API_BASE
@@ -481,6 +702,10 @@ document.addEventListener('DOMContentLoaded', () => {
     'loopback',
     'avatar',
   ];
+  const MEDIA_TIMESLICE_MS = 60 * 1000;
+  const MEDIA_UPLOAD_MAX_RETRIES = 5;
+  const MEDIA_UPLOAD_RETRY_DELAY = 3 * 1000;
+  const MEDIA_UPLOAD_WAIT_MS = 30 * 1000;
   const getPercentColorClass = (percent) => {
     if (percent < 70) return 'pct-red';
     if (percent <= 75) return 'pct-yellow';
@@ -646,10 +871,15 @@ document.addEventListener('DOMContentLoaded', () => {
     try { await navigator.keyboard?.unlock?.(); } catch {}
   }
 
-  function safeNavigateHome() {
+  async function safeNavigateHome() {
     state.mustStayFullscreen = false;
     focusTrap.disable();
     unlockKeys();
+    try {
+      await finalizeRecording({ waitForUploads: true });
+    } catch (err) {
+      dlog('finalize recording failed', err);
+    }
     stopCamera();
     try {
       if (document.fullscreenElement) {
@@ -1024,6 +1254,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showResults() {
     try {
+      void finalizeRecording({ waitForUploads: false });
       stopCountdown();
       void apiFinish();
       if (!DOM.resultsOverlay || !DOM.examResults || !DOM.resultsList) return;
@@ -1245,7 +1476,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (DOM.examStart) DOM.examStart.disabled = true;
     if (DOM.examFinish) DOM.examFinish.disabled = false;
     hide(DOM.prestartOverlay);
-    void startCamera();
+    if (isStreamActive(state.cameraStream)) {
+      void startRecording();
+      return;
+    }
+    startCamera()
+      .then((stream) => {
+        if (stream) {
+          return startRecording();
+        }
+        return null;
+      })
+      .catch(() => {});
   }
 
   async function handleExamStart() {
@@ -1328,7 +1570,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function wireUI() {
     DOM.gateForm?.addEventListener('submit', handleGateSubmit);
-    DOM.gateClose?.addEventListener('click', safeNavigateHome);
+    DOM.gateClose?.addEventListener('click', () => { void safeNavigateHome(); });
     DOM.gateInput?.addEventListener('input', () => setHidden(DOM.gateError, true));
 
     DOM.examStart?.addEventListener('click', handleExamStart);
@@ -1339,13 +1581,13 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.returnToExam?.addEventListener('click', hideAll);
     DOM.agreeExit?.addEventListener('click', () => {
       exitFullscreen();
-      safeNavigateHome();
+      void safeNavigateHome();
     });
 
     DOM.resultsClose?.addEventListener('click', () => {
       hideResults();
       exitFullscreen();
-      safeNavigateHome();
+      void safeNavigateHome();
     });
 
     DOM.answerAllClose?.addEventListener('click', hideAnswerAllDialog);
@@ -1410,7 +1652,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       })
       .catch(() => {});
-    window.addEventListener('beforeunload', stopCamera);
+    window.addEventListener('beforeunload', () => {
+      void finalizeRecording({ waitForUploads: false });
+      stopCamera();
+    });
     const handleDeviceChange = async () => {
       await refreshCameraDevices().catch(() => []);
       if (!state.examStarted && !state.gatePassed) {

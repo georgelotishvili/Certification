@@ -14,6 +14,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
     ]
     founder_admin_email: Optional[str] = "naormala@gmail.com"
+    media_root: str = "media"
 
     class Config:
         env_file = ".env"

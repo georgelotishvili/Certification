@@ -57,9 +57,14 @@ document.addEventListener('DOMContentLoaded', () => {
     resultDetailSummary: document.getElementById('resultDetailSummary'),
     resultQuestionTable: document.getElementById('resultQuestionTable'),
     resultDetailDownload: document.getElementById('resultDetailDownload'),
+    resultDetailMedia: document.getElementById('resultDetailMedia'),
     resultDetailClose: document.getElementById('resultDetailClose'),
     resultDetailDangerZone: document.getElementById('resultDetailDangerZone'),
     resultDetailDelete: document.getElementById('resultDetailDelete'),
+    resultMediaSection: document.getElementById('resultMediaSection'),
+    resultMediaPlayer: document.getElementById('resultMediaPlayer'),
+    resultMediaDownload: document.getElementById('resultMediaDownload'),
+    resultMediaInfo: document.getElementById('resultMediaInfo'),
   };
 
   const NAV_TARGETS = {
@@ -138,8 +143,13 @@ document.addEventListener('DOMContentLoaded', () => {
     return {};
   }
 
-  function getActorHeaders() {
+  function getActorEmail() {
     const actor = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
+    return actor;
+  }
+
+  function getActorHeaders() {
+    const actor = getActorEmail();
     return actor ? { 'x-actor-email': actor } : {};
   }
 
@@ -230,6 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
       handleAdminErrorResponse,
       getAdminHeaders,
       getActorHeaders,
+      getActorEmail,
       openOverlay,
       closeOverlay,
       isFounderActor,
