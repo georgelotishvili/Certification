@@ -80,6 +80,9 @@ document.addEventListener('DOMContentLoaded', () => {
     trapFocusHandler: null,
     cameraStream: null,
     cameraVideo: null,
+    cameraDevices: [],
+    cameraDeviceId: null,
+    cameraDeviceLabel: '',
   };
 
   const timers = { countdown: null };
@@ -110,6 +113,16 @@ document.addEventListener('DOMContentLoaded', () => {
     text.textContent = String(message || '');
     placeholder.appendChild(text);
 
+    const labelText = options.currentLabel ?? getCurrentCameraLabel();
+    if (labelText) {
+      const label = document.createElement('div');
+      label.textContent = `არჩევანი: ${labelText}`;
+      label.style.fontSize = '12px';
+      label.style.color = '#475569';
+      label.style.fontWeight = '500';
+      placeholder.appendChild(label);
+    }
+
     if (options.retry) {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -119,15 +132,137 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.style.fontSize = '13px';
       btn.addEventListener('click', () => {
         btn.disabled = true;
-        showCameraMessage('კამერის ჩართვა მიმდინარეობს...');
-        startCamera()?.finally?.(() => {
+        showCameraMessage('კამერის ჩართვა მიმდინარეობს...', {
+          allowSwitch: options.allowSwitch,
+          currentLabel: options.currentLabel,
+        });
+        startCamera({ force: true }).finally(() => {
           btn.disabled = false;
         });
       });
       placeholder.appendChild(btn);
     }
 
+    if (options.allowSwitch && (state.cameraDevices?.length || 0) > 1) {
+      const switchBtn = document.createElement('button');
+      switchBtn.type = 'button';
+      switchBtn.textContent = 'კამერის გადართვა';
+      switchBtn.className = 'btn camera-switch-btn';
+      switchBtn.style.padding = '8px 14px';
+      switchBtn.style.fontSize = '13px';
+      switchBtn.addEventListener('click', () => {
+        switchBtn.disabled = true;
+        switchToNextCamera().finally(() => {
+          switchBtn.disabled = false;
+        });
+      });
+      placeholder.appendChild(switchBtn);
+    }
+
     DOM.cameraSlot.appendChild(placeholder);
+  }
+
+  function isStreamActive(stream) {
+    if (!stream) return false;
+    try {
+      return stream.getTracks().some((track) => track.readyState === 'live');
+    } catch {
+      return false;
+    }
+  }
+
+  function handleCameraStreamEnded() {
+    if (!state.examStarted && !state.gatePassed) return;
+    stopCamera();
+    startCamera({ force: true }).catch(() => {});
+  }
+
+  function monitorCameraStream(stream) {
+    if (!stream) return;
+    try {
+      stream.getTracks().forEach((track) => {
+        track.addEventListener('ended', handleCameraStreamEnded, { once: true });
+        track.addEventListener('mute', handleCameraStreamEnded, { once: true });
+        track.addEventListener('inactive', handleCameraStreamEnded, { once: true });
+      });
+    } catch {}
+  }
+
+  async function refreshCameraDevices() {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      return state.cameraDevices;
+    }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      state.cameraDevices = devices.filter((device) => device.kind === 'videoinput');
+    } catch (err) {
+      dlog('enumerateDevices failed', err);
+    }
+    return state.cameraDevices;
+  }
+
+  function getCameraLabelById(deviceId) {
+    if (!deviceId) return '';
+    const match = state.cameraDevices.find((device) => device.deviceId === deviceId);
+    return match?.label || '';
+  }
+
+  function getCurrentCameraLabel() {
+    return getCameraLabelById(state.cameraDeviceId) || state.cameraDeviceLabel || '';
+  }
+
+  function isLikelyVirtualCamera(device) {
+    const label = String(device?.label || '').toLowerCase();
+    return VIRTUAL_CAMERA_HINTS.some((hint) => label.includes(hint));
+  }
+
+  function buildCameraPreference(devices, requestedDeviceId) {
+    const ordered = [];
+    const add = (id) => {
+      if (!id) return;
+      if (!ordered.includes(id)) ordered.push(id);
+    };
+
+    if (requestedDeviceId) add(requestedDeviceId);
+    if (state.cameraDeviceId) add(state.cameraDeviceId);
+
+    devices.filter((device) => !isLikelyVirtualCamera(device)).forEach((device) => add(device.deviceId));
+    devices.forEach((device) => add(device.deviceId));
+
+    return ordered;
+  }
+
+  async function acquireCameraStream(deviceId) {
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.getUserMedia) {
+      throw new Error('getUserMedia is not supported');
+    }
+
+    const baseConstraints = {
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    };
+
+    if (deviceId) {
+      baseConstraints.video.deviceId = { exact: deviceId };
+    } else {
+      baseConstraints.video.facingMode = { ideal: 'user' };
+    }
+
+    try {
+      return await mediaDevices.getUserMedia(baseConstraints);
+    } catch (error) {
+      if (error?.name === 'OverconstrainedError' || error?.name === 'ConstraintNotSatisfiedError' || error?.name === 'NotReadableError') {
+        const relaxedConstraints = deviceId
+          ? { video: { deviceId: { exact: deviceId } }, audio: false }
+          : { video: true, audio: false };
+        return await mediaDevices.getUserMedia(relaxedConstraints);
+      }
+      throw error;
+    }
   }
 
   function getCameraErrorMessage(error) {
@@ -163,6 +298,12 @@ document.addEventListener('DOMContentLoaded', () => {
       state.cameraVideo.autoplay = true;
       state.cameraVideo.muted = true;
       state.cameraVideo.controls = false;
+      state.cameraVideo.addEventListener('error', () => {
+        if (state.examStarted || state.gatePassed) {
+          stopCamera();
+          startCamera({ force: true }).catch(() => {});
+        }
+      });
     }
     if (!DOM.cameraSlot.contains(state.cameraVideo)) {
       DOM.cameraSlot.appendChild(state.cameraVideo);
@@ -178,9 +319,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function startCamera() {
+  async function startCamera({ force = false, requestedDeviceId = null } = {}) {
     if (!DOM.cameraSlot) return null;
-    if (state.cameraStream) return state.cameraStream;
+
+    if (state.cameraStream) {
+      if (!force && isStreamActive(state.cameraStream)) {
+        attachStreamToCameraSlot(state.cameraStream);
+        return state.cameraStream;
+      }
+      stopCamera();
+    }
+
     if (cameraStartPromise) return cameraStartPromise;
 
     const mediaDevices = navigator.mediaDevices;
@@ -191,55 +340,103 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const hostname = window.location?.hostname || '';
     const isLocalHost = ['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(hostname);
+
+    await refreshCameraDevices().catch(() => []);
+
     if (window.isSecureContext === false && !isLocalHost) {
-      showCameraMessage('კამერის გამოსაყენებლად გახსენით გვერდი უსაფრთხო (https) კავშირით ან localhost-იდან.', { retry: true });
+      showCameraMessage('კამერის გამოსაყენებლად გახსენით გვერდი უსაფრთხო (https) კავშირით ან localhost-იდან.', {
+        retry: true,
+        allowSwitch: (state.cameraDevices.length || 0) > 1,
+      });
       return null;
     }
 
-    showCameraMessage('კამერის ჩართვა მიმდინარეობს...');
-    const constraints = {
-      video: {
-        facingMode: { ideal: 'user' },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
-      audio: false,
-    };
+    const preferredIds = buildCameraPreference(state.cameraDevices, requestedDeviceId);
+    const allowSwitch = (state.cameraDevices.length || 0) > 1;
+    const currentLabel = requestedDeviceId
+      ? getCameraLabelById(requestedDeviceId)
+      : getCurrentCameraLabel();
 
-    // Attempt to prefer any available camera if facingMode ideal fails
-    cameraStartPromise = mediaDevices.getUserMedia(constraints)
-      .then((stream) => {
-        state.cameraStream = stream;
-        attachStreamToCameraSlot(stream);
-        return stream;
-      })
-      .catch((err) => {
-        console.error('Failed to start camera with ideal constraints', err);
-        if (err?.name === 'OverconstrainedError' || err?.name === 'ConstraintNotSatisfiedError') {
-          const relaxedConstraints = {
-            video: true,
-            audio: false,
-          };
-          return mediaDevices.getUserMedia(relaxedConstraints)
-            .then((stream) => {
-              state.cameraStream = stream;
-              attachStreamToCameraSlot(stream);
-              return stream;
-            })
-            .catch((retryErr) => {
-              console.error('Failed to start camera with relaxed constraints', retryErr);
-              showCameraMessage(getCameraErrorMessage(retryErr), { retry: true });
-              return null;
-            });
+    showCameraMessage('კამერის ჩართვა მიმდინარეობს...', {
+      allowSwitch,
+      currentLabel,
+    });
+
+    cameraStartPromise = (async () => {
+      let lastError = null;
+      const queue = [...preferredIds, null].filter((value, index, arr) => arr.indexOf(value) === index);
+      for (const deviceId of queue) {
+        try {
+          const stream = await acquireCameraStream(deviceId);
+          if (!stream) continue;
+
+          const tracks = typeof stream.getVideoTracks === 'function' ? stream.getVideoTracks() : [];
+          const track = tracks[0];
+          if (!track) {
+            try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+            continue;
+          }
+          const settings = track.getSettings ? track.getSettings() : null;
+          const actualDeviceId = settings?.deviceId || deviceId || null;
+          const trackLabel = track.label || '';
+
+          state.cameraStream = stream;
+          monitorCameraStream(stream);
+          attachStreamToCameraSlot(stream);
+          await refreshCameraDevices().catch(() => []);
+
+          let effectiveDeviceId = actualDeviceId;
+          if (!effectiveDeviceId && trackLabel) {
+            const matched = state.cameraDevices.find((device) => device.label === trackLabel);
+            if (matched?.deviceId) {
+              effectiveDeviceId = matched.deviceId;
+            }
+          }
+          state.cameraDeviceId = effectiveDeviceId;
+          state.cameraDeviceLabel = trackLabel || getCameraLabelById(effectiveDeviceId) || state.cameraDeviceLabel;
+          return stream;
+        } catch (error) {
+          lastError = error;
+          dlog('camera start failed for device', deviceId, error);
         }
-        showCameraMessage(getCameraErrorMessage(err), { retry: true });
-        return null;
-      })
-      .finally(() => {
-        cameraStartPromise = null;
-      });
+      }
 
-    return cameraStartPromise;
+      throw lastError || new Error('კამერა ვერ ჩაირთო');
+    })();
+
+    try {
+      return await cameraStartPromise;
+    } catch (err) {
+      showCameraMessage(getCameraErrorMessage(err), {
+        retry: true,
+        allowSwitch: (state.cameraDevices.length || 0) > 1,
+        currentLabel: getCurrentCameraLabel(),
+      });
+      return null;
+    } finally {
+      cameraStartPromise = null;
+    }
+  }
+
+  async function switchToNextCamera() {
+    await refreshCameraDevices().catch(() => []);
+    const devices = state.cameraDevices;
+    if (!devices.length) {
+      showCameraMessage('კამერა ვერ მოიძებნა. გთხოვთ შეაერთოთ კამერა და სცადოთ ხელახლა.', { retry: true });
+      return null;
+    }
+
+    const ids = devices.map((device) => device.deviceId).filter((id) => !!id);
+    if (!ids.length) {
+      showCameraMessage('კამერა ვერ მოიძებნა. გთხოვთ შეაერთოთ კამერა და სცადოთ ხელახლა.', { retry: true });
+      return null;
+    }
+
+    const currentIndex = state.cameraDeviceId ? ids.indexOf(state.cameraDeviceId) : -1;
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % ids.length : 0;
+    const nextDeviceId = ids[nextIndex];
+
+    return startCamera({ force: true, requestedDeviceId: nextDeviceId });
   }
 
   function stopCamera() {
@@ -269,6 +466,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const EXAM_ID = 1;
   const DEFAULT_TITLE_TEXT = '';
   const KEYBOARD_LOCKS = ['Escape', 'F11', 'F4'];
+  const VIRTUAL_CAMERA_HINTS = [
+    'virtual',
+    'obs',
+    'splitcam',
+    'iriun',
+    'droidcam',
+    'epoccam',
+    'manycam',
+    'snap camera',
+    'snapcamera',
+    'camo',
+    'webcam utility',
+    'loopback',
+    'avatar',
+  ];
   const getPercentColorClass = (percent) => {
     if (percent < 70) return 'pct-red';
     if (percent <= 75) return 'pct-yellow';
@@ -1185,8 +1397,37 @@ document.addEventListener('DOMContentLoaded', () => {
     void preloadExamMetadata();
     show(DOM.gateOverlay);
     if (DOM.gateInput) DOM.gateInput.focus();
-    showCameraMessage('კამერა ჩაირთვება ადმინისტრატორის პაროლის შეყვანის და გამოცდის დაწყების შემდეგ.');
+    showCameraMessage('კამერა ჩაირთვება ადმინისტრატორის პაროლის შეყვანის და გამოცდის დაწყების შემდეგ.', {
+      allowSwitch: (state.cameraDevices.length || 0) > 1,
+      currentLabel: getCurrentCameraLabel(),
+    });
+    refreshCameraDevices()
+      .then(() => {
+        if (state.cameraStream) return;
+        showCameraMessage('კამერა ჩაირთვება ადმინისტრატორის პაროლის შეყვანის და გამოცდის დაწყების შემდეგ.', {
+          allowSwitch: (state.cameraDevices.length || 0) > 1,
+          currentLabel: getCurrentCameraLabel(),
+        });
+      })
+      .catch(() => {});
     window.addEventListener('beforeunload', stopCamera);
+    const handleDeviceChange = async () => {
+      await refreshCameraDevices().catch(() => []);
+      if (!state.examStarted && !state.gatePassed) {
+        showCameraMessage('კამერა ჩაირთვება ადმინისტრატორის პაროლის შეყვანის და გამოცდის დაწყების შემდეგ.', {
+          allowSwitch: (state.cameraDevices.length || 0) > 1,
+          currentLabel: getCurrentCameraLabel(),
+        });
+        return;
+      }
+      if (isStreamActive(state.cameraStream)) return;
+      startCamera({ force: true }).catch(() => {});
+    };
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    } else if (navigator.mediaDevices) {
+      navigator.mediaDevices.ondevicechange = handleDeviceChange;
+    }
   }
 
   function preventZooming() {
