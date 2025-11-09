@@ -873,7 +873,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function handleAnswerClick(event) {
     const row = event.target?.closest?.('.cm-answer');
     if (!row || !DOM.cmContent?.contains(row)) return;
-    const answerId = row.dataset.answerId || event.target?.getAttribute?.('data-answer-id');
+    const mark = event.target?.closest?.('.mark');
+    if (!mark || !row.contains(mark)) return;
+    const answerId = row.dataset.answerId;
     if (!answerId) return;
     selectAnswer(answerId).catch(() => {});
   }
