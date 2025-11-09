@@ -593,13 +593,13 @@ footer {
   }
 
   .footer-bottom .admin-link {
-    color: var(--accent-soft);
+    color: #9ec5ff;
     text-decoration: none;
     transition: color .2s ease;
   }
 
   .footer-bottom .admin-link:hover {
-    color: #244a8b;
+    color: #7aa4ff;
     text-decoration: underline;
   }
 
