@@ -52,6 +52,30 @@ document.addEventListener('DOMContentLoaded', () => {
     cameraSlot: qs('.camera-slot'),
   };
 
+  const MEDIA_TYPES = {
+    CAMERA: 'camera',
+    SCREEN: 'screen',
+  };
+  const MEDIA_TYPE_LIST = Object.values(MEDIA_TYPES);
+
+  function createMediaState() {
+    return {
+      recorder: null,
+      chunkIndex: 0,
+      uploadQueue: [],
+      uploading: false,
+      uploadTimer: null,
+      stopRequested: false,
+      recordingActive: false,
+      uploadError: false,
+      recordingStartedAt: null,
+    };
+  }
+
+  function getMediaState(mediaType) {
+    return state.mediaStates?.[mediaType];
+  }
+
   if (DOM.examFinish) {
     try { DOM.examFinish.disabled = true; } catch {}
   }
@@ -83,20 +107,17 @@ document.addEventListener('DOMContentLoaded', () => {
     cameraDevices: [],
     cameraDeviceId: null,
     cameraDeviceLabel: '',
-    mediaRecorder: null,
-    mediaChunkIndex: 0,
-    mediaUploadQueue: [],
-    mediaUploading: false,
-    mediaUploadTimer: null,
-    mediaStopRequested: false,
-    mediaRecordingActive: false,
-    mediaUploadError: false,
-    recordingStartedAt: null,
+    screenStream: null,
+    mediaStates: {
+      [MEDIA_TYPES.CAMERA]: createMediaState(),
+      [MEDIA_TYPES.SCREEN]: createMediaState(),
+    },
   };
 
   const timers = { countdown: null };
   let remainingMs = 0;
   let cameraStartPromise = null;
+  let screenStartPromise = null;
   function showCameraMessage(message, options = {}) {
     if (!DOM.cameraSlot) return;
     DOM.cameraSlot.innerHTML = '';
@@ -472,6 +493,80 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function handleScreenStreamEnded() {
+    if (!state.examStarted && !state.gatePassed) return;
+    stopScreenCapture();
+    alert('ეკრანის გაზიარება შეწყდა. გამოცდის გაგრძელებისთვის აუცილებელია ეკრანის გაზიარების ხელახლა ჩართვა.');
+    startScreenCapture({ force: true })
+      .then((stream) => {
+        if (stream && state.examStarted) {
+          void startMediaRecording(MEDIA_TYPES.SCREEN, stream);
+        }
+      })
+      .catch((error) => {
+        dlog('screen capture restart failed', error);
+      });
+  }
+
+  function monitorScreenStream(stream) {
+    if (!stream) return;
+    try {
+      stream.getTracks().forEach((track) => {
+        track.addEventListener('ended', handleScreenStreamEnded, { once: true });
+        track.addEventListener('inactive', handleScreenStreamEnded, { once: true });
+      });
+    } catch {}
+  }
+
+  async function startScreenCapture({ force = false } = {}) {
+    const getDisplayMedia = navigator.mediaDevices?.getDisplayMedia;
+    if (typeof getDisplayMedia !== 'function') {
+      alert('თქვენი ბრაუზერი არ უჭერს მხარს ეკრანის გაზიარებას.');
+      return null;
+    }
+
+    if (state.screenStream) {
+      if (!force && isStreamActive(state.screenStream)) {
+        return state.screenStream;
+      }
+      stopScreenCapture();
+    }
+
+    if (screenStartPromise) return screenStartPromise;
+
+    screenStartPromise = (async () => {
+      const constraints = {
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 },
+        },
+        audio: false,
+      };
+      const stream = await getDisplayMedia.call(navigator.mediaDevices, constraints);
+      state.screenStream = stream;
+      monitorScreenStream(stream);
+      return stream;
+    })();
+
+    try {
+      return await screenStartPromise;
+    } finally {
+      screenStartPromise = null;
+    }
+  }
+
+  function stopScreenCapture() {
+    if (state.screenStream) {
+      try {
+        state.screenStream.getTracks().forEach((track) => {
+          try { track.stop(); } catch {}
+        });
+      } catch {}
+    }
+    state.screenStream = null;
+  }
+
   function isMediaRecorderSupported() {
     return typeof window.MediaRecorder === 'function';
   }
@@ -497,118 +592,130 @@ document.addEventListener('DOMContentLoaded', () => {
     return '';
   }
 
-  function handleRecorderData(event) {
+  function handleRecorderData(mediaType, event) {
     if (!event?.data || !event.data.size) return;
-    const isRecorderInactive = !state.mediaRecorder || state.mediaRecorder.state === 'inactive';
+    const mediaState = getMediaState(mediaType);
+    if (!mediaState) return;
+    const isRecorderInactive = !mediaState.recorder || mediaState.recorder.state === 'inactive';
     const item = {
-      index: state.mediaChunkIndex,
+      index: mediaState.chunkIndex,
       blob: event.data,
-      isLast: state.mediaStopRequested && isRecorderInactive,
+      isLast: mediaState.stopRequested && isRecorderInactive,
       retries: 0,
     };
-    state.mediaChunkIndex += 1;
-    state.mediaUploadQueue.push(item);
-    void processMediaUploadQueue();
+    mediaState.chunkIndex += 1;
+    mediaState.uploadQueue.push(item);
+    void processMediaUploadQueue(mediaType);
   }
 
-  function handleRecorderStop() {
-    state.mediaRecordingActive = false;
-    state.mediaRecorder = null;
-    state.mediaStopRequested = false;
-    void processMediaUploadQueue();
+  function handleRecorderStop(mediaType) {
+    const mediaState = getMediaState(mediaType);
+    if (!mediaState) return;
+    mediaState.recordingActive = false;
+    mediaState.recorder = null;
+    mediaState.stopRequested = false;
+    void processMediaUploadQueue(mediaType);
   }
 
-  function handleRecorderError(event) {
-    state.mediaUploadError = true;
-    dlog('media recorder error', event?.error || event);
+  function handleRecorderError(mediaType, event) {
+    const mediaState = getMediaState(mediaType);
+    if (!mediaState) return;
+    mediaState.uploadError = true;
+    dlog(`${mediaType} recorder error`, event?.error || event);
     try {
-      if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
-        state.mediaRecorder.stop();
+      if (mediaState.recorder && mediaState.recorder.state !== 'inactive') {
+        mediaState.recorder.stop();
       }
     } catch {}
   }
 
-  async function startRecording() {
+  async function startMediaRecording(mediaType, stream) {
     if (!isMediaRecorderSupported()) {
       dlog('MediaRecorder unsupported in this browser');
       return;
     }
-    if (!state.cameraStream) return;
-    if (state.mediaRecorder && state.mediaRecorder.state === 'recording') return;
+    if (!stream) return;
 
-    const hasAudioTrack = typeof state.cameraStream.getAudioTracks === 'function'
-      ? state.cameraStream.getAudioTracks().some((track) => track.kind === 'audio')
+    const mediaState = getMediaState(mediaType);
+    if (!mediaState) return;
+    if (mediaState.recorder && mediaState.recorder.state === 'recording') return;
+
+    const hasAudioTrack = typeof stream.getAudioTracks === 'function'
+      ? stream.getAudioTracks().some((track) => track.kind === 'audio')
       : false;
-    if (!hasAudioTrack) {
-      dlog('No audio track available on stream');
+    if (!hasAudioTrack && mediaType === MEDIA_TYPES.CAMERA) {
+      dlog('No audio track available on camera stream');
     }
 
     const mimeType = getPreferredMimeType();
     let recorder;
     try {
       recorder = mimeType
-        ? new MediaRecorder(state.cameraStream, { mimeType })
-        : new MediaRecorder(state.cameraStream);
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
     } catch (error) {
-      dlog('MediaRecorder init failed', error);
+      dlog(`${mediaType} MediaRecorder init failed`, error);
       return;
     }
 
-    state.mediaRecorder = recorder;
-    state.mediaChunkIndex = 0;
-    state.mediaUploadQueue = [];
-    state.mediaUploading = false;
-    state.mediaUploadError = false;
-    state.mediaRecordingActive = true;
-    state.recordingStartedAt = Date.now();
-    state.mediaStopRequested = false;
-    if (state.mediaUploadTimer) {
-      clearTimeout(state.mediaUploadTimer);
-      state.mediaUploadTimer = null;
+    mediaState.recorder = recorder;
+    mediaState.chunkIndex = 0;
+    mediaState.uploadQueue = [];
+    mediaState.uploading = false;
+    mediaState.uploadError = false;
+    mediaState.recordingActive = true;
+    mediaState.recordingStartedAt = Date.now();
+    mediaState.stopRequested = false;
+    if (mediaState.uploadTimer) {
+      clearTimeout(mediaState.uploadTimer);
+      mediaState.uploadTimer = null;
     }
 
-    recorder.addEventListener('dataavailable', handleRecorderData);
-    recorder.addEventListener('stop', handleRecorderStop);
-    recorder.addEventListener('error', handleRecorderError);
+    recorder.addEventListener('dataavailable', (event) => handleRecorderData(mediaType, event));
+    recorder.addEventListener('stop', () => handleRecorderStop(mediaType));
+    recorder.addEventListener('error', (event) => handleRecorderError(mediaType, event));
 
     try {
       recorder.start(MEDIA_TIMESLICE_MS);
-      dlog('MediaRecorder started', { mimeType });
+      dlog('MediaRecorder started', { mediaType, mimeType });
     } catch (error) {
-      dlog('MediaRecorder start failed', error);
-      state.mediaRecordingActive = false;
+      dlog(`${mediaType} MediaRecorder start failed`, error);
+      mediaState.recordingActive = false;
     }
   }
 
-  async function processMediaUploadQueue() {
-    if (state.mediaUploading) return;
-    if (!state.mediaUploadQueue.length) return;
+  async function processMediaUploadQueue(mediaType) {
+    const mediaState = getMediaState(mediaType);
+    if (!mediaState) return;
+    if (mediaState.uploading) return;
+    if (!mediaState.uploadQueue.length) return;
     if (!state.sessionId || !state.sessionToken) {
-      if (!state.mediaUploadTimer) {
-        state.mediaUploadTimer = setTimeout(() => {
-          state.mediaUploadTimer = null;
-          void processMediaUploadQueue();
+      if (!mediaState.uploadTimer) {
+        mediaState.uploadTimer = setTimeout(() => {
+          mediaState.uploadTimer = null;
+          void processMediaUploadQueue(mediaType);
         }, 1000);
       }
       return;
     }
 
-    const item = state.mediaUploadQueue[0];
+    const item = mediaState.uploadQueue[0];
     if (!item || !item.blob) {
-      state.mediaUploadQueue.shift();
-      void processMediaUploadQueue();
+      mediaState.uploadQueue.shift();
+      void processMediaUploadQueue(mediaType);
       return;
     }
 
     const formData = new FormData();
     formData.append('chunk_index', String(item.index));
     formData.append('is_last', item.isLast ? 'true' : 'false');
-    const durationMs = state.recordingStartedAt ? Math.max(Date.now() - state.recordingStartedAt, 0) : 0;
+    const durationMs = mediaState.recordingStartedAt ? Math.max(Date.now() - mediaState.recordingStartedAt, 0) : 0;
     formData.append('duration_ms', String(durationMs));
     formData.append('chunk', item.blob, `chunk-${item.index}.webm`);
+    formData.append('media_type', mediaType);
 
     const headers = { ...authHeaders() };
-    state.mediaUploading = true;
+    mediaState.uploading = true;
     try {
       const response = await fetch(`${API_BASE}/exam/${state.sessionId}/media`, {
         method: 'POST',
@@ -619,50 +726,51 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(`upload failed: ${response.status}`);
       }
       const payload = await response.json().catch(() => ({}));
-      state.mediaUploadQueue.shift();
+      mediaState.uploadQueue.shift();
       item.blob = null;
       if (typeof payload?.next_chunk_index === 'number') {
-        state.mediaChunkIndex = payload.next_chunk_index;
+        mediaState.chunkIndex = payload.next_chunk_index;
       }
-      if (state.mediaUploadTimer) {
-        clearTimeout(state.mediaUploadTimer);
-        state.mediaUploadTimer = null;
+      if (mediaState.uploadTimer) {
+        clearTimeout(mediaState.uploadTimer);
+        mediaState.uploadTimer = null;
       }
     } catch (error) {
-      dlog('media chunk upload error', error);
+      dlog(`${mediaType} media chunk upload error`, error);
       item.retries = (item.retries || 0) + 1;
       if (item.retries > MEDIA_UPLOAD_MAX_RETRIES) {
-        state.mediaUploadError = true;
-        state.mediaUploading = false;
+        mediaState.uploadError = true;
+        mediaState.uploading = false;
         return;
       }
-      state.mediaUploading = false;
+      mediaState.uploading = false;
       const delay = MEDIA_UPLOAD_RETRY_DELAY * item.retries;
-      if (state.mediaUploadTimer) {
-        clearTimeout(state.mediaUploadTimer);
+      if (mediaState.uploadTimer) {
+        clearTimeout(mediaState.uploadTimer);
       }
-      state.mediaUploadTimer = setTimeout(() => {
-        state.mediaUploadTimer = null;
-        void processMediaUploadQueue();
+      mediaState.uploadTimer = setTimeout(() => {
+        mediaState.uploadTimer = null;
+        void processMediaUploadQueue(mediaType);
       }, delay);
       return;
     }
-    state.mediaUploading = false;
-    void processMediaUploadQueue();
+    mediaState.uploading = false;
+    void processMediaUploadQueue(mediaType);
   }
 
-  async function stopRecorder() {
-    if (!state.mediaRecorder) return;
-    if (state.mediaRecorder.state === 'inactive') return;
-    state.mediaStopRequested = true;
+  async function stopRecorder(mediaType) {
+    const mediaState = getMediaState(mediaType);
+    if (!mediaState?.recorder) return;
+    if (mediaState.recorder.state === 'inactive') return;
+    mediaState.stopRequested = true;
     await new Promise((resolve) => {
       const handleStop = () => {
-        state.mediaRecorder?.removeEventListener('stop', handleStop);
+        mediaState.recorder?.removeEventListener('stop', handleStop);
         resolve();
       };
-      state.mediaRecorder.addEventListener('stop', handleStop, { once: true });
+      mediaState.recorder.addEventListener('stop', handleStop, { once: true });
       try {
-        state.mediaRecorder.stop();
+        mediaState.recorder.stop();
       } catch {
         resolve();
       }
@@ -671,10 +779,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function finalizeRecording(opts = {}) {
     const waitForUploads = !!opts.waitForUploads;
-    await stopRecorder();
+    await Promise.all(MEDIA_TYPE_LIST.map((type) => stopRecorder(type)));
     if (waitForUploads) {
       const started = Date.now();
-      while ((state.mediaUploadQueue.length || state.mediaUploading) && Date.now() - started < MEDIA_UPLOAD_WAIT_MS) {
+      const shouldWait = () => MEDIA_TYPE_LIST.some((type) => {
+        const mediaState = getMediaState(type);
+        if (!mediaState) return false;
+        return (mediaState.uploadQueue.length || mediaState.uploading);
+      });
+      while (shouldWait() && Date.now() - started < MEDIA_UPLOAD_WAIT_MS) {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
@@ -881,6 +994,7 @@ document.addEventListener('DOMContentLoaded', () => {
       dlog('finalize recording failed', err);
     }
     stopCamera();
+    stopScreenCapture();
     try {
       if (document.fullscreenElement) {
         (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen)?.call(document);
@@ -1477,17 +1591,30 @@ document.addEventListener('DOMContentLoaded', () => {
     if (DOM.examFinish) DOM.examFinish.disabled = false;
     hide(DOM.prestartOverlay);
     if (isStreamActive(state.cameraStream)) {
-      void startRecording();
-      return;
+      void startMediaRecording(MEDIA_TYPES.CAMERA, state.cameraStream);
+    } else {
+      startCamera()
+        .then((stream) => {
+          if (stream) {
+            return startMediaRecording(MEDIA_TYPES.CAMERA, stream);
+          }
+          return null;
+        })
+        .catch(() => {});
     }
-    startCamera()
-      .then((stream) => {
-        if (stream) {
-          return startRecording();
-        }
-        return null;
-      })
-      .catch(() => {});
+
+    if (isStreamActive(state.screenStream)) {
+      void startMediaRecording(MEDIA_TYPES.SCREEN, state.screenStream);
+    } else {
+      startScreenCapture()
+        .then((stream) => {
+          if (stream) {
+            return startMediaRecording(MEDIA_TYPES.SCREEN, stream);
+          }
+          return null;
+        })
+        .catch(() => {});
+    }
   }
 
   async function handleExamStart() {
@@ -1499,22 +1626,40 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.gateInput?.focus();
         return;
       }
-      const stream = await startCamera().catch(() => null);
-      if (!stream) return;
-      activateExamUi();
-      startCountdown();
-      await beginSession();
-      startCountdown();
-      await initExamData();
-      return;
     }
 
-    const stream = await startCamera().catch(() => null);
-    if (!stream) return;
-    activateExamUi();
-    startCountdown();
-    await initExamData();
-    startCountdown();
+    const startButton = DOM.examStart;
+    if (startButton) startButton.disabled = true;
+
+    try {
+      const cameraStream = await startCamera().catch(() => null);
+      if (!cameraStream) return;
+
+      const screenStream = await startScreenCapture().catch((error) => {
+        dlog('screen capture failed', error);
+        return null;
+      });
+
+      if (!screenStream) {
+        alert('ეკრანის გაზიარება აუცილებელია გამოცდის დასაწყებად. გთხოვთ აირჩიოთ სრულ ეკრანზე გაზიარება და სცადოთ ხელახლა.');
+        return;
+      }
+
+      activateExamUi();
+      startCountdown();
+
+      if (!state.sessionId || !state.sessionToken) {
+        await beginSession();
+        startCountdown();
+      }
+      await initExamData();
+      startCountdown();
+    } finally {
+      if (!state.examStarted && startButton) {
+        startButton.disabled = false;
+        startButton.focus?.();
+      }
+    }
   }
 
   function handleAnswerClick(event) {
@@ -1655,6 +1800,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('beforeunload', () => {
       void finalizeRecording({ waitForUploads: false });
       stopCamera();
+      stopScreenCapture();
     });
     const handleDeviceChange = async () => {
       await refreshCameraDevices().catch(() => []);

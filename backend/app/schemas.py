@@ -219,7 +219,8 @@ class ResultDetailResponse(BaseModel):
     answers: List[AnswerDetail]
 
 
-class ResultMediaResponse(BaseModel):
+class ResultMediaItem(BaseModel):
+    media_type: str
     available: bool
     download_url: str | None = None
     filename: str | None = None
@@ -227,6 +228,10 @@ class ResultMediaResponse(BaseModel):
     size_bytes: int | None = None
     duration_seconds: int | None = None
     updated_at: datetime | None = None
+
+
+class ResultMediaResponse(BaseModel):
+    items: List[ResultMediaItem]
 
 
 # Users (registration and admin listing)

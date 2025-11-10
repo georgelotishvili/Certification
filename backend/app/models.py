@@ -115,11 +115,10 @@ class Session(Base):
     exam: Mapped[Exam] = relationship("Exam", back_populates="sessions")
     code: Mapped[ExamCode] = relationship("ExamCode", back_populates="sessions")
     answers: Mapped[List[Answer]] = relationship("Answer", back_populates="session", cascade="all, delete-orphan")
-    media: Mapped["ExamMedia"] = relationship(
+    media_entries: Mapped[List["ExamMedia"]] = relationship(
         "ExamMedia",
         back_populates="session",
         cascade="all, delete-orphan",
-        uselist=False,
     )
 
 
@@ -159,9 +158,13 @@ class User(Base):
 
 class ExamMedia(Base):
     __tablename__ = "exam_media"
+    __table_args__ = (
+        UniqueConstraint("session_id", "media_type", name="uq_exam_media_session_type"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), unique=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"))
+    media_type: Mapped[str] = mapped_column(String(32), default="camera")
     storage_path: Mapped[str] = mapped_column(String(1024))
     filename: Mapped[str] = mapped_column(String(255))
     mime_type: Mapped[str] = mapped_column(String(128), default="video/webm")
@@ -173,4 +176,4 @@ class ExamMedia(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    session: Mapped["Session"] = relationship("Session", back_populates="media")
+    session: Mapped["Session"] = relationship("Session", back_populates="media_entries")

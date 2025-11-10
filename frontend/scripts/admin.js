@@ -58,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resultQuestionTable: document.getElementById('resultQuestionTable'),
     resultDetailDownload: document.getElementById('resultDetailDownload'),
     resultDetailMedia: document.getElementById('resultDetailMedia'),
+    resultDetailScreenMedia: document.getElementById('resultDetailScreenMedia'),
     resultDetailClose: document.getElementById('resultDetailClose'),
     resultDetailDangerZone: document.getElementById('resultDetailDangerZone'),
     resultDetailDelete: document.getElementById('resultDetailDelete'),

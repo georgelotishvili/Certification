@@ -21,6 +21,7 @@ from ..schemas import (
     ResultListResponse,
     ResultDetailResponse,
     ResultMediaResponse,
+    ResultMediaItem,
     AnswerDetail,
     BlockStatDetail,
     UsersListResponse,
@@ -31,6 +32,8 @@ from ..services.media_storage import resolve_storage_path
 
 
 router = APIRouter()
+
+MEDIA_TYPES = ("camera", "screen")
 
 
 def _require_admin(
@@ -643,19 +646,38 @@ def result_media_meta(
     db: Session = Depends(get_db),
 ):
     _require_admin(db, actor or x_actor_email)
-    media = db.scalar(select(ExamMedia).where(ExamMedia.session_id == session_id))
-    if not media or not media.completed:
-        return ResultMediaResponse(available=False)
+    records = db.scalars(select(ExamMedia).where(ExamMedia.session_id == session_id)).all()
+    media_map: dict[str, ExamMedia] = {}
+    for record in records:
+        media_type = (record.media_type or "camera").strip().lower()
+        if media_type not in MEDIA_TYPES:
+            continue
+        if media_type not in media_map or media_map[media_type].updated_at <= record.updated_at:
+            media_map[media_type] = record
 
-    return ResultMediaResponse(
-        available=True,
-        download_url=f"/admin/results/{session_id}/media/file",
-        filename=media.filename,
-        mime_type=media.mime_type,
-        size_bytes=media.size_bytes,
-        duration_seconds=media.duration_seconds,
-        updated_at=media.updated_at,
-    )
+    items: list[ResultMediaItem] = []
+    for media_type in MEDIA_TYPES:
+        record = media_map.get(media_type)
+        available = bool(record and record.completed)
+        download_url = (
+            f"/admin/results/{session_id}/media/file?media_type={media_type}"
+            if available
+            else None
+        )
+        items.append(
+            ResultMediaItem(
+                media_type=media_type,
+                available=available,
+                download_url=download_url,
+                filename=record.filename if record else None,
+                mime_type=record.mime_type if record else None,
+                size_bytes=record.size_bytes if record else None,
+                duration_seconds=record.duration_seconds if record else None,
+                updated_at=record.updated_at if record else None,
+            )
+        )
+
+    return ResultMediaResponse(items=items)
 
 
 @router.get("/results/{session_id}/media/file")
@@ -663,10 +685,28 @@ def result_media_file(
     session_id: int = Path(...),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     actor: str | None = Query(None, alias="actor"),
+    media_type: str = Query("camera", alias="media_type"),
     db: Session = Depends(get_db),
 ):
     _require_admin(db, actor or x_actor_email)
-    media = db.scalar(select(ExamMedia).where(ExamMedia.session_id == session_id))
+    media_type_norm = (media_type or "camera").strip().lower()
+    if media_type_norm not in MEDIA_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid media type")
+
+    media = db.scalar(
+        select(ExamMedia).where(
+            ExamMedia.session_id == session_id,
+            ExamMedia.media_type == media_type_norm,
+        )
+    )
+    if not media and media_type_norm == "camera":
+        # Backwards compatibility for legacy rows without media_type set
+        media = db.scalar(
+            select(ExamMedia).where(
+                ExamMedia.session_id == session_id,
+                (ExamMedia.media_type.is_(None)),
+            )
+        )
     if not media or not media.completed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
 

@@ -24,14 +24,27 @@
       detail: null,
       loading: false,
       detailLoading: false,
-      mediaMeta: null,
+      mediaMeta: {},
+      mediaMetaSessionId: null,
       mediaLoading: false,
+      mediaLoadingType: null,
+      activeMediaType: null,
     };
 
     const STATUS_MAP = {
       completed: { label: 'დასრულებულია', tag: 'success' },
       aborted: { label: 'შეწყვეტილია', tag: 'error' },
       in_progress: { label: 'მიმდინარე', tag: 'neutral' },
+    };
+
+    const MEDIA_TYPES = {
+      CAMERA: 'camera',
+      SCREEN: 'screen',
+    };
+
+    const MEDIA_LABELS = {
+      [MEDIA_TYPES.CAMERA]: 'ვიდეოთვალი',
+      [MEDIA_TYPES.SCREEN]: 'სკრინი',
     };
 
     function statusMeta(status) {
@@ -106,8 +119,38 @@
       DOM.candidateResultsList.appendChild(fragment);
     }
 
+    function setMediaButtonState(button, enabled) {
+      if (!button) return;
+      button.disabled = !enabled;
+      button.classList.toggle('disabled', !enabled);
+      button.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+    }
+
+    function updateMediaButtons() {
+      const allowMedia = state.detail?.session?.status === 'completed';
+      const cameraMeta = state.mediaMeta?.[MEDIA_TYPES.CAMERA];
+      const screenMeta = state.mediaMeta?.[MEDIA_TYPES.SCREEN];
+      setMediaButtonState(DOM.resultDetailMedia, allowMedia && !!cameraMeta?.available);
+      setMediaButtonState(DOM.resultDetailScreenMedia, allowMedia && !!screenMeta?.available);
+    }
+
+    function setActiveMediaButton(mediaType) {
+      const buttons = {
+        [MEDIA_TYPES.CAMERA]: DOM.resultDetailMedia,
+        [MEDIA_TYPES.SCREEN]: DOM.resultDetailScreenMedia,
+      };
+      Object.entries(buttons).forEach(([type, button]) => {
+        if (!button) return;
+        button.classList.toggle('active', mediaType && type === mediaType);
+      });
+    }
+
     function resetMediaSection() {
-      state.mediaMeta = null;
+      state.mediaMeta = {};
+      state.mediaMetaSessionId = null;
+      state.activeMediaType = null;
+      state.mediaLoading = false;
+      state.mediaLoadingType = null;
       if (DOM.resultMediaSection) DOM.resultMediaSection.hidden = true;
       if (DOM.resultMediaPlayer) {
         try {
@@ -124,6 +167,8 @@
         DOM.resultMediaDownload.removeAttribute('target');
       }
       if (DOM.resultMediaInfo) DOM.resultMediaInfo.textContent = '';
+      updateMediaButtons();
+      setActiveMediaButton(null);
     }
 
     function createAttemptCard(item) {
@@ -201,7 +246,46 @@
         headers: { ...getAdminHeaders(), ...getActorHeaders() },
       });
       if (!response.ok) throw new Error('failed');
-      return await response.json();
+      const payload = await response.json();
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      const map = {};
+      items.forEach((item) => {
+        const type = (item?.media_type || '').trim().toLowerCase();
+        if (type) {
+          map[type] = item;
+        }
+      });
+      return map;
+    }
+
+    async function ensureMediaMeta(sessionId, { force = false } = {}) {
+      if (!sessionId) return;
+      const allowMedia = state.detail?.session?.status === 'completed';
+      if (!allowMedia) {
+        state.mediaMeta = {};
+        state.mediaMetaSessionId = sessionId;
+        updateMediaButtons();
+        return;
+      }
+      if (!force && state.mediaMetaSessionId === sessionId && Object.keys(state.mediaMeta || {}).length) {
+        updateMediaButtons();
+        return;
+      }
+      state.mediaLoading = true;
+      state.mediaLoadingType = 'all';
+      try {
+        const metaMap = await fetchResultMediaMeta(sessionId);
+        state.mediaMeta = metaMap;
+        state.mediaMetaSessionId = sessionId;
+      } catch (error) {
+        console.error('Failed to load media metadata', error);
+        state.mediaMeta = {};
+        state.mediaMetaSessionId = sessionId;
+      } finally {
+        state.mediaLoading = false;
+        state.mediaLoadingType = null;
+        updateMediaButtons();
+      }
     }
 
     function renderDetailLoading() {
@@ -219,11 +303,6 @@
       if (DOM.resultBlockStats) DOM.resultBlockStats.innerHTML = '';
       const tbody = DOM.resultQuestionTable?.querySelector('tbody');
       if (tbody) tbody.innerHTML = '';
-      if (DOM.resultDetailMedia) {
-        DOM.resultDetailMedia.disabled = true;
-        DOM.resultDetailMedia.classList.add('disabled');
-        DOM.resultDetailMedia.setAttribute('aria-disabled', 'true');
-      }
     }
 
     function renderDetail(detail) {
@@ -255,11 +334,9 @@
         DOM.resultDetailSummary.textContent = `სულ: ${detail.total_questions} • პასუხი: ${detail.answered_questions} • სწორია: ${detail.correct_answers}`;
       }
 
-      if (DOM.resultDetailMedia) {
-        const disableMedia = session.status !== 'completed';
-        DOM.resultDetailMedia.disabled = disableMedia;
-        DOM.resultDetailMedia.classList.toggle('disabled', disableMedia);
-        DOM.resultDetailMedia.setAttribute('aria-disabled', disableMedia ? 'true' : 'false');
+      if (session.status !== 'completed') {
+        setMediaButtonState(DOM.resultDetailMedia, false);
+        setMediaButtonState(DOM.resultDetailScreenMedia, false);
       }
 
       if (DOM.resultBlockStats) {
@@ -330,37 +407,49 @@
         DOM.resultDetailDelete.disabled = !isFounderActor();
         DOM.resultDetailDelete.dataset.sessionId = String(session.session_id || session.id || '');
       }
+      updateMediaButtons();
     }
 
-    function renderMedia(meta, sessionId) {
+    function renderMedia(meta, sessionId, mediaType) {
       if (!meta?.available || !sessionId) {
         showToast('ვიდეო ჩანაწერი არ არის ხელმისაწვდომი', 'warning');
         return;
       }
       if (!DOM.resultMediaSection) return;
 
-      const params = new URLSearchParams();
+      const downloadPath = meta.download_url || '';
+      if (!downloadPath) {
+        showToast('ვიდეო ჩანაწერი ვერ ჩაიტვირთა', 'error');
+        return;
+      }
+
       const actorEmail = typeof getActorEmail === 'function' ? (getActorEmail() || '') : '';
-      if (actorEmail) params.set('actor', actorEmail);
-      params.set('t', String(Date.now()));
-      const fileUrl = `${API_BASE}/admin/results/${sessionId}/media/file?${params.toString()}`;
+      const baseUrl = new URL(downloadPath, API_BASE);
+      if (actorEmail) baseUrl.searchParams.set('actor', actorEmail);
+
+      const playerUrl = new URL(baseUrl.toString());
+      playerUrl.searchParams.set('t', String(Date.now()));
+
       DOM.resultMediaSection.hidden = false;
 
       if (DOM.resultMediaPlayer) {
-        DOM.resultMediaPlayer.src = `${fileUrl}?t=${Date.now()}`;
+        DOM.resultMediaPlayer.src = playerUrl.toString();
         DOM.resultMediaPlayer.load?.();
       }
 
       if (DOM.resultMediaDownload) {
-        DOM.resultMediaDownload.href = fileUrl;
+        DOM.resultMediaDownload.href = baseUrl.toString();
         DOM.resultMediaDownload.setAttribute('aria-disabled', 'false');
         DOM.resultMediaDownload.classList.remove('disabled');
         DOM.resultMediaDownload.setAttribute('target', '_blank');
-        DOM.resultMediaDownload.setAttribute('download', meta.filename || `session-${sessionId}.webm`);
+        const fallbackName = `session-${sessionId}-${mediaType}.webm`;
+        DOM.resultMediaDownload.setAttribute('download', meta.filename || fallbackName);
       }
 
+      const label = MEDIA_LABELS[mediaType] || 'ჩანაწერი';
       if (DOM.resultMediaInfo) {
         const infoParts = [
+          `ტიპი: ${label}`,
           `ზომა: ${formatBytesValue(meta.size_bytes)}`,
           `ხანგრძლივობა: ${formatSecondsValue(meta.duration_seconds)}`,
         ];
@@ -369,6 +458,9 @@
         }
         DOM.resultMediaInfo.textContent = infoParts.join(' • ');
       }
+
+      state.activeMediaType = mediaType;
+      setActiveMediaButton(mediaType);
     }
 
     function closeDetail() {
@@ -387,6 +479,7 @@
         const detail = await fetchResultDetail(sessionId);
         state.detail = detail;
         renderDetail(detail);
+        await ensureMediaMeta(sessionId, { force: true });
       } catch (err) {
         console.error('Failed to load result detail', err);
         showToast('დეტალური შედეგი ვერ ჩაიტვირთა', 'error');
@@ -422,42 +515,31 @@
       }
     }
 
-    async function handleMediaClick() {
+    async function handleMediaClick(mediaType) {
       const sessionId = state.detail?.session?.session_id;
       const sessionStatus = state.detail?.session?.status;
-      const allowMedia = sessionStatus === 'completed';
-      if (!sessionId || !allowMedia) {
+      if (!sessionId || sessionStatus !== 'completed') {
         showToast('ვიდეო ჩანაწერი ხელმისაწვდომია მხოლოდ დასრულებული გამოცდისთვის', 'warning');
         return;
       }
       if (state.mediaLoading) return;
 
-      state.mediaLoading = true;
-      if (DOM.resultDetailMedia) {
-        DOM.resultDetailMedia.disabled = true;
-        DOM.resultDetailMedia.classList.add('disabled');
+      if (state.mediaMetaSessionId !== sessionId || !state.mediaMeta?.[mediaType]) {
+        await ensureMediaMeta(sessionId, { force: true });
       }
 
-      try {
-        const meta = await fetchResultMediaMeta(sessionId);
-        state.mediaMeta = meta;
-        if (!meta?.available) {
-          resetMediaSection();
-          showToast('ვიდეო ჩანაწერი არ არის ხელმისაწვდომი', 'warning');
-          return;
-        }
-        renderMedia(meta, sessionId);
-      } catch (error) {
-        console.error('Failed to load media meta', error);
-        showToast('ვიდეო ჩანაწერი ვერ ჩაიტვირთა', 'error');
-      } finally {
-        state.mediaLoading = false;
-        if (DOM.resultDetailMedia) {
-          DOM.resultDetailMedia.disabled = !allowMedia;
-          DOM.resultDetailMedia.classList.toggle('disabled', !allowMedia);
-          DOM.resultDetailMedia.setAttribute('aria-disabled', !allowMedia ? 'true' : 'false');
-        }
+      let meta = state.mediaMeta?.[mediaType];
+      if (!meta?.available) {
+        await ensureMediaMeta(sessionId, { force: true });
+        meta = state.mediaMeta?.[mediaType];
       }
+
+      if (!meta?.available) {
+        showToast('ვიდეო ჩანაწერი არ არის ხელმისაწვდომი', 'warning');
+        return;
+      }
+
+      renderMedia(meta, sessionId, mediaType);
     }
 
     let jsPdfLoader = null;
@@ -646,7 +728,10 @@
         void downloadCurrentPdf();
       });
       on(DOM.resultDetailMedia, 'click', () => {
-        void handleMediaClick();
+        void handleMediaClick(MEDIA_TYPES.CAMERA);
+      });
+      on(DOM.resultDetailScreenMedia, 'click', () => {
+        void handleMediaClick(MEDIA_TYPES.SCREEN);
       });
       on(DOM.resultMediaDownload, 'click', (event) => {
         if (DOM.resultMediaDownload?.getAttribute('aria-disabled') === 'true') {

@@ -45,6 +45,8 @@ from ..services.media_storage import (
 
 router = APIRouter()
 
+MEDIA_TYPES = {"camera", "screen"}
+
 
 @router.post("/gate/verify", response_model=ExamGateVerifyResponse)
 def verify_gate_password(payload: ExamGateVerifyRequest, db: Session = Depends(get_db)):
@@ -215,6 +217,7 @@ def upload_exam_media(
     chunk: UploadFile = File(...),
     is_last: bool = Form(False),
     duration_ms: Optional[str] = Form(None),
+    media_type: str = Form("camera"),
     authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
@@ -232,8 +235,17 @@ def upload_exam_media(
     if duration_value is not None:
         duration_seconds = max(0, duration_value // 1000)
 
-    media = db.scalar(select(ExamMedia).where(ExamMedia.session_id == session.id))
-    default_filename = f"session_{session.id}.webm"
+    media_type_norm = (media_type or "camera").strip().lower()
+    if media_type_norm not in MEDIA_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid media type")
+
+    media = db.scalar(
+        select(ExamMedia).where(
+            ExamMedia.session_id == session.id,
+            ExamMedia.media_type == media_type_norm,
+        )
+    )
+    default_filename = f"session_{session.id}_{media_type_norm}.webm"
 
     if media is None:
         if index != 0:
@@ -244,6 +256,7 @@ def upload_exam_media(
         target_path = ensure_file_path(session.id, default_filename)
         media = ExamMedia(
             session_id=session.id,
+            media_type=media_type_norm,
             storage_path=relative_storage_path(target_path),
             filename=default_filename,
             mime_type=chunk.content_type or "video/webm",
@@ -258,6 +271,8 @@ def upload_exam_media(
         except ValueError:
             target_path = ensure_file_path(session.id, media.filename or default_filename)
             media.storage_path = relative_storage_path(target_path)
+        if not getattr(media, "media_type", None):
+            media.media_type = media_type_norm
 
     expected_index = media.chunk_count
     if index < expected_index:

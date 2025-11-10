@@ -9,9 +9,11 @@ from .models import Base
 from .services.media_storage import ensure_media_root
 try:
     # When running from project root (e.g. `python -m backend.app.main`)
-    from backend.scripts.migrate_results_cols import run as run_migrations
+    from backend.scripts.migrate_results_cols import run as run_results_migration
+    from backend.scripts.migrate_media_table import run as run_media_migration
 except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.main:app`
-    from scripts.migrate_results_cols import run as run_migrations  # type: ignore
+    from scripts.migrate_results_cols import run as run_results_migration  # type: ignore
+    from scripts.migrate_media_table import run as run_media_migration  # type: ignore
 
 
 def create_app() -> FastAPI:
@@ -19,10 +21,11 @@ def create_app() -> FastAPI:
 
     Base.metadata.create_all(bind=engine)
     # Ensure additive columns for results exist (idempotent)
-    try:
-        run_migrations()
-    except Exception:
-        pass
+    for migrate in (run_results_migration, run_media_migration):
+        try:
+            migrate()
+        except Exception:
+            pass
 
     ensure_media_root()
 
