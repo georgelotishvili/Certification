@@ -154,6 +154,22 @@ class User(Base):
     code: Mapped[str] = mapped_column(String(10), index=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    statements: Mapped[List["Statement"]] = relationship(
+        "Statement",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class Statement(Base):
+    __tablename__ = "statements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    user: Mapped["User"] = relationship("User", back_populates="statements")
 
 
 class ExamMedia(Base):

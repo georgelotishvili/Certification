@@ -10,7 +10,7 @@
       getAdminHeaders,
       getActorHeaders,
     } = context;
-    const { onShowResults } = context;
+    const { onShowResults, onShowStatements } = context;
 
     async function fetchUsers() {
       if (!DOM.usersGrid) return { items: [] };
@@ -148,7 +148,13 @@
       }
       const resultsBtns = card.querySelectorAll('.btn-user-results');
       const certificateBtns = card.querySelectorAll('.btn-user-certificate');
-      announcementsBtn?.addEventListener('click', () => alert('განცხადებები — მალე დაემატება'));
+      announcementsBtn?.addEventListener('click', () => {
+        if (typeof onShowStatements === 'function') {
+          onShowStatements(user);
+        } else {
+          alert('განცხადებები — მალე დაემატება');
+        }
+      });
       resultsBtns?.forEach((btn) => btn.addEventListener('click', () => {
         if (typeof onShowResults === 'function') {
           onShowResults(user);

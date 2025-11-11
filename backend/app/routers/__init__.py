@@ -3,5 +3,6 @@ __all__ = [
     "exam",
     "admin",
     "users",
+    "statements",
 ]
 

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
-from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam
+from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam, Statement
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -28,6 +28,8 @@ from ..schemas import (
     UsersListResponse,
     UserOut,
     ToggleAdminRequest,
+    AdminStatementsResponse,
+    AdminStatementOut,
 )
 from ..services.media_storage import resolve_storage_path
 
@@ -55,6 +57,11 @@ def _require_admin(
             return
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin credentials")
+
+
+def _is_founder_actor(actor_email: str | None) -> bool:
+    settings = get_settings()
+    return (settings.founder_admin_email or "").lower() == (actor_email or "").strip().lower()
 
 
 def _get_or_create_exam(db: Session, exam_id: int | None = None) -> Exam:
@@ -840,7 +847,7 @@ def admin_toggle_user(
     db: Session = Depends(get_db),
 ):
     settings = get_settings()
-    if (settings.founder_admin_email or "").lower() != (x_actor_email or "").lower():
+    if not _is_founder_actor(x_actor_email):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can modify admin status")
 
     u = db.get(User, user_id)
@@ -862,7 +869,7 @@ def admin_delete_user(
     db: Session = Depends(get_db),
 ):
     settings = get_settings()
-    if (settings.founder_admin_email or "").lower() != (x_actor_email or "").lower():
+    if not _is_founder_actor(x_actor_email):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete")
 
     u = db.get(User, user_id)
@@ -885,7 +892,7 @@ def admin_delete_all_users(
     settings = get_settings()
     # Only founder can delete all users
     founder_email = (settings.founder_admin_email or "").lower()
-    if founder_email != (x_actor_email or "").lower():
+    if not _is_founder_actor(x_actor_email):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete all users")
 
     # Do not delete founder
@@ -895,5 +902,54 @@ def admin_delete_all_users(
         if (u.email or "").lower() == founder_email:
             continue
         db.delete(u)
+    db.commit()
+    return
+
+
+@router.get("/users/{user_id}/statements", response_model=AdminStatementsResponse)
+def admin_user_statements(
+    user_id: int,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    statements = db.scalars(
+        select(Statement)
+        .where(Statement.user_id == user.id)
+        .order_by(Statement.created_at.desc(), Statement.id.desc())
+    ).all()
+    items = [
+        AdminStatementOut(
+            id=statement.id,
+            user_id=user.id,
+            user_first_name=user.first_name,
+            user_last_name=user.last_name,
+            user_email=user.email,
+            message=statement.message,
+            created_at=statement.created_at,
+        )
+        for statement in statements
+    ]
+    return AdminStatementsResponse(items=items, total=len(items))
+
+
+@router.delete("/statements/{statement_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_statement(
+    statement_id: int,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    if not _is_founder_actor(x_actor_email):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete statements")
+
+    statement = db.get(Statement, statement_id)
+    if not statement:
+        return
+    db.delete(statement)
     db.commit()
     return

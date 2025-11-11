@@ -88,7 +88,7 @@
         <nav class="drawer-nav">
           <a href="#">მთავარი</a>
           <a href="#">რეესტრი</a>
-          <a href="#">განცხადებები</a>
+          <a href="#" class="nav-statements">განცხადებები</a>
           <div class="drawer-item drawer-exam">
             <a href="#" class="drawer-exam-trigger" aria-haspopup="true" aria-expanded="false">გამოცდა</a>
             <div class="drawer-submenu" role="menu" hidden>
@@ -106,7 +106,7 @@
         <nav class="nav">
           <a href="#">მთავარი</a>
           <a href="#">რეესტრი</a>
-          <a href="#">განცხადებები</a>
+          <a href="#" class="drawer-statements">განცხადებები</a>
           <div class="nav-item nav-exam">
             <a href="#" class="exam-trigger" aria-haspopup="true" aria-expanded="false">გამოცდა</a>
             <div class="dropdown" role="menu" aria-hidden="true">
@@ -121,6 +121,25 @@
     </header>
 
     <main></main>
+
+    <div class="results-overlay" id="userStatementsOverlay" aria-hidden="true">
+      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userStatementsTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="userStatementsTitle">განცხადებები</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="userStatementsMeta"></span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="modal-close" id="userStatementsClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <div id="userStatementsList" class="statements-list" role="list"></div>
+        </div>
+      </div>
+    </div>
 
     <!-- (Removed) inline exam overlay; exam now lives in exam.html -->
 

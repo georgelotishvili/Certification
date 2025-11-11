@@ -9,6 +9,7 @@
     <script src="../scripts/admin/shared.js" defer></script>
     <script src="../scripts/admin/exam-settings.js" defer></script>
     <script src="../scripts/admin/blocks.js" defer></script>
+    <script src="../scripts/admin/statements.js" defer></script>
     <script src="../scripts/admin/results.js" defer></script>
     <script src="../scripts/admin/users.js" defer></script>
     <link rel="stylesheet" href="../styles/admin.css" />
@@ -121,6 +122,25 @@
         </div>
         <div class="results-modal-body">
           <div id="candidateResultsList" class="attempts-list" role="list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="userStatementsOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userStatementsTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="userStatementsTitle">განცხადებები</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="userStatementsMeta"></span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="modal-close" id="userStatementsClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <div id="userStatementsList" class="statements-list" role="list"></div>
         </div>
       </div>
     </div>

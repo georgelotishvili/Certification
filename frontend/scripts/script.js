@@ -42,28 +42,99 @@ document.addEventListener('DOMContentLoaded', () => {
     navExamTrigger: document.querySelector('.nav .exam-trigger'),
     navDropdown: document.querySelector('.nav .dropdown'),
     footerForm: document.querySelector('.footer-form'),
+    navStatements: document.querySelector('.nav-statements'),
+    drawerStatements: document.querySelector('.drawer-statements'),
+    statementsOverlay: document.getElementById('userStatementsOverlay'),
+    statementsClose: document.getElementById('userStatementsClose'),
+    statementsList: document.getElementById('userStatementsList'),
+    statementsMeta: document.getElementById('userStatementsMeta'),
   };
 
   const regionsForIsolation = Array.from(document.querySelectorAll('header, .nav-bar, main, footer, .overlay, .drawer, #loginModal'));
+
+  const GEORGIA_TIME_ZONE = 'Asia/Tbilisi';
+  const ISO_NO_TZ_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/;
+  const ISO_WITH_SPACE_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/;
+  let tbilisiFormatter = null;
+
+  function getTbilisiFormatter() {
+    if (!tbilisiFormatter) {
+      tbilisiFormatter = new Intl.DateTimeFormat('en-GB', {
+        timeZone: GEORGIA_TIME_ZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+    return tbilisiFormatter;
+  }
+
+  function normalizeIsoString(value) {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    if (!trimmed) return trimmed;
+    if (trimmed.endsWith('Z')) return trimmed;
+    if (/[+-]\d{2}:?\d{2}$/.test(trimmed)) return trimmed;
+    if (ISO_NO_TZ_REGEX.test(trimmed)) return `${trimmed}Z`;
+    if (ISO_WITH_SPACE_REGEX.test(trimmed)) return `${trimmed.replace(' ', 'T')}Z`;
+    return trimmed;
+  }
+
+  function parseUtcDate(value) {
+    if (!value) return null;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    try {
+      const normalized = normalizeIsoString(String(value));
+      const parsed = new Date(normalized);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    } catch {
+      return null;
+    }
+  }
 
   const utils = {
     on: (element, event, handler) => element && element.addEventListener(event, handler),
     isValidEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
     getTrimmed: (formData, name) => (formData.get(name) || '').toString().trim(),
+    formatDateTime: (value) => {
+      const date = parseUtcDate(value);
+      if (!date) return String(value || '');
+      try {
+        const formatter = getTbilisiFormatter();
+        const parts = formatter.formatToParts(date);
+        const mapped = parts.reduce((acc, part) => {
+          if (part.type !== 'literal') acc[part.type] = part.value;
+          return acc;
+        }, {});
+        const day = mapped.day || '00';
+        const month = mapped.month || '00';
+        const year = mapped.year || '0000';
+        const hour = mapped.hour || '00';
+        const minute = mapped.minute || '00';
+        return `${day}-${month}-${year} ${hour}:${minute}`;
+      } catch {
+        return String(value || '');
+      }
+    },
   };
 
   const layoutModule = createLayoutModule();
   const menuModule = createMenuModule();
   const fullscreenModule = createFullscreenModule();
-  const examNavigationModule = createExamNavigationModule();
   const authModule = createAuthModule();
-  const footerFormModule = createFooterFormModule();
+  const statementsModule = createStatementsModule();
+  const examNavigationModule = createExamNavigationModule();
+  const footerFormModule = createFooterFormModule({ statementsModule });
 
   layoutModule.init();
   menuModule.init();
   fullscreenModule.init();
-  examNavigationModule.init();
   authModule.init();
+  examNavigationModule.init();
+  statementsModule.init();
   footerFormModule.init();
 
   // Global escape handling (modal first, then menu)
@@ -71,6 +142,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.key !== 'Escape') return;
     if (authModule.isModalOpen()) {
       authModule.closeModal();
+      return;
+    }
+    if (statementsModule.isOpen()) {
+      statementsModule.close();
       return;
     }
     if (menuModule.isOpen()) {
@@ -424,6 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateAuthUI();
       updateBanner();
       updateAdminLinkVisibility();
+      document.dispatchEvent(new CustomEvent('auth:logout'));
       alert('გასვლა შესრულებულია');
       closeModal();
     }
@@ -461,10 +537,19 @@ document.addEventListener('DOMContentLoaded', () => {
           const response = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(email)}`);
           if (response.ok) {
             const data = await response.json();
-            saveCurrentUser({ firstName: data.first_name, lastName: data.last_name, code: data.code, isAdmin: !!data.is_admin, email: data.email });
+            const normalizedUser = {
+              id: data.id,
+              firstName: data.first_name,
+              lastName: data.last_name,
+              code: data.code,
+              isAdmin: !!data.is_admin,
+              email: data.email,
+            };
+            saveCurrentUser(normalizedUser);
             updateAuthUI();
             updateBanner();
             updateAdminLinkVisibility();
+            document.dispatchEvent(new CustomEvent('auth:login', { detail: { user: normalizedUser } }));
             closeModal();
             DOM.loginForm?.reset?.();
             showOptions();
@@ -543,13 +628,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
           }
           const data = await response.json();
-          saveCurrentUser({ firstName: data.first_name || firstName, lastName: data.last_name || lastName, code: data.code, isAdmin: !!data.is_admin, email: data.email });
+          const normalizedUser = {
+            id: data.id,
+            firstName: data.first_name || firstName,
+            lastName: data.last_name || lastName,
+            code: data.code,
+            isAdmin: !!data.is_admin,
+            email: data.email,
+          };
+          saveCurrentUser(normalizedUser);
           localStorage.setItem(KEYS.SAVED_EMAIL, email);
           localStorage.setItem(KEYS.SAVED_PASSWORD, password);
           setLoggedIn(true);
           updateAuthUI();
           updateBanner();
           updateAdminLinkVisibility();
+          document.dispatchEvent(new CustomEvent('auth:login', { detail: { user: normalizedUser } }));
           alert('რეგისტრაცია მიღებულია!');
           closeModal();
           DOM.registerForm?.reset?.();
@@ -596,6 +690,201 @@ document.addEventListener('DOMContentLoaded', () => {
       generateUniqueCode,
       getUsedCodes,
       saveUsedCodes,
+    };
+  }
+
+  function createStatementsModule() {
+    let overlayOpen = false;
+    let isLoading = false;
+    let cache = [];
+
+    function getActorEmail() {
+      return (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
+    }
+
+    function setMetaFromUser() {
+      if (!DOM.statementsMeta) return;
+      const user = authModule.getCurrentUser?.();
+      const actorEmail = getActorEmail();
+      const parts = [];
+      if (user) {
+        const name = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+        if (name) parts.push(name);
+        if (user.code) parts.push(`კოდი: ${user.code}`);
+        if (user.email) parts.push(user.email);
+      } else if (actorEmail) {
+        parts.push(actorEmail);
+      }
+      DOM.statementsMeta.textContent = parts.join(' · ');
+    }
+
+    function openOverlay() {
+      if (!DOM.statementsOverlay) return;
+      overlayOpen = true;
+      DOM.statementsOverlay.classList.add('open');
+      DOM.statementsOverlay.setAttribute('aria-hidden', 'false');
+      DOM.body.classList.add('modal-open');
+    }
+
+    function closeOverlay() {
+      if (!DOM.statementsOverlay) return;
+      overlayOpen = false;
+      DOM.statementsOverlay.classList.remove('open');
+      DOM.statementsOverlay.setAttribute('aria-hidden', 'true');
+      DOM.body.classList.remove('modal-open');
+    }
+
+    function isOpen() {
+      return overlayOpen;
+    }
+
+    function renderPlaceholder(text, modifier) {
+      if (!DOM.statementsList) return;
+      const placeholder = document.createElement('div');
+      placeholder.className = `statements-placeholder${modifier ? ` ${modifier}` : ''}`;
+      placeholder.textContent = text;
+      DOM.statementsList.innerHTML = '';
+      DOM.statementsList.appendChild(placeholder);
+    }
+
+    function renderList(items) {
+      if (!DOM.statementsList) return;
+      if (!items.length) {
+        renderPlaceholder('განცხადებები ჯერ არ გაქვთ.', 'statements-empty');
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      items.forEach((item, index) => {
+        const details = document.createElement('details');
+        details.className = 'statement-item';
+        details.setAttribute('role', 'listitem');
+        if (index === 0) details.open = true;
+
+        const summary = document.createElement('summary');
+        summary.className = 'statement-summary';
+        const dateSpan = document.createElement('span');
+        dateSpan.className = 'statement-date';
+        dateSpan.textContent = utils.formatDateTime(item.created_at);
+        summary.appendChild(dateSpan);
+        details.appendChild(summary);
+
+        const message = document.createElement('div');
+        message.className = 'statement-message';
+        message.textContent = item.message || '';
+        details.appendChild(message);
+
+        fragment.appendChild(details);
+      });
+      DOM.statementsList.innerHTML = '';
+      DOM.statementsList.appendChild(fragment);
+    }
+
+    async function fetchStatements() {
+      if (!DOM.statementsList || isLoading) return;
+      const actorEmail = getActorEmail();
+      if (!actorEmail) {
+        renderPlaceholder('ავტორიზაცია ვერ დადასტურდა', 'statements-error');
+        return;
+      }
+      isLoading = true;
+      try {
+        const response = await fetch(`${API_BASE}/statements/me`, {
+          headers: {
+            'x-actor-email': actorEmail,
+            'Cache-Control': 'no-cache',
+          },
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          if (response.status === 401) {
+            renderPlaceholder('გთხოვთ გაიაროთ ავტორიზაცია', 'statements-error');
+            alert('გთხოვთ გაიაროთ ავტორიზაცია');
+            closeOverlay();
+            return;
+          }
+          let detail = '';
+          try {
+            const json = await response.clone().json();
+            detail = json?.detail || '';
+          } catch {
+            try {
+              detail = (await response.clone().text()).trim();
+            } catch {}
+          }
+          throw new Error(detail || 'ჩატვირთვის შეცდომა');
+        }
+        const data = await response.json();
+        cache = Array.isArray(data) ? data : [];
+        renderList(cache);
+      } catch (error) {
+        console.error('Failed to load statements', error);
+        renderPlaceholder('ჩატვირთვის შეცდომა', 'statements-error');
+      } finally {
+        isLoading = false;
+      }
+    }
+
+    function handleOpenRequest(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (!authModule.isLoggedIn()) {
+        alert('გთხოვთ გაიაროთ ავტორიზაცია');
+        return;
+      }
+      const actorEmail = getActorEmail();
+      if (!actorEmail) {
+        alert('ავტორიზაცია ვერ დადასტურდა');
+        return;
+      }
+      menuModule.close();
+      setMetaFromUser();
+      openOverlay();
+      renderPlaceholder('იტვირთება...', 'statements-loading');
+      fetchStatements();
+    }
+
+    function handleBackdropClick(event) {
+      if (event.target === DOM.statementsOverlay) {
+        closeOverlay();
+      }
+    }
+
+    function handleNewStatement(statement) {
+      if (!statement || typeof statement !== 'object') return;
+      cache = [statement, ...cache.filter((item) => item.id !== statement.id)];
+      if (overlayOpen) {
+        renderList(cache);
+      }
+    }
+
+    function reset() {
+      cache = [];
+      if (overlayOpen) {
+        closeOverlay();
+      }
+      if (DOM.statementsList) DOM.statementsList.innerHTML = '';
+      if (DOM.statementsMeta) DOM.statementsMeta.textContent = '';
+    }
+
+    function init() {
+      utils.on(DOM.navStatements, 'click', handleOpenRequest);
+      utils.on(DOM.drawerStatements, 'click', handleOpenRequest);
+      utils.on(DOM.statementsClose, 'click', closeOverlay);
+      utils.on(DOM.statementsOverlay, 'click', handleBackdropClick);
+      document.addEventListener('auth:logout', reset);
+      document.addEventListener('auth:login', setMetaFromUser);
+      setMetaFromUser();
+    }
+
+    return {
+      init,
+      isOpen,
+      close: closeOverlay,
+      refresh: fetchStatements,
+      handleNewStatement,
+      reset,
     };
   }
 
@@ -667,7 +956,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return { init };
   }
 
-  function createFooterFormModule() {
+  function createFooterFormModule(deps = {}) {
+    const { statementsModule } = deps;
     let messageField = null;
 
     function ensureAuth(event) {
@@ -677,14 +967,55 @@ document.addEventListener('DOMContentLoaded', () => {
       messageField?.blur?.();
     }
 
-    function handleSubmit(event) {
+    async function handleSubmit(event) {
       event.preventDefault();
       if (!DOM.footerForm) return;
+      if (!authModule.isLoggedIn()) {
+        alert('გთხოვთ გაიაროთ ავტორიზაცია');
+        return;
+      }
       const formData = new FormData(DOM.footerForm);
       const message = utils.getTrimmed(formData, 'message');
       if (!message) return alert('გთხოვთ შეიყვანოთ შეტყობინება');
-      alert('თქვენი შეტყობინება გაგზავნილია! ჩვენ მალე დაგიკავშირდებით.');
-      DOM.footerForm.reset();
+      const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
+      if (!actorEmail) {
+        alert('ავტორიზაცია ვერ დადასტურდა');
+        return;
+      }
+      const submitBtn = DOM.footerForm.querySelector('button[type="submit"]');
+      submitBtn?.setAttribute('disabled', 'true');
+      try {
+        const response = await fetch(`${API_BASE}/statements`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-actor-email': actorEmail,
+          },
+          body: JSON.stringify({ message }),
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          let detail = '';
+          try {
+            const json = await response.clone().json();
+            detail = json?.detail || '';
+          } catch {
+            try {
+              detail = (await response.clone().text()).trim();
+            } catch {}
+          }
+          throw new Error(detail || 'გაგზავნა ვერ შესრულდა');
+        }
+        const data = await response.json();
+        alert('თქვენი განცხადება მიღებულია!');
+        DOM.footerForm.reset();
+        statementsModule?.handleNewStatement?.(data);
+      } catch (error) {
+        console.error('Failed to submit statement', error);
+        alert(error.message || 'გაგზავნა ვერ შესრულდა');
+      } finally {
+        submitBtn?.removeAttribute('disabled');
+      }
     }
 
     function init() {

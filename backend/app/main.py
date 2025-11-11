@@ -39,12 +39,13 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from .routers import auth, exam, admin, users
+    from .routers import auth, exam, admin, users, statements
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
     app.include_router(users.router, prefix="/users", tags=["users"])
+    app.include_router(statements.router, prefix="/statements", tags=["statements"])
 
     return app
 

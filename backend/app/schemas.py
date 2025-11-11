@@ -271,6 +271,31 @@ class UsersListResponse(BaseModel):
     total: int
 
 
+class StatementCreate(BaseModel):
+    message: str = Field(..., min_length=1, max_length=5000)
+
+
+class StatementOut(BaseModel):
+    id: int
+    message: str
+    created_at: datetime
+
+
+class AdminStatementOut(BaseModel):
+    id: int
+    user_id: int
+    user_first_name: str | None = None
+    user_last_name: str | None = None
+    user_email: str | None = None
+    message: str
+    created_at: datetime
+
+
+class AdminStatementsResponse(BaseModel):
+    items: List[AdminStatementOut]
+    total: int
+
+
 class ToggleAdminRequest(BaseModel):
     is_admin: bool
 

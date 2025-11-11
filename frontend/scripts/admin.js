@@ -43,6 +43,10 @@ document.addEventListener('DOMContentLoaded', () => {
     candidateResultsCode: document.getElementById('candidateResultsCode'),
     candidateResultsPersonalId: document.getElementById('candidateResultsPersonalId'),
     candidateResultsClose: document.getElementById('candidateResultsClose'),
+    userStatementsOverlay: document.getElementById('userStatementsOverlay'),
+    userStatementsList: document.getElementById('userStatementsList'),
+    userStatementsMeta: document.getElementById('userStatementsMeta'),
+    userStatementsClose: document.getElementById('userStatementsClose'),
     resultDetailOverlay: document.getElementById('resultDetailOverlay'),
     resultDetailExamTitle: document.getElementById('resultDetailExamTitle'),
     resultDetailStatus: document.getElementById('resultDetailStatus'),
@@ -257,8 +261,12 @@ document.addEventListener('DOMContentLoaded', () => {
       ? modules.createResultsModule(moduleContextBase)
       : { init: () => {}, open: () => {}, close: () => {} };
 
+    const statementsModule = modules.createStatementsModule
+      ? modules.createStatementsModule(moduleContextBase)
+      : { init: () => {}, open: () => {}, close: () => {}, refresh: () => {} };
+
     const usersModule = modules.createUsersModule
-      ? modules.createUsersModule({ ...moduleContextBase, onShowResults: resultsModule.open })
+      ? modules.createUsersModule({ ...moduleContextBase, onShowResults: resultsModule.open, onShowStatements: statementsModule.open })
       : { init: () => {}, render: () => {} };
 
     const hasAccess = await ensureAdminAccess();
@@ -269,6 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
     examSettings.init();
     blocksModule.init();
     resultsModule.init();
+    statementsModule.init();
     usersModule.init();
 
     showSection(null);
