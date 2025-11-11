@@ -220,15 +220,17 @@ def update_exam_blocks(
         else:
             block = Block(exam_id=exam.id)
             db.add(block)
-            db.flush()
             exam.blocks.append(block)
-            block_by_id[str(block.id)] = block
 
         block_index_default += 1
         block.title = (block_payload.name or "").strip() or f"ბლოკი {block_index_default}"
         block.qty = qty
         block.order_index = block_payload.number or block_index_default
         block.enabled = block_payload.enabled
+
+        db.flush()
+
+        block_by_id[str(block.id)] = block
         processed_block_ids.add(block.id)
 
         existing_questions = {str(question.id): question for question in block.questions}
@@ -241,7 +243,6 @@ def update_exam_blocks(
             else:
                 question = Question(block_id=block.id)
                 db.add(question)
-                db.flush()
                 block.questions.append(question)
                 existing_questions[str(question.id)] = question
 
@@ -249,6 +250,9 @@ def update_exam_blocks(
             question.text = (question_payload.text or "").strip()
             question.order_index = question_index
             question.enabled = question_payload.enabled
+
+            db.flush()
+
             processed_question_ids.add(question.id)
 
             existing_options = {str(option.id): option for option in question.options}
@@ -261,7 +265,6 @@ def update_exam_blocks(
                 else:
                     option = Option(question_id=question.id)
                     db.add(option)
-                    db.flush()
                     question.options.append(option)
                     existing_options[str(option.id)] = option
 
@@ -271,6 +274,9 @@ def update_exam_blocks(
                     if question_payload.correct_answer_id is not None
                     else False
                 )
+
+                db.flush()
+
                 processed_option_ids.add(option.id)
 
             if question.options and not any(opt.is_correct for opt in question.options):
