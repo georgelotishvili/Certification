@@ -8,9 +8,9 @@ viewBox="0 0 25559.43 2985.46"
  <defs>
   <style type="text/css">
    <![CDATA[
+    .fil1 {fill:#003399}
     .fil2 {fill:#131C2F}
-    .fil1 {fill:gray}
-    .fil0 {fill:#9999FF}
+    .fil0 {fill:#6666FF}
    ]]>
   </style>
  </defs>

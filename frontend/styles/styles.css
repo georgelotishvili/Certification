@@ -708,15 +708,15 @@ footer {
   .burger {
     display: flex;
   }
+  
+  .header-hero {
+    height: 110px;
+  }
 }
 
 @media (max-width: 640px) {
   body {
     padding-top: 160px;
-  }
-
-  .header-hero {
-    height: 110px;
   }
 
   .footer-content {
