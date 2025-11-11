@@ -591,9 +591,20 @@ footer {
 }
 
 .login-option {
-  background: var(--color-accent);
+  background: var(--color-success);
   color: #ffffff;
-  border-color: var(--color-accent);
+  border: 1px solid var(--color-success);
+  box-shadow: 0 8px 18px rgba(31, 138, 77, 0.18);
+  font-weight: 600;
+}
+
+.login-option:hover,
+.login-option:focus-visible {
+  background: #1a7a44;
+  border-color: #1a7a44;
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(31, 138, 77, 0.24);
+  transform: translateY(-1px);
 }
 
 .login-form,
