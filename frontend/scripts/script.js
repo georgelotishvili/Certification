@@ -668,23 +668,31 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function createFooterFormModule() {
+    let messageField = null;
+
+    function ensureAuth(event) {
+      if (authModule.isLoggedIn()) return;
+      if (event?.cancelable) event.preventDefault();
+      alert('გთხოვთ გაიაროთ ავტორიზაცია');
+      messageField?.blur?.();
+    }
+
     function handleSubmit(event) {
       event.preventDefault();
       if (!DOM.footerForm) return;
       const formData = new FormData(DOM.footerForm);
-      const name = utils.getTrimmed(formData, 'name');
-      const email = utils.getTrimmed(formData, 'email');
       const message = utils.getTrimmed(formData, 'message');
-      if (!name) return alert('გთხოვთ შეიყვანოთ სახელი');
-      if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
-      if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
       if (!message) return alert('გთხოვთ შეიყვანოთ შეტყობინება');
       alert('თქვენი შეტყობინება გაგზავნილია! ჩვენ მალე დაგიკავშირდებით.');
       DOM.footerForm.reset();
     }
 
     function init() {
-      if (DOM.footerForm) utils.on(DOM.footerForm, 'submit', handleSubmit);
+      if (!DOM.footerForm) return;
+      messageField = DOM.footerForm.querySelector('textarea[name="message"]');
+      utils.on(DOM.footerForm, 'submit', handleSubmit);
+      utils.on(messageField, 'mousedown', ensureAuth);
+      utils.on(messageField, 'focus', ensureAuth);
     }
 
     return { init };
