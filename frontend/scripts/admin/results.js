@@ -47,6 +47,15 @@
       [MEDIA_TYPES.SCREEN]: 'სკრინი',
     };
 
+    const PDF_COLORS = {
+      text: '#0f172a',
+      muted: '#64748b',
+      success: '#1f8a4d',
+      danger: '#c73631',
+      cardBackground: '#f8fafc',
+      cardBorder: '#d0d8ea',
+    };
+
     function statusMeta(status) {
       return STATUS_MAP[status] || { label: 'უცნობია', tag: 'neutral' };
     }
@@ -83,6 +92,106 @@
         return { label: 'არ არის პასუხი', tag: 'neutral' };
       }
       return answer.is_correct ? { label: 'სწორია', tag: 'success' } : { label: 'არასწორია', tag: 'error' };
+    }
+
+    function buildOptionsList(answer) {
+      const list = document.createElement('ul');
+      list.className = 'result-question-options';
+      const options = Array.isArray(answer?.options) ? answer.options : [];
+      if (!options.length) {
+        const item = document.createElement('li');
+        item.className = 'result-question-option';
+        const text = document.createElement('span');
+        text.className = 'option-text';
+        text.textContent = 'პასუხები ვერ მოიძებნა';
+        item.appendChild(text);
+        list.appendChild(item);
+        return list;
+      }
+
+      options.forEach((option) => {
+        const item = document.createElement('li');
+        item.className = 'result-question-option';
+        if (option.is_correct) item.classList.add('correct');
+        if (option.is_selected) item.classList.add('selected');
+
+        const text = document.createElement('span');
+        text.className = 'option-text';
+        text.textContent = option.option_text || '';
+        item.appendChild(text);
+
+      const statusWrap = document.createElement('div');
+      statusWrap.className = 'option-status';
+      if (option.is_selected) {
+        const selectedBadge = document.createElement('span');
+        selectedBadge.className = 'option-badge selected-badge';
+        selectedBadge.textContent = 'მონიშნული';
+        statusWrap.appendChild(selectedBadge);
+      }
+      if (option.is_correct) {
+        const correctBadge = document.createElement('span');
+        correctBadge.className = 'option-badge correct-badge';
+        correctBadge.textContent = 'სწორი';
+        statusWrap.appendChild(correctBadge);
+      }
+      if (statusWrap.children.length) {
+        item.appendChild(statusWrap);
+      }
+
+        list.appendChild(item);
+      });
+
+      return list;
+    }
+
+    function createMetaItem(label, value, className = 'meta-item') {
+      const item = document.createElement('span');
+      item.className = className;
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'label';
+      labelSpan.textContent = label;
+      item.appendChild(labelSpan);
+      const valueSpan = document.createElement('span');
+      valueSpan.textContent = value;
+      item.appendChild(valueSpan);
+      return item;
+    }
+
+    function buildQuestionCard(answer, index) {
+      const card = document.createElement('article');
+      card.className = 'result-question-card';
+
+      const statusData = answerStatusMeta(answer);
+
+      const head = document.createElement('div');
+      head.className = 'result-question-card-head';
+
+      const headTop = document.createElement('div');
+      headTop.className = 'result-question-card-head-top';
+
+      const metaWrap = document.createElement('div');
+      metaWrap.className = 'result-question-card-head-meta';
+      metaWrap.appendChild(createMetaItem('ბლოკი', answer.block_title || '—'));
+      metaWrap.appendChild(createMetaItem('კოდი', answer.question_code || '—'));
+      metaWrap.appendChild(createMetaItem('კითხვა №', String(index + 1)));
+
+      const statusTag = document.createElement('span');
+      statusTag.className = `result-tag ${statusData.tag}`;
+      statusTag.textContent = statusData.label;
+
+      headTop.append(metaWrap, statusTag);
+      head.appendChild(headTop);
+      card.appendChild(head);
+
+      const questionText = document.createElement('div');
+      questionText.className = 'result-question-text';
+      questionText.textContent = answer.question_text || '';
+      card.appendChild(questionText);
+
+      const optionsList = buildOptionsList(answer);
+      card.appendChild(optionsList);
+
+      return card;
     }
 
     function setCandidateHeader(user) {
@@ -305,8 +414,7 @@
       if (DOM.resultDetailScore) DOM.resultDetailScore.textContent = '';
       if (DOM.resultDetailSummary) DOM.resultDetailSummary.textContent = '';
       if (DOM.resultBlockStats) DOM.resultBlockStats.innerHTML = '';
-      const tbody = DOM.resultQuestionTable?.querySelector('tbody');
-      if (tbody) tbody.innerHTML = '';
+      if (DOM.resultQuestionList) DOM.resultQuestionList.innerHTML = '';
     }
 
     function renderDetail(detail) {
@@ -367,40 +475,12 @@
         DOM.resultBlockStats.appendChild(fragment);
       }
 
-      const tbody = DOM.resultQuestionTable?.querySelector('tbody');
-      if (tbody) {
-        tbody.innerHTML = '';
-        (detail.answers || []).forEach((answer) => {
+      if (DOM.resultQuestionList) {
+        DOM.resultQuestionList.innerHTML = '';
+        (detail.answers || []).forEach((answer, index) => {
           if (!answer) return;
-          const statusData = answerStatusMeta(answer);
-          const row = document.createElement('tr');
-
-          const codeCell = document.createElement('td');
-          codeCell.textContent = answer.question_code || '';
-
-          const blockCell = document.createElement('td');
-          blockCell.textContent = answer.block_title || '';
-
-          const questionCell = document.createElement('td');
-          questionCell.textContent = answer.question_text || '';
-
-          const selectedCell = document.createElement('td');
-          selectedCell.textContent = answer.selected_option_text || '—';
-
-          const correctCell = document.createElement('td');
-          correctCell.textContent = answer.correct_option_text || '—';
-
-          const statusCell = document.createElement('td');
-          const statusTag = document.createElement('span');
-          statusTag.className = `result-tag ${statusData.tag}`;
-          statusTag.textContent = statusData.label;
-          statusCell.appendChild(statusTag);
-
-          const timeCell = document.createElement('td');
-          timeCell.textContent = answer.answered_at ? formatDateTime(answer.answered_at) : '—';
-
-          row.append(codeCell, blockCell, questionCell, selectedCell, correctCell, statusCell, timeCell);
-          tbody.appendChild(row);
+          const card = buildQuestionCard(answer, index);
+          if (card) DOM.resultQuestionList.appendChild(card);
         });
       }
 
@@ -607,6 +687,48 @@
         const lineHeight = 16;
         let cursorY = margin;
 
+        const hexToRgb = (hex) => {
+          const normalized = (hex || '').replace('#', '');
+          const bigint = parseInt(normalized, 16);
+          if (Number.isNaN(bigint)) return { r: 0, g: 0, b: 0 };
+          if (normalized.length === 3) {
+            const r = (bigint >> 8) & 0xf;
+            const g = (bigint >> 4) & 0xf;
+            const b = bigint & 0xf;
+            return {
+              r: (r << 4) | r,
+              g: (g << 4) | g,
+              b: (b << 4) | b,
+            };
+          }
+          return {
+            r: (bigint >> 16) & 0xff,
+            g: (bigint >> 8) & 0xff,
+            b: bigint & 0xff,
+          };
+        };
+
+        const setTextColor = (hex) => {
+          const { r, g, b } = hexToRgb(hex);
+          doc.setTextColor(r, g, b);
+        };
+
+        const resetTextColor = () => setTextColor(PDF_COLORS.text);
+
+        const ensureSpace = (height = 0) => {
+          if (cursorY + height > pageHeight - margin) {
+            doc.addPage();
+            cursorY = margin;
+            doc.setFont(fontName, 'normal');
+            doc.setFontSize(12);
+            resetTextColor();
+          }
+        };
+
+        doc.setFont(fontName, 'normal');
+        doc.setFontSize(12);
+        resetTextColor();
+
         const session = detail.session || {};
         const status = statusMeta(session.status);
         const durationBase = session.finished_at || session.ends_at;
@@ -632,7 +754,8 @@
           `კითხვები: სულ ${detail.total_questions}, პასუხი ${detail.answered_questions}, სწორია ${detail.correct_answers}`,
         ];
 
-        const splitAndWrite = (text) => {
+        const splitAndWrite = (text, { color = PDF_COLORS.text } = {}) => {
+          setTextColor(color);
           const lines = doc.splitTextToSize(text, usableWidth);
           lines.forEach((line) => {
             if (cursorY > pageHeight - margin) {
@@ -642,6 +765,7 @@
             doc.text(line, margin, cursorY);
             cursorY += lineHeight;
           });
+          resetTextColor();
         };
 
         infoLines.forEach((line) => splitAndWrite(line));
@@ -672,16 +796,117 @@
           doc.text('კითხვების დეტალური შედეგები', margin, cursorY);
           cursorY += lineHeight;
           doc.setFont(fontName, 'normal');
+          const cardPadding = 16;
+          const sectionSpacing = lineHeight / 2;
+          const optionGap = 6;
+          const cardWidth = usableWidth;
+
           detail.answers.forEach((answer, index) => {
             const statusData = answerStatusMeta(answer);
-            const header = `${index + 1}. ${answer.question_code || ''} — ${answer.block_title || ''}`.trim();
-            splitAndWrite(header);
-            if (answer.question_text) splitAndWrite(`კითხვა: ${answer.question_text}`);
-            splitAndWrite(`არჩეული: ${answer.selected_option_text || 'არ არის პასუხი'}`);
-            splitAndWrite(`სწორი: ${answer.correct_option_text || '—'}`);
-            splitAndWrite(`სტატუსი: ${statusData.label}`);
-            splitAndWrite(`დრო: ${answer.answered_at ? formatDateTime(answer.answered_at) : '—'}`);
-            cursorY += lineHeight / 2;
+            const options = Array.isArray(answer.options) ? answer.options : [];
+            const contentWidth = cardWidth - cardPadding * 2;
+
+            const blockLabelParts = [];
+            if (answer.block_id != null) {
+              blockLabelParts.push(`ბლოკი № ${answer.block_id}`);
+            }
+            if (answer.block_title) {
+              blockLabelParts.push(answer.block_title);
+            }
+            const blockLabel = blockLabelParts.length ? blockLabelParts.join(' — ') : 'ბლოკი: უცნობი';
+            const headerLine = `კითხვა № ${index + 1} — კოდი ${answer.question_code || '—'} • ${blockLabel}`;
+            const headerLines = doc.splitTextToSize(headerLine, contentWidth);
+
+            const questionLines = answer.question_text
+              ? doc.splitTextToSize(`კითხვა: ${answer.question_text}`, contentWidth)
+              : [];
+
+            const footerLine = `სტატუსი: ${statusData.label} • პასუხის დრო: ${answer.answered_at ? formatDateTime(answer.answered_at) : '—'}`;
+            const footerLines = doc.splitTextToSize(footerLine, contentWidth);
+
+            const optionBlocks = options.map((option, optionIndex) => {
+              const markers = [];
+              if (option.is_correct) markers.push('სწორი');
+              if (option.is_selected) markers.push('მონიშნული');
+              const suffix = markers.length ? ` (${markers.join(', ')})` : '';
+              const text = `${optionIndex + 1}. ${option.option_text || '—'}${suffix}`;
+              const lines = doc.splitTextToSize(text, contentWidth);
+              let color = PDF_COLORS.text;
+              if (option.is_selected && option.is_correct) {
+                color = PDF_COLORS.success;
+              } else if (option.is_selected && !option.is_correct) {
+                color = PDF_COLORS.danger;
+              }
+              return { lines, color };
+            });
+
+            let cardHeight = cardPadding * 2;
+            cardHeight += headerLines.length * lineHeight;
+            if (questionLines.length) {
+              cardHeight += sectionSpacing + questionLines.length * lineHeight;
+            }
+            if (optionBlocks.length) {
+              cardHeight += sectionSpacing;
+              optionBlocks.forEach(({ lines }) => {
+                cardHeight += lines.length * lineHeight;
+              });
+              cardHeight += optionGap * Math.max(optionBlocks.length - 1, 0);
+            }
+            cardHeight += sectionSpacing + footerLines.length * lineHeight;
+
+            ensureSpace(cardHeight);
+
+            doc.setFillColor(248, 250, 252);
+            const { r: borderR, g: borderG, b: borderB } = hexToRgb(PDF_COLORS.cardBorder);
+            doc.setDrawColor(borderR, borderG, borderB);
+            doc.setLineWidth(0.6);
+
+            doc.rect(margin, cursorY, cardWidth, cardHeight, 'FD');
+
+            let textX = margin + cardPadding;
+            let textY = cursorY + cardPadding + lineHeight;
+
+            doc.setFont(fontName, 'bold');
+            resetTextColor();
+            headerLines.forEach((line) => {
+              doc.text(line, textX, textY);
+              textY += lineHeight;
+            });
+
+            doc.setFont(fontName, 'normal');
+            resetTextColor();
+            if (questionLines.length) {
+              textY += sectionSpacing;
+              questionLines.forEach((line) => {
+                doc.text(line, textX, textY);
+                textY += lineHeight;
+              });
+            }
+
+            if (optionBlocks.length) {
+              textY += sectionSpacing;
+              optionBlocks.forEach(({ lines, color }, optionIdx) => {
+                setTextColor(color);
+                lines.forEach((line) => {
+                  doc.text(line, textX, textY);
+                  textY += lineHeight;
+                });
+                if (optionIdx < optionBlocks.length - 1) {
+                  textY += optionGap;
+                }
+              });
+              resetTextColor();
+            }
+
+            textY += sectionSpacing;
+            setTextColor(PDF_COLORS.muted);
+            footerLines.forEach((line) => {
+              doc.text(line, textX, textY);
+              textY += lineHeight;
+            });
+            resetTextColor();
+
+            cursorY += cardHeight + lineHeight / 2;
           });
         }
 

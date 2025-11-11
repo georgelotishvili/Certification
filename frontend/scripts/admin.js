@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resultDetailScore: document.getElementById('resultDetailScore'),
     resultBlockStats: document.getElementById('resultBlockStats'),
     resultDetailSummary: document.getElementById('resultDetailSummary'),
-    resultQuestionTable: document.getElementById('resultQuestionTable'),
+    resultQuestionList: document.getElementById('resultQuestionList'),
     resultDetailDownload: document.getElementById('resultDetailDownload'),
     resultDetailMedia: document.getElementById('resultDetailMedia'),
     resultDetailScreenMedia: document.getElementById('resultDetailScreenMedia'),

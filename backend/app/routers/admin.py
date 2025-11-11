@@ -23,6 +23,7 @@ from ..schemas import (
     ResultMediaResponse,
     ResultMediaItem,
     AnswerDetail,
+    AnswerOptionDetail,
     BlockStatDetail,
     UsersListResponse,
     UserOut,
@@ -512,6 +513,11 @@ def result_detail(
         else []
     )
     options_by_id = {opt.id: opt for opt in options}
+    options_by_question: dict[int, list[Option]] = {}
+    for opt in options:
+        options_by_question.setdefault(opt.question_id, []).append(opt)
+    for question_options in options_by_question.values():
+        question_options.sort(key=lambda option: option.id)
     correct_option_map: dict[int, Option] = {}
     for opt in options:
         if opt.is_correct:
@@ -604,6 +610,16 @@ def result_detail(
         answer = answer_by_question.get(qid)
         selected_option = options_by_id.get(answer.option_id) if answer else None
         correct_option = correct_option_map.get(qid)
+        option_details: list[AnswerOptionDetail] = []
+        for option in options_by_question.get(qid, []):
+            option_details.append(
+                AnswerOptionDetail(
+                    option_id=option.id,
+                    option_text=option.text,
+                    is_correct=bool(option.is_correct),
+                    is_selected=bool(answer and option.id == answer.option_id),
+                )
+            )
         block = block_map.get(question.block_id)
         answers_payload.append(
             AnswerDetail(
@@ -618,6 +634,7 @@ def result_detail(
                 answered_at=answer.answered_at if answer else None,
                 correct_option_id=correct_option.id if correct_option else None,
                 correct_option_text=correct_option.text if correct_option else None,
+                options=option_details,
             )
         )
 

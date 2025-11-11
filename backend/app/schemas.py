@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic import EmailStr
 
 
@@ -187,6 +187,13 @@ class ResultListResponse(BaseModel):
     total: int
 
 
+class AnswerOptionDetail(BaseModel):
+    option_id: int
+    option_text: str
+    is_correct: bool
+    is_selected: bool
+
+
 class AnswerDetail(BaseModel):
     question_id: int
     question_code: str
@@ -199,6 +206,7 @@ class AnswerDetail(BaseModel):
     answered_at: datetime | None = None
     correct_option_id: int | None = None
     correct_option_text: str | None = None
+    options: List[AnswerOptionDetail] = Field(default_factory=list)
 
 
 class BlockStatDetail(BaseModel):
