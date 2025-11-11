@@ -11,6 +11,9 @@
       getActorHeaders,
     } = context;
     const { onShowResults, onShowStatements } = context;
+    const navLinks = DOM.navLinks || [];
+
+    let cachedItems = [];
 
     async function fetchUsers() {
       if (!DOM.usersGrid) return { items: [] };
@@ -39,7 +42,7 @@
       const safeEmail = escapeHtml(user.email || '');
       const safeRegistered = escapeHtml(formatDateTime(user.created_at));
       return `
-        <div class="block-tile block-card" data-id="${safeId}">
+        <div class="block-tile block-card${user.has_unseen_statements ? ' has-new-statements' : ''}" data-id="${safeId}">
         <div class="block-head" style="grid-template-columns:auto 1fr auto auto auto;">
             <div class="block-order"></div>
             <div style="font-size:16px;font-weight:700;color:#0f172a;">${safeFullName}</div>
@@ -165,18 +168,31 @@
       certificateBtns?.forEach((btn) => btn.addEventListener('click', () => alert('სერტიფიკატი — მალე დაემატება')));
     }
 
+    function setCardUnseenState(card, hasUnseen) {
+      if (!card) return;
+      card.classList.toggle('has-new-statements', !!hasUnseen);
+      const announcementsButton = card.querySelector('.btn-user-announcements');
+      if (announcementsButton) {
+        announcementsButton.classList.toggle('has-new-statements', !!hasUnseen);
+      }
+    }
+
     function drawUsers(items) {
       if (!DOM.usersGrid) return;
       DOM.usersGrid.innerHTML = '';
+      cachedItems = items || [];
       (items || []).forEach((user) => {
         const wrapper = document.createElement('div');
         wrapper.innerHTML = userRowHTML(user);
         const card = wrapper.firstElementChild;
         if (card) {
+          card.dataset.unseenCount = String(user.unseen_statement_count || 0);
+          setCardUnseenState(card, user.has_unseen_statements);
           mountUserCard(card, user);
           DOM.usersGrid.appendChild(card);
         }
       });
+      updateNavBadge(cachedItems.some((user) => user.has_unseen_statements));
     }
 
     async function render() {
@@ -184,7 +200,8 @@
       DOM.usersGrid.innerHTML = '<div class="block-tile">იტვირთება...</div>';
       try {
         const data = await fetchUsers();
-        drawUsers(data.items || []);
+        cachedItems = Array.isArray(data?.items) ? data.items : [];
+        drawUsers(cachedItems);
       } catch {
         DOM.usersGrid.innerHTML = '<div class="block-tile">ჩატვირთვის შეცდომა</div>';
       }
@@ -196,9 +213,49 @@
       on(DOM.onlyAdmins, 'change', render);
     }
 
+    function updateUserUnseenStatus(userId, hasUnseen, count) {
+      const card = DOM.usersGrid?.querySelector(`.block-card[data-id="${userId}"]`);
+      if (!card) return;
+      setCardUnseenState(card, hasUnseen);
+      card.dataset.unseenCount = String(count || 0);
+      const index = cachedItems.findIndex((item) => String(item.id) === String(userId));
+      if (index !== -1) {
+        cachedItems[index] = {
+          ...cachedItems[index],
+          has_unseen_statements: !!hasUnseen,
+          unseen_statement_count: count || 0,
+        };
+      }
+      updateNavBadge(cachedItems.some((item) => item.has_unseen_statements));
+    }
+
+    function updateNavBadge(hasAny) {
+      navLinks.forEach((link) => {
+        const label = (link.textContent || '').trim();
+        if (label === 'რეგისტრაციები' || label === 'რეგისტრირებული პირები') {
+          link.classList.toggle('has-new-statements', !!hasAny);
+        }
+      });
+    }
+
+    async function refreshUnseenSummary() {
+      try {
+        const response = await fetch(`${API_BASE}/admin/statements/summary`, {
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+        });
+        if (!response.ok) throw new Error('summary failed');
+        const data = await response.json();
+        updateNavBadge(!!data?.has_unseen);
+      } catch (error) {
+        console.warn('Failed to refresh statement summary', error);
+      }
+    }
+
     return {
       init,
       render: () => render(),
+      updateUserUnseenStatus,
+      refreshUnseenSummary,
     };
   }
 

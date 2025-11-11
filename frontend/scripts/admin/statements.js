@@ -101,8 +101,11 @@
       items.forEach((item, index) => {
         const details = document.createElement('details');
         details.className = 'statement-item';
+        details.dataset.statementId = String(item.id);
         details.setAttribute('role', 'listitem');
-        if (index === 0) details.open = true;
+        if (item.seen_at == null) {
+          details.classList.add('is-unseen');
+        }
 
         const summary = document.createElement('summary');
         summary.className = 'statement-summary';
@@ -156,6 +159,12 @@
 
         details.appendChild(messageWrapper);
         fragment.appendChild(details);
+
+        details.addEventListener('toggle', () => {
+          if (details.open && details.classList.contains('is-unseen')) {
+            markStatementsSeen([item.id]);
+          }
+        });
       });
       list.innerHTML = '';
       list.appendChild(fragment);
@@ -181,6 +190,44 @@
         renderPlaceholder('განცხადებების ჩატვირთვა ვერ შესრულდა', 'statements-error');
       } finally {
         loading = false;
+      }
+    }
+
+    async function markStatementsSeen(ids) {
+      if (!Array.isArray(ids) || !ids.length) return;
+      try {
+        const response = await fetch(`${API_BASE}/admin/statements/mark-seen`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAdminHeaders(),
+            ...getActorHeaders(),
+          },
+          body: JSON.stringify({ statement_ids: ids }),
+        });
+        if (!response.ok) throw new Error('mark failed');
+        const nowIso = new Date().toISOString();
+        cache = cache.map((item) => (ids.includes(item.id) ? { ...item, seen_at: nowIso, seen_by: getActorHeaders()['x-actor-email'] || 'admin' } : item));
+        const remaining = cache.filter((item) => item.seen_at == null).length;
+        if (list) {
+          list.querySelectorAll('.statement-item').forEach((element) => {
+            const statementId = Number(element.dataset.statementId);
+            if (ids.includes(statementId)) {
+              element.classList.remove('is-unseen');
+            }
+          });
+        }
+        window.dispatchEvent(new CustomEvent('admin:statementsSeen', {
+          detail: {
+            userId: activeUser?.id,
+            ids,
+            remainingCount: remaining,
+            hasUnseen: remaining > 0,
+            refreshSummary: remaining <= 0,
+          },
+        }));
+      } catch (error) {
+        console.warn('Failed to mark statements seen', error);
       }
     }
 
@@ -350,6 +397,7 @@
       open,
       close,
       downloadStatementPdf,
+      markStatementsSeen,
     };
   }
 

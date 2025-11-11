@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -64,4 +65,12 @@ def list_my_statements(
         )
         for statement in statements
     ]
+
+
+@router.get("/summary")
+def statements_summary(
+    db: Session = Depends(get_db),
+):
+    total_unseen = db.scalar(select(func.count()).select_from(Statement).where(Statement.seen_at.is_(None))) or 0
+    return {"has_unseen": total_unseen > 0, "unseen_total": total_unseen}
 

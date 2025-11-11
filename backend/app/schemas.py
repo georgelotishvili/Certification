@@ -255,6 +255,8 @@ class UserOut(BaseModel):
     is_admin: bool
     is_founder: bool = False
     created_at: datetime
+    has_unseen_statements: bool | None = None
+    unseen_statement_count: int | None = None
 
 
 class UserCreate(BaseModel):
@@ -289,11 +291,17 @@ class AdminStatementOut(BaseModel):
     user_email: str | None = None
     message: str
     created_at: datetime
+    seen_at: datetime | None = None
+    seen_by: str | None = None
 
 
 class AdminStatementsResponse(BaseModel):
     items: List[AdminStatementOut]
     total: int
+
+
+class StatementSeenRequest(BaseModel):
+    statement_ids: List[int]
 
 
 class ToggleAdminRequest(BaseModel):

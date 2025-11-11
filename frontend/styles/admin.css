@@ -904,6 +904,11 @@ body.modal-open {
   box-shadow: 0 16px 32px rgba(29, 39, 68, 0.12);
 }
 
+.statement-item.is-unseen {
+  border-color: var(--danger);
+  box-shadow: 0 16px 32px rgba(199, 54, 49, 0.18);
+}
+
 .statement-summary {
   list-style: none;
   cursor: pointer;
@@ -1468,6 +1473,27 @@ body.modal-open {
 
 .hidden {
   display: none !important;
+}
+
+.nav a.has-new-statements,
+.drawer-nav a.has-new-statements {
+  border: 2px solid var(--danger);
+  border-radius: 6px;
+}
+
+.block-card.has-new-statements {
+  border: 2px solid var(--danger);
+}
+
+.btn-user-announcements.has-new-statements {
+  border-color: var(--danger) !important;
+  color: inherit;
+}
+
+.btn-user-announcements.has-new-statements:hover,
+.btn-user-announcements.has-new-statements:focus-visible {
+  background: var(--danger-soft);
+  color: inherit;
 }
 
 @media (max-width: 768px) {

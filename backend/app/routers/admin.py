@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Path, Response, Query
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select, or_
@@ -30,6 +32,7 @@ from ..schemas import (
     ToggleAdminRequest,
     AdminStatementsResponse,
     AdminStatementOut,
+    StatementSeenRequest,
 )
 from ..services.media_storage import resolve_storage_path
 
@@ -62,6 +65,12 @@ def _require_admin(
 def _is_founder_actor(actor_email: str | None) -> bool:
     settings = get_settings()
     return (settings.founder_admin_email or "").lower() == (actor_email or "").strip().lower()
+
+
+def _actor_email_normalized(actor_email: str | None) -> str | None:
+    if not actor_email:
+        return None
+    return actor_email.strip().lower() or None
 
 
 def _get_or_create_exam(db: Session, exam_id: int | None = None) -> Exam:
@@ -821,21 +830,39 @@ def admin_users(
     users = db.scalars(stmt).all()
     founder_email = (settings.founder_admin_email or "").lower()
 
-    items = [
-        UserOut(
-            id=u.id,
-            personal_id=u.personal_id,
-            first_name=u.first_name,
-            last_name=u.last_name,
-            phone=u.phone,
-            email=u.email,
-            code=u.code,
-            is_admin=(u.email.lower() == founder_email) or bool(u.is_admin),
-            is_founder=(u.email.lower() == founder_email),
-            created_at=u.created_at,
+    user_ids = [u.id for u in users]
+    unseen_counts: dict[int, int] = {}
+    if user_ids:
+        stmt = (
+            select(Statement.user_id, func.count())
+            .where(
+                Statement.user_id.in_(user_ids),
+                Statement.seen_at.is_(None),
+            )
+            .group_by(Statement.user_id)
         )
-        for u in users
-    ]
+        for user_id, count in db.execute(stmt):
+            unseen_counts[int(user_id)] = int(count)
+
+    items = []
+    for u in users:
+        unseen_count = unseen_counts.get(u.id, 0)
+        items.append(
+            UserOut(
+                id=u.id,
+                personal_id=u.personal_id,
+                first_name=u.first_name,
+                last_name=u.last_name,
+                phone=u.phone,
+                email=u.email,
+                code=u.code,
+                is_admin=(u.email.lower() == founder_email) or bool(u.is_admin),
+                is_founder=(u.email.lower() == founder_email),
+                created_at=u.created_at,
+                has_unseen_statements=unseen_count > 0,
+                unseen_statement_count=unseen_count,
+            )
+        )
     return UsersListResponse(items=items, total=len(items))
 
 
@@ -931,6 +958,8 @@ def admin_user_statements(
             user_email=user.email,
             message=statement.message,
             created_at=statement.created_at,
+            seen_at=statement.seen_at,
+            seen_by=statement.seen_by,
         )
         for statement in statements
     ]
@@ -951,5 +980,38 @@ def admin_delete_statement(
     if not statement:
         return
     db.delete(statement)
+    db.commit()
+    return
+
+
+@router.get("/statements/summary")
+def admin_statements_summary(
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    total_unseen = db.scalar(
+        select(func.count()).select_from(Statement).where(Statement.seen_at.is_(None))
+    ) or 0
+    return {"has_unseen": total_unseen > 0, "unseen_total": total_unseen}
+
+
+@router.post("/statements/mark-seen", status_code=status.HTTP_204_NO_CONTENT)
+def admin_mark_statements_seen(
+    payload: StatementSeenRequest,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    actor_email = _actor_email_normalized(x_actor_email) or "admin"
+    statement_ids = [sid for sid in payload.statement_ids if isinstance(sid, int)]
+    if not statement_ids:
+        return
+    now = datetime.utcnow()
+    db.execute(
+        Statement.__table__.update()
+        .where(Statement.id.in_(statement_ids))
+        .values(seen_at=now, seen_by=actor_email)
+    )
     db.commit()
     return

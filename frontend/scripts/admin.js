@@ -227,6 +227,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const statementsEventHandlers = [];
+  window.addEventListener('admin:statementsSeen', (event) => {
+    statementsEventHandlers.forEach((handler) => {
+      try { handler(event); } catch (error) { console.warn('Statements seen handler failed', error); }
+    });
+  });
+
   void bootstrapAdmin();
 
   async function bootstrapAdmin() {
@@ -262,8 +269,8 @@ document.addEventListener('DOMContentLoaded', () => {
       : { init: () => {}, open: () => {}, close: () => {} };
 
     const statementsModule = modules.createStatementsModule
-      ? modules.createStatementsModule(moduleContextBase)
-      : { init: () => {}, open: () => {}, close: () => {}, refresh: () => {} };
+      ? modules.createStatementsModule({ ...moduleContextBase })
+      : { init: () => {}, open: () => {}, close: () => {}, downloadStatementPdf: () => {}, markStatementsSeen: () => {} };
 
     const usersModule = modules.createUsersModule
       ? modules.createUsersModule({ ...moduleContextBase, onShowResults: resultsModule.open, onShowStatements: statementsModule.open })
@@ -279,6 +286,18 @@ document.addEventListener('DOMContentLoaded', () => {
     resultsModule.init();
     statementsModule.init();
     usersModule.init();
+
+    usersModule.refreshUnseenSummary?.();
+
+    statementsEventHandlers.push((event) => {
+      const detail = event.detail || {};
+      if (detail.userId != null) {
+        usersModule.updateUserUnseenStatus?.(detail.userId, detail.hasUnseen, detail.remainingCount);
+      }
+      if (detail.refreshSummary !== false) {
+        usersModule.refreshUnseenSummary?.();
+      }
+    });
 
     showSection(null);
   }

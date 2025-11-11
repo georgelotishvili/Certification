@@ -758,7 +758,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const details = document.createElement('details');
         details.className = 'statement-item';
         details.setAttribute('role', 'listitem');
-        if (index === 0) details.open = true;
 
         const summary = document.createElement('summary');
         summary.className = 'statement-summary';
