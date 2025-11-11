@@ -195,7 +195,11 @@
         </div>
         <div class="attempt-actions">
           <button type="button" class="secondary-btn" data-action="view">შედეგის ნახვა</button>
-          ${isFounderActor() ? '<button type="button" class="danger-btn" data-action="delete">წაშლა</button>' : ''}
+          ${
+            isFounderActor()
+              ? '<button type="button" class="attempt-delete" data-action="delete" aria-label="შედეგის წაშლა" title="წაშლა">×</button>'
+              : ''
+          }
         </div>
       `;
 
@@ -400,13 +404,6 @@
         });
       }
 
-      if (DOM.resultDetailDangerZone) {
-        DOM.resultDetailDangerZone.classList.toggle('hidden', !isFounderActor());
-      }
-      if (DOM.resultDetailDelete) {
-        DOM.resultDetailDelete.disabled = !isFounderActor();
-        DOM.resultDetailDelete.dataset.sessionId = String(session.session_id || session.id || '');
-      }
       updateMediaButtons();
     }
 
@@ -737,10 +734,6 @@
         if (DOM.resultMediaDownload?.getAttribute('aria-disabled') === 'true') {
           event.preventDefault();
         }
-      });
-      on(DOM.resultDetailDelete, 'click', () => {
-        const sessionId = state.detail?.session?.session_id;
-        if (sessionId) void handleDelete(sessionId);
       });
     }
 

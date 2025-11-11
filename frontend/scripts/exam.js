@@ -1567,19 +1567,41 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       setHidden(DOM.gateError, true);
-      const stream = await startCamera().catch(() => null);
-      if (!stream) {
-        state.gatePassed = false;
-        state.mustStayFullscreen = false;
-        return;
-      }
+
+      // Gate წარმატებულია — ჯერ დავბლოკოთ "გამოცდის დაწყება" სანამ ნებართვები არ დადასტურდება
+      if (DOM.examStart) DOM.examStart.disabled = true;
+
       state.gatePassed = true;
       state.mustStayFullscreen = true;
       hide(DOM.gateOverlay);
       enterFullscreen();
+
+      // სესია საჭიროა ჩანაწერების ატვირთვისთვის
+      void beginSession();
+
+      // კამერა/მიკროფონი — ნებართვა Gate-ის შემდეგ
+      const cameraStream = await startCamera().catch(() => null);
+      if (!cameraStream) {
+        alert('კამერის/მიკროფონის ნებართვა აუცილებელია გამოცდის დასაწყებად. გთხოვთ დაუშვათ წვდომა.');
+        if (DOM.examStart) DOM.examStart.disabled = true;
+        return;
+      }
+
+      // ეკრანის გაზიარება — ნებართვა Gate-ის შემდეგ
+      const screenStream = await startScreenCapture().catch(() => null);
+      if (!screenStream) {
+        alert('ეკრანის გაზიარება აუცილებელია გამოცდის დასაწყებად. გთხოვთ აირჩიოთ სრულ ეკრანზე გაზიარება და სცადოთ ხელახლა.');
+        if (DOM.examStart) DOM.examStart.disabled = true;
+        return;
+      }
+
+      // ნებართვების მიღებისთანავე დავიწყოთ ჩაწერა
+      void startMediaRecording(MEDIA_TYPES.CAMERA, cameraStream);
+      void startMediaRecording(MEDIA_TYPES.SCREEN, screenStream);
+
+      // ახლა შესაძლებელია გამოცდის დაწყება
       if (DOM.examStart) DOM.examStart.disabled = false;
       if (DOM.examFinish) DOM.examFinish.disabled = false;
-      void beginSession();
     } finally {
       if (submitBtn) submitBtn.disabled = false;
     }
@@ -1684,6 +1706,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function handleGlobalKey(event) {
+    if (!state.examStarted) {
+      if (event.key === 'F4' && event.altKey) {
+        event.preventDefault();
+        ensureFullscreen();
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        ensureFullscreen();
+        return;
+      }
+      ensureFullscreen();
+      return;
+    }
     if (event.key === 'F4' && event.altKey) {
       event.preventDefault();
       showStep1();
@@ -1699,6 +1735,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function handleFullscreenChange() {
     if (document.fullscreenElement || !state.mustStayFullscreen) return;
+
+    if (!state.examStarted) {
+      requestAnimationFrame(() => {
+        if (state.mustStayFullscreen && !document.fullscreenElement) {
+          enterFullscreen();
+        }
+      });
+      return;
+    }
 
     if (DOM.answerAllDialog && !DOM.answerAllDialog.hidden) {
       requestAnimationFrame(() => {
@@ -1719,7 +1764,10 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.gateInput?.addEventListener('input', () => setHidden(DOM.gateError, true));
 
     DOM.examStart?.addEventListener('click', handleExamStart);
-    DOM.examFinish?.addEventListener('click', showStep1);
+    DOM.examFinish?.addEventListener('click', () => {
+      if (!state.examStarted) return;
+      showStep1();
+    });
 
     DOM.confirmLeaveNo?.addEventListener('click', hideAll);
     DOM.confirmLeaveYes?.addEventListener('click', showStep2);

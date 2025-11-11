@@ -1,6 +1,47 @@
 (function (global) {
   const shared = {};
 
+  const GEORGIA_TIME_ZONE = 'Asia/Tbilisi';
+  const ISO_NO_TZ_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/;
+  const ISO_WITH_SPACE_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/;
+  let tbilisiDateTimeFormatter = null;
+
+  function getTbilisiDateTimeFormatter() {
+    if (!tbilisiDateTimeFormatter) {
+      tbilisiDateTimeFormatter = new Intl.DateTimeFormat('en-GB', {
+        timeZone: GEORGIA_TIME_ZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+    return tbilisiDateTimeFormatter;
+  }
+
+  function normalizeIsoString(value) {
+    if (!(typeof value === 'string')) return value;
+    const trimmed = value.trim();
+    if (!trimmed) return trimmed;
+    if (trimmed.endsWith('Z')) return trimmed;
+    if (/[+-]\d{2}:?\d{2}$/.test(trimmed)) return trimmed;
+    if (ISO_NO_TZ_REGEX.test(trimmed)) return `${trimmed}Z`;
+    if (ISO_WITH_SPACE_REGEX.test(trimmed)) return `${trimmed.replace(' ', 'T')}Z`;
+    return trimmed;
+  }
+
+  function parseUtcDate(input) {
+    if (!input) return null;
+    if (input instanceof Date) {
+      return Number.isNaN(input.getTime()) ? null : input;
+    }
+    const normalized = normalizeIsoString(String(input));
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
   shared.arrayBufferToBase64 = function arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
     const chunkSize = 0x8000;
@@ -75,11 +116,22 @@
   };
 
   shared.formatDateTime = function formatDateTime(iso) {
+    if (!iso) return '';
     try {
-      const date = new Date(iso);
-      if (Number.isNaN(date.getTime())) return String(iso || '');
-      const pad = (value) => String(value).padStart(2, '0');
-      return `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      const date = parseUtcDate(iso);
+      if (!date) return String(iso || '');
+      const formatter = getTbilisiDateTimeFormatter();
+      const parts = formatter.formatToParts(date);
+      const mapped = parts.reduce((acc, part) => {
+        if (part.type !== 'literal') acc[part.type] = part.value;
+        return acc;
+      }, {});
+      const day = mapped.day || '00';
+      const month = mapped.month || '00';
+      const year = mapped.year || '0000';
+      const hour = mapped.hour || '00';
+      const minute = mapped.minute || '00';
+      return `${day}-${month}-${year} ${hour}:${minute}`;
     } catch {
       return String(iso || '');
     }
@@ -88,9 +140,9 @@
   shared.formatDuration = function formatDuration(startIso, endIso) {
     if (!startIso || !endIso) return '—';
     try {
-      const start = new Date(startIso);
-      const end = new Date(endIso);
-      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return '—';
+      const start = parseUtcDate(startIso);
+      const end = parseUtcDate(endIso);
+      if (!start || !end || end <= start) return '—';
       const diffMs = end.getTime() - start.getTime();
       const totalSeconds = Math.floor(diffMs / 1000);
       const hours = Math.floor(totalSeconds / 3600);

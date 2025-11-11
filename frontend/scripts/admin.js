@@ -60,8 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
     resultDetailMedia: document.getElementById('resultDetailMedia'),
     resultDetailScreenMedia: document.getElementById('resultDetailScreenMedia'),
     resultDetailClose: document.getElementById('resultDetailClose'),
-    resultDetailDangerZone: document.getElementById('resultDetailDangerZone'),
-    resultDetailDelete: document.getElementById('resultDetailDelete'),
     resultMediaSection: document.getElementById('resultMediaSection'),
     resultMediaPlayer: document.getElementById('resultMediaPlayer'),
     resultMediaDownload: document.getElementById('resultMediaDownload'),
