@@ -159,6 +159,12 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    certificate: Mapped["Certificate"] = relationship(
+        "Certificate",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
 
 class Statement(Base):
@@ -195,3 +201,20 @@ class ExamMedia(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     session: Mapped["Session"] = relationship("Session", back_populates="media_entries")
+
+
+class Certificate(Base):
+    __tablename__ = "certificates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    unique_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    level: Mapped[str] = mapped_column(String(32), default="architect")  # architect, expert
+    status: Mapped[str] = mapped_column(String(32), default="active")  # active, suspended, expired
+    issue_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    validity_term: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # years
+    valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship("User", back_populates="certificate")

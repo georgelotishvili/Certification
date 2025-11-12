@@ -14,7 +14,7 @@
       openOverlay = () => {},
       closeOverlay = () => {},
     } = context;
-    const { onShowResults, onShowStatements } = context;
+    const { onShowResults, onShowStatements, onShowCertificate } = context;
     const navLinks = DOM.navLinks || [];
 
     let cachedItems = [];
@@ -201,7 +201,13 @@
           alert('გამოცდის შედეგები — მალე დაემატება');
         }
       }));
-      certificateBtns?.forEach((btn) => btn.addEventListener('click', () => alert('სერტიფიკატი — მალე დაემატება')));
+      certificateBtns?.forEach((btn) => btn.addEventListener('click', () => {
+        if (typeof onShowCertificate === 'function') {
+          onShowCertificate(user);
+        } else {
+          alert('სერტიფიკატი — მალე დაემატება');
+        }
+      }));
       editBtns?.forEach((btn) => btn.addEventListener('click', () => openEditModal(user)));
     }
 

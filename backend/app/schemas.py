@@ -315,3 +315,35 @@ class AdminUserUpdateRequest(CamelModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     code: Optional[str] = None
+
+
+class CertificateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    unique_code: str | None = None
+    level: str  # architect, expert
+    status: str  # active, suspended, expired
+    issue_date: datetime | None = None
+    validity_term: int | None = None  # years
+    valid_until: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CertificateCreate(BaseModel):
+    unique_code: str | None = None
+    level: str = "architect"  # architect, expert
+    status: str = "active"  # active, suspended, expired
+    issue_date: datetime | None = None
+    validity_term: int | None = None  # years
+    valid_until: datetime | None = None
+
+
+class CertificateUpdate(CamelModel):
+    unique_code: Optional[str] = None
+    level: Optional[str] = None
+    status: Optional[str] = None
+    issue_date: Optional[datetime] = None
+    validity_term: Optional[int] = None
+    valid_until: Optional[datetime] = None

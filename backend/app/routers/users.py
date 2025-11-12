@@ -7,8 +7,8 @@ from sqlalchemy import select, or_, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User
-from ..schemas import UserCreate, UserOut
+from ..models import User, Certificate
+from ..schemas import UserCreate, UserOut, CertificateOut, CertificateCreate, CertificateUpdate
 from ..config import get_settings
 from ..security import hash_code
 
@@ -115,4 +115,125 @@ def profile(email: str = Query(..., description="User email to lookup"), db: Ses
         is_founder=is_founder,
         created_at=u.created_at,
     )
+
+
+@router.get("/{user_id}/certificate", response_model=CertificateOut)
+def get_certificate(user_id: int, db: Session = Depends(get_db)):
+    """Get certificate for a user"""
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
+    if not cert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
+    
+    return CertificateOut(
+        id=cert.id,
+        user_id=cert.user_id,
+        unique_code=cert.unique_code,
+        level=cert.level,
+        status=cert.status,
+        issue_date=cert.issue_date,
+        validity_term=cert.validity_term,
+        valid_until=cert.valid_until,
+        created_at=cert.created_at,
+        updated_at=cert.updated_at,
+    )
+
+
+@router.post("/{user_id}/certificate", response_model=CertificateOut, status_code=status.HTTP_201_CREATED)
+def create_certificate(user_id: int, payload: CertificateCreate, db: Session = Depends(get_db)):
+    """Create certificate for a user"""
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    existing = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Certificate already exists")
+    
+    cert = Certificate(
+        user_id=user_id,
+        unique_code=payload.unique_code or user.code,
+        level=payload.level or "architect",
+        status=payload.status or "active",
+        issue_date=payload.issue_date,
+        validity_term=payload.validity_term,
+        valid_until=payload.valid_until,
+    )
+    db.add(cert)
+    db.commit()
+    db.refresh(cert)
+    
+    return CertificateOut(
+        id=cert.id,
+        user_id=cert.user_id,
+        unique_code=cert.unique_code,
+        level=cert.level,
+        status=cert.status,
+        issue_date=cert.issue_date,
+        validity_term=cert.validity_term,
+        valid_until=cert.valid_until,
+        created_at=cert.created_at,
+        updated_at=cert.updated_at,
+    )
+
+
+@router.put("/{user_id}/certificate", response_model=CertificateOut)
+def update_certificate(user_id: int, payload: CertificateUpdate, db: Session = Depends(get_db)):
+    """Update certificate for a user"""
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
+    if not cert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
+    
+    if payload.unique_code is not None:
+        cert.unique_code = payload.unique_code
+    if payload.level is not None:
+        cert.level = payload.level
+    if payload.status is not None:
+        cert.status = payload.status
+    if payload.issue_date is not None:
+        cert.issue_date = payload.issue_date
+    if payload.validity_term is not None:
+        cert.validity_term = payload.validity_term
+    if payload.valid_until is not None:
+        cert.valid_until = payload.valid_until
+    
+    cert.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(cert)
+    
+    return CertificateOut(
+        id=cert.id,
+        user_id=cert.user_id,
+        unique_code=cert.unique_code,
+        level=cert.level,
+        status=cert.status,
+        issue_date=cert.issue_date,
+        validity_term=cert.validity_term,
+        valid_until=cert.valid_until,
+        created_at=cert.created_at,
+        updated_at=cert.updated_at,
+    )
+
+
+@router.delete("/{user_id}/certificate", status_code=status.HTTP_204_NO_CONTENT)
+def delete_certificate(user_id: int, db: Session = Depends(get_db)):
+    """Delete certificate for a user"""
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
+    if not cert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
+    
+    db.delete(cert)
+    db.commit()
+    return None
 

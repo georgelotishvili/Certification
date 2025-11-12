@@ -47,6 +47,28 @@ document.addEventListener('DOMContentLoaded', () => {
     userStatementsList: document.getElementById('userStatementsList'),
     userStatementsMeta: document.getElementById('userStatementsMeta'),
     userStatementsClose: document.getElementById('userStatementsClose'),
+    userCertificateOverlay: document.getElementById('userCertificateOverlay'),
+    userCertificateClose: document.getElementById('userCertificateClose'),
+    userCertificateDownload: document.getElementById('userCertificateDownload'),
+    certificateCard: document.getElementById('certificateCard'),
+    certificateStatusBadge: document.getElementById('certificateStatusBadge'),
+    userCertificateDelete: document.getElementById('userCertificateDelete'),
+    certificateEditBtn: document.getElementById('certificateEditBtn'),
+    certificateEmptyState: document.getElementById('certificateEmptyState'),
+    certificateEmptyCreate: document.getElementById('certificateEmptyCreate'),
+    certificateForm: document.getElementById('certificateForm'),
+    certificateFormCode: document.getElementById('certificateFormCode'),
+    certificateFormCodeDisplay: document.getElementById('certificateFormCodeDisplay'),
+    certificateFormLevel: document.getElementById('certificateFormLevel'),
+    certificateFormStatus: document.getElementById('certificateFormStatus'),
+    certificateFormIssueDate: document.getElementById('certificateFormIssueDate'),
+    certificateFormValidityTerm: document.getElementById('certificateFormValidityTerm'),
+    certificateFormValidUntil: document.getElementById('certificateFormValidUntil'),
+    certificateFormValidUntilDisplay: document.getElementById('certificateFormValidUntilDisplay'),
+    certificateFormSubmit: document.getElementById('certificateFormSubmit'),
+    certificateFormName: document.getElementById('certificateFormName'),
+    certificateFormPhone: document.getElementById('certificateFormPhone'),
+    certificateFormEmail: document.getElementById('certificateFormEmail'),
     resultDetailOverlay: document.getElementById('resultDetailOverlay'),
     resultDetailExamTitle: document.getElementById('resultDetailExamTitle'),
     resultDetailStatus: document.getElementById('resultDetailStatus'),
@@ -285,8 +307,17 @@ document.addEventListener('DOMContentLoaded', () => {
       ? modules.createStatementsModule({ ...moduleContextBase })
       : { init: () => {}, open: () => {}, close: () => {}, downloadStatementPdf: () => {}, markStatementsSeen: () => {} };
 
+    const certificateModule = modules.createCertificateModule
+      ? modules.createCertificateModule({ ...moduleContextBase })
+      : { init: () => {}, open: () => {}, close: () => {} };
+
     const usersModule = modules.createUsersModule
-      ? modules.createUsersModule({ ...moduleContextBase, onShowResults: resultsModule.open, onShowStatements: statementsModule.open })
+      ? modules.createUsersModule({
+          ...moduleContextBase,
+          onShowResults: resultsModule.open,
+          onShowStatements: statementsModule.open,
+          onShowCertificate: certificateModule.open,
+        })
       : { init: () => {}, render: () => {} };
 
     const hasAccess = await ensureAdminAccess();
@@ -298,6 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
     blocksModule.init();
     resultsModule.init();
     statementsModule.init();
+    certificateModule.init();
     usersModule.init();
 
     usersModule.refreshUnseenSummary?.();
