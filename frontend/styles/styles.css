@@ -64,9 +64,8 @@ header {
   right: 0;
   z-index: 120;
   background: var(--color-surface);
-  border-bottom: 2px solid var(--color-success);
+  border-bottom: 2px solid var(--color-border);
   box-shadow: 0 18px 48px rgba(3, 6, 16, 0.6);
-  backdrop-filter: blur(14px);
 }
 
 .header-hero {
@@ -226,7 +225,7 @@ header {
   position: fixed;
   inset: 0;
   background: rgba(29, 39, 68, 0.35);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(10px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease;
@@ -494,14 +493,15 @@ footer {
   padding: 10px;
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background var(--transition-base), transform var(--transition-base), box-shadow var(--transition-base);
+  transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
   box-shadow: 0 6px 16px rgba(31, 138, 77, 0.16);
 }
 
 .footer-form button:hover,
 .footer-form button:focus-visible {
-  background: #1a7a44;
-  box-shadow: 0 12px 24px rgba(31, 138, 77, 0.22);
+  background: #17622e;
+  color: var(--color-text);
+  box-shadow: 0 12px 28px rgba(5, 12, 30, 0.45);
   transform: translateY(-1px);
 }
 
@@ -531,7 +531,7 @@ footer {
   display: none;
   padding: 16px;
   background: rgba(29, 39, 68, 0.35);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(10px);
   opacity: 0.98;
   z-index: 140;
 }
@@ -754,11 +754,16 @@ body.modal-open {
   transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
 }
 
-.modal-btn:hover {
+.modal-btn:hover,
+.modal-btn:focus-visible {
   color: var(--color-accent);
   background: var(--color-accent-soft);
   transform: translateY(-1px);
   box-shadow: 0 8px 18px rgba(47, 91, 168, 0.14);
+}
+
+.modal-btn:focus-visible {
+  outline: none;
 }
 
 .login-option {
@@ -770,10 +775,10 @@ body.modal-open {
 
 .login-option:hover,
 .login-option:focus-visible {
-  background: #1a7a44;
-  border-color: #1a7a44;
-  color: #ffffff;
-  box-shadow: 0 12px 24px rgba(31, 138, 77, 0.24);
+  background: #17622e;
+  border-color: #17622e;
+  color: var(--color-text);
+  box-shadow: 0 12px 28px rgba(5, 12, 30, 0.45);
   transform: translateY(-1px);
 }
 
@@ -815,14 +820,14 @@ body.modal-open {
 
 .submit {
   background: var(--color-success);
-  color: #ffffff;
+  color: var(--color-text);
   border: 1px solid var(--color-success);
   padding: 12px;
   cursor: pointer;
   width: 100%;
   border-radius: var(--radius-sm);
-  transition: background var(--transition-base), transform var(--transition-base), box-shadow var(--transition-base);
-  box-shadow: 0 8px 18px rgba(31, 138, 77, 0.18);
+  transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
+  box-shadow: 0 6px 16px rgba(31, 138, 77, 0.16);
 }
 
 .back-to-login {
@@ -850,10 +855,11 @@ body.modal-open {
 
 .submit:hover,
 .submit:focus-visible {
-  background: #1a7a44;
-  box-shadow: 0 12px 24px rgba(31, 138, 77, 0.24);
+  background: #17622e;
+  border-color: #17622e;
+  box-shadow: 0 12px 28px rgba(5, 12, 30, 0.45);
   transform: translateY(-1px);
-  color: #ffffff;
+  color: var(--color-text);
 }
 
 .back-to-login:hover,
