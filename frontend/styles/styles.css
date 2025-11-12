@@ -3,6 +3,7 @@
   margin: 0;
   padding: 0;
   font-size: 12px;
+  font-weight: 100;
   font-family: 'DejaVu Sans', sans-serif;
   text-decoration: none;
 }
@@ -23,7 +24,7 @@ body {
   --color-muted: #9aa7c7;
   --color-accent: #5aa4ff;
   --color-accent-soft: rgba(90, 164, 255, 0.18);
-  --color-success: #008e36;
+  --color-success: #085400;
   --shadow-soft: 0 18px 40px rgba(6, 11, 25, 0.45);
   --shadow-medium: 0 14px 32px rgba(17, 27, 48, 0.38);
   --radius-sm: 2px;
@@ -77,28 +78,32 @@ header {
 
 .nav-bar {
   position: absolute;
-  bottom: 10px;
+  bottom: -20px;
   left: 50%;
   transform: translateX(-50%);
+  max-width: 1200px;
   width: 90%;
   height: 40px;
-  padding: 0 5px;
+  padding: 0 5px 0 15px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border: 1px solid var(--color-border);
   gap: 16px;
-  background: linear-gradient(135deg, rgba(13, 21, 39, 0.9), rgba(23, 34, 58, 0.92));
+  background: var(--color-success);
   box-shadow: 0 16px 36px rgba(3, 6, 16, 0.6);
   border-radius: var(--radius-md);
 }
 
 .auth-banner {
   color: rgba(224, 233, 255, 0.82);
-  font-weight: 500;
 }
 
 .nav {
+  position: absolute;
+  right: 130px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -166,24 +171,21 @@ header {
 }
 
 .login-btn {
-  padding: 6px 16px;
-  background: linear-gradient(135deg, rgba(28, 44, 78, 0.9), rgba(23, 34, 58, 0.92));
+  padding: 6px 30px;
+  background: var(--color-success);
   color: var(--color-text);
-  border: 1px solid var(--color-border-strong);
+  border: 1px solid var(--color-text);
   border-radius: var(--radius-sm);
-  font-weight: 600;
-  box-shadow: 0 12px 28px rgba(5, 9, 21, 0.55);
   cursor: pointer;
   transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
 }
 
 .login-btn:hover,
 .login-btn:focus-visible {
-  background: linear-gradient(135deg, rgba(55, 92, 150, 0.95), rgba(41, 68, 115, 0.95));
-  border-color: var(--color-accent);
+  background: rgba(90, 164, 255, 0.18);
   color: var(--color-text);
-  transform: translateY(-2px);
-  box-shadow: 0 16px 36px rgba(5, 12, 30, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(5, 12, 30, 0.45);
 }
 
 .login-btn:focus-visible {
@@ -333,7 +335,6 @@ header {
   color: var(--color-text);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
-  font-weight: 600;
   box-shadow: 0 14px 32px rgba(5, 9, 21, 0.55);
   padding: 10px;
   cursor: pointer;
@@ -493,7 +494,6 @@ footer {
   padding: 10px;
   cursor: pointer;
   border-radius: var(--radius-sm);
-  font-weight: 600;
   transition: background var(--transition-base), transform var(--transition-base), box-shadow var(--transition-base);
   box-shadow: 0 6px 16px rgba(31, 138, 77, 0.16);
 }
@@ -563,7 +563,6 @@ footer {
   background: var(--surface-elevated);
   color: var(--text-muted);
   font-size: 20px;
-  font-weight: 700;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -626,7 +625,6 @@ body.modal-open {
 
 .results-modal-titles h2 {
   font-size: 18px;
-  font-weight: 700;
   color: var(--text-strong);
 }
 
@@ -642,7 +640,6 @@ body.modal-open {
   background: rgba(15, 23, 42, 0.8);
   border: 1px solid var(--border-soft);
   color: var(--text-muted);
-  font-weight: 600;
   border-radius: 4px;
 }
 
@@ -675,7 +672,6 @@ body.modal-open {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-weight: 600;
   padding: 14px 18px;
   color: var(--text-strong);
 }
@@ -770,7 +766,6 @@ body.modal-open {
   color: #ffffff;
   border: 1px solid var(--color-success);
   box-shadow: 0 8px 18px rgba(31, 138, 77, 0.18);
-  font-weight: 600;
 }
 
 .login-option:hover,
@@ -826,7 +821,6 @@ body.modal-open {
   cursor: pointer;
   width: 100%;
   border-radius: var(--radius-sm);
-  font-weight: 600;
   transition: background var(--transition-base), transform var(--transition-base), box-shadow var(--transition-base);
   box-shadow: 0 8px 18px rgba(31, 138, 77, 0.18);
 }
