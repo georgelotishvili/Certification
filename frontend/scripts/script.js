@@ -43,6 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
     navDropdown: document.querySelector('.nav .dropdown'),
     footerForm: document.querySelector('.footer-form'),
     navStatements: document.querySelector('.nav-statements'),
+    navContact: document.querySelector('.nav-contact'),
+    drawerContact: document.querySelector('.drawer-contact'),
     drawerStatements: document.querySelector('.drawer-statements'),
     statementsOverlay: document.getElementById('userStatementsOverlay'),
     statementsClose: document.getElementById('userStatementsClose'),
@@ -136,6 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
   examNavigationModule.init();
   statementsModule.init();
   footerFormModule.init();
+  setupContactScroll();
 
   // Global escape handling (modal first, then menu)
   document.addEventListener('keydown', (event) => {
@@ -158,6 +161,22 @@ document.addEventListener('DOMContentLoaded', () => {
     open: fullscreenModule.open,
     close: fullscreenModule.close,
   };
+
+  function setupContactScroll() {
+    const footer = document.querySelector('footer');
+    if (!footer) return;
+
+    const scrollToFooter = (event, shouldCloseMenu = false) => {
+      event.preventDefault();
+      footer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (shouldCloseMenu) {
+        menuModule.close();
+      }
+    };
+
+    utils.on(DOM.navContact, 'click', (event) => scrollToFooter(event));
+    utils.on(DOM.drawerContact, 'click', (event) => scrollToFooter(event, true));
+  }
 
   function createLayoutModule() {
     function setBodyOffset() {
