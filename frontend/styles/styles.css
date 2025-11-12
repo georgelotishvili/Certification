@@ -88,7 +88,7 @@ header {
   justify-content: space-between;
   border: 1px solid var(--color-border);
   gap: 16px;
-  background: var(--color-success);
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
   box-shadow: 0 16px 36px rgba(3, 6, 16, 0.6);
   border-radius: var(--radius-md);
 }
@@ -170,20 +170,22 @@ header {
 
 .login-btn {
   padding: 6px 30px;
-  background: var(--color-success);
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
   color: var(--color-text);
-  border: 1px solid var(--color-text);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .login-btn:hover,
 .login-btn:focus-visible {
-  background: rgba(90, 164, 255, 0.18);
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
   color: var(--color-text);
+  border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px rgba(5, 12, 30, 0.45);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
 }
 
 .login-btn:focus-visible {
@@ -486,21 +488,22 @@ footer {
 }
 
 .footer-form button {
-  background: var(--color-success);
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
   color: #ffffff;
-  border: 1px solid var(--color-success);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 10px;
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
-  box-shadow: 0 6px 16px rgba(31, 138, 77, 0.16);
+  transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), border-color var(--transition-base);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .footer-form button:hover,
 .footer-form button:focus-visible {
-  background: #17622e;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
   color: var(--color-text);
-  box-shadow: 0 12px 28px rgba(5, 12, 30, 0.45);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
   transform: translateY(-1px);
 }
 
@@ -744,21 +747,23 @@ body.modal-open {
 }
 
 .modal-btn {
-  background: var(--color-panel);
-  color: var(--color-muted);
-  border: 1px solid var(--color-border);
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 12px;
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
+  transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), border-color var(--transition-base);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .modal-btn:hover,
 .modal-btn:focus-visible {
-  color: var(--color-accent);
-  background: var(--color-accent-soft);
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(47, 91, 168, 0.14);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
 }
 
 .modal-btn:focus-visible {
@@ -766,18 +771,18 @@ body.modal-open {
 }
 
 .login-option {
-  background: var(--color-success);
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
   color: #ffffff;
-  border: 1px solid var(--color-success);
-  box-shadow: 0 8px 18px rgba(31, 138, 77, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .login-option:hover,
 .login-option:focus-visible {
-  background: #17622e;
-  border-color: #17622e;
-  color: var(--color-text);
-  box-shadow: 0 12px 28px rgba(5, 12, 30, 0.45);
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
   transform: translateY(-1px);
 }
 
@@ -818,26 +823,27 @@ body.modal-open {
 }
 
 .submit {
-  background: var(--color-success);
-  color: var(--color-text);
-  border: 1px solid var(--color-success);
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 12px;
   cursor: pointer;
   width: 100%;
   border-radius: var(--radius-sm);
-  transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
-  box-shadow: 0 6px 16px rgba(31, 138, 77, 0.16);
+  transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), border-color var(--transition-base);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .back-to-login {
-  background: var(--color-panel);
-  color: var(--color-muted);
-  border: 1px solid var(--color-border);
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 12px;
   cursor: pointer;
   width: 100%;
   border-radius: var(--radius-sm);
-  transition: background var(--transition-base), color var(--transition-base), transform var(--transition-base);
+  transition: background var(--transition-base), color var(--transition-base), transform var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .forgot-password-link {
@@ -856,18 +862,20 @@ body.modal-open {
 
 .submit:hover,
 .submit:focus-visible {
-  background: #17622e;
-  border-color: #17622e;
-  box-shadow: 0 12px 28px rgba(5, 12, 30, 0.45);
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
   transform: translateY(-1px);
-  color: var(--color-text);
+  color: #ffffff;
 }
 
 .back-to-login:hover,
 .back-to-login:focus-visible {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
 }
 
 .submit:focus-visible,
