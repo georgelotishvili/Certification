@@ -16,7 +16,7 @@ body {
 :root {
   --color-base: #060b19;
   --color-surface: #0d1325;
-  --color-panel: #17223a;
+  --color-panel: #141d32;
   --color-panel-soft: #1f2d4a;
   --color-border: #273b63;
   --color-border-strong: #33527d;
@@ -27,8 +27,8 @@ body {
   --color-success: #085400;
   --shadow-soft: 0 18px 40px rgba(6, 11, 25, 0.45);
   --shadow-medium: 0 14px 32px rgba(17, 27, 48, 0.38);
-  --radius-sm: 2px;
-  --radius-md: 4px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
   --transition-base: 0.25s ease;
   --overlay-scrim: rgba(6, 11, 25, 0.7);
   --surface-elevated: rgba(9, 15, 31, 0.98);
@@ -842,7 +842,9 @@ body.modal-open {
 }
 
 .forgot-password-link {
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  margin: 12px 0 16px;
 }
 
 .forgot-password-link a {
