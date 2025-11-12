@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
-from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam, Statement
+from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam, Statement, Certificate
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -828,6 +828,7 @@ def admin_users(
         stmt = stmt.order_by(User.created_at.desc())
 
     # Paging not used effectively (size very large) as per spec: show all
+    stmt = stmt.options(selectinload(User.certificate))
     users = db.scalars(stmt).all()
     founder_email = (settings.founder_admin_email or "").lower()
 
@@ -848,22 +849,34 @@ def admin_users(
     items = []
     for u in users:
         unseen_count = unseen_counts.get(u.id, 0)
-        items.append(
-            UserOut(
-                id=u.id,
-                personal_id=u.personal_id,
-                first_name=u.first_name,
-                last_name=u.last_name,
-                phone=u.phone,
-                email=u.email,
-                code=u.code,
-                is_admin=(u.email.lower() == founder_email) or bool(u.is_admin),
-                is_founder=(u.email.lower() == founder_email),
-                created_at=u.created_at,
-                has_unseen_statements=unseen_count > 0,
-                unseen_statement_count=unseen_count,
-            )
-        )
+        cert_data = None
+        if u.certificate:
+            cert_data = {
+                'unique_code': u.certificate.unique_code,
+                'level': u.certificate.level,
+                'status': u.certificate.status,
+                'issue_date': u.certificate.issue_date,
+                'validity_term': u.certificate.validity_term,
+                'valid_until': u.certificate.valid_until,
+            }
+        user_dict = {
+            'id': u.id,
+            'personal_id': u.personal_id,
+            'first_name': u.first_name,
+            'last_name': u.last_name,
+            'phone': u.phone,
+            'email': u.email,
+            'code': u.code,
+            'is_admin': (u.email.lower() == founder_email) or bool(u.is_admin),
+            'is_founder': (u.email.lower() == founder_email),
+            'created_at': u.created_at,
+            'has_unseen_statements': unseen_count > 0,
+            'unseen_statement_count': unseen_count,
+        }
+        if cert_data:
+            user_dict['certificate'] = cert_data
+            user_dict['certificate_info'] = cert_data
+        items.append(UserOut(**user_dict))
     return UsersListResponse(items=items, total=len(items))
 
 

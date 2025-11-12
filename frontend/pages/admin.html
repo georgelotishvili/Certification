@@ -88,18 +88,37 @@
       </section>
       <section id="registrations-section" class="exam-settings" style="display:none;">
         <div class="exam-content">
-          <div class="exam-blocks-header">
-            <h2 class="exam-blocks-title">რეგისტრირებული პირები</h2>
-            <input id="usersSearch" class="exam-blocks-search" type="search" placeholder="ძებნა (სახელი/გვარი/ელფოსტა/ტელეფონი/კოდი/პირადი)" />
-            <select id="usersSort" class="duration-input" style="width:auto;">
-              <option value="date_desc">თარიღი ↓ (ნაგულისხმევი)</option>
-              <option value="date_asc">თარიღი ↑</option>
-              <option value="name_asc">სახელი/გვარი ა-ჰ</option>
-              <option value="name_desc">სახელი/გვარი ჰ-ა</option>
-            </select>
-            <label class="duration-label" style="display:inline-flex;align-items:center;gap:6px;">
-              <input id="onlyAdmins" type="checkbox" /> მხოლოდ ადმინები
-            </label>
+          <div class="users-filters-section">
+            <div class="users-filters-header">
+              <h2 class="exam-blocks-title">რეგისტრირებული პირები</h2>
+              <div class="users-filters-controls">
+                <input id="usersSearch" class="exam-blocks-search" type="search" placeholder="ძებნა (სახელი/გვარი/ელფოსტა/ტელეფონი/კოდი/პირადი)" />
+                <select id="usersSort" class="users-sort-select">
+                  <option value="date_desc">თარიღი ↓ (ნაგულისხმევი)</option>
+                  <option value="date_asc">თარიღი ↑</option>
+                  <option value="name_asc">სახელი/გვარი ა-ჰ</option>
+                  <option value="name_desc">სახელი/გვარი ჰ-ა</option>
+                </select>
+              </div>
+            </div>
+            <div class="users-filters-checkboxes">
+              <label class="users-filter-label">
+                <input id="onlyAdmins" type="checkbox" />
+                <span>მხოლოდ ადმინები</span>
+              </label>
+              <label class="users-filter-label">
+                <input id="filterArchitects" type="checkbox" />
+                <span>არქიტექტორები</span>
+              </label>
+              <label class="users-filter-label">
+                <input id="filterExperts" type="checkbox" />
+                <span>არქიტექტორი ექსპერტები</span>
+              </label>
+              <label class="users-filter-label">
+                <input id="filterCertified" type="checkbox" />
+                <span>სერტიფიცირებული პირები</span>
+              </label>
+            </div>
           </div>
           <div id="usersGrid" class="exam-blocks-grid"></div>
         </div>

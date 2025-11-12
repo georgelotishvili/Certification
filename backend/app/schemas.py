@@ -257,6 +257,8 @@ class UserOut(BaseModel):
     created_at: datetime
     has_unseen_statements: bool | None = None
     unseen_statement_count: int | None = None
+    certificate: dict | None = None
+    certificate_info: dict | None = None
 
 
 class UserCreate(BaseModel):

@@ -37,6 +37,9 @@ document.addEventListener('DOMContentLoaded', () => {
     usersSearch: document.getElementById('usersSearch'),
     usersSort: document.getElementById('usersSort'),
     onlyAdmins: document.getElementById('onlyAdmins'),
+    filterArchitects: document.getElementById('filterArchitects'),
+    filterExperts: document.getElementById('filterExperts'),
+    filterCertified: document.getElementById('filterCertified'),
     candidateResultsOverlay: document.getElementById('candidateResultsOverlay'),
     candidateResultsList: document.getElementById('candidateResultsList'),
     candidateResultsFullName: document.getElementById('candidateResultsFullName'),
@@ -307,18 +310,27 @@ document.addEventListener('DOMContentLoaded', () => {
       ? modules.createStatementsModule({ ...moduleContextBase })
       : { init: () => {}, open: () => {}, close: () => {}, downloadStatementPdf: () => {}, markStatementsSeen: () => {} };
 
-    const certificateModule = modules.createCertificateModule
-      ? modules.createCertificateModule({ ...moduleContextBase })
-      : { init: () => {}, open: () => {}, close: () => {} };
-
     const usersModule = modules.createUsersModule
       ? modules.createUsersModule({
           ...moduleContextBase,
           onShowResults: resultsModule.open,
           onShowStatements: statementsModule.open,
-          onShowCertificate: certificateModule.open,
+          onShowCertificate: (user) => {
+            if (certificateModule.open) certificateModule.open(user);
+          },
         })
-      : { init: () => {}, render: () => {} };
+      : { init: () => {}, render: () => {}, updateUserCardColor: () => {} };
+
+    const certificateModule = modules.createCertificateModule
+      ? modules.createCertificateModule({
+          ...moduleContextBase,
+          onUserCertificateUpdated: (userId, certificateData) => {
+            if (usersModule.updateUserCardColor) {
+              usersModule.updateUserCardColor(userId, certificateData);
+            }
+          },
+        })
+      : { init: () => {}, open: () => {}, close: () => {} };
 
     const hasAccess = await ensureAdminAccess();
     if (!hasAccess) return;

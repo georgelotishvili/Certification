@@ -9,6 +9,7 @@
       getAdminHeaders = () => ({}),
       getActorHeaders = () => ({}),
       handleAdminErrorResponse = async () => {},
+      onUserCertificateUpdated = () => {},
       escapeHtml = (value) => {
         if (value == null) return '';
         return String(value)
@@ -620,6 +621,12 @@
         closeForm({ force: true });
         populateView(activeData);
         updateView();
+        
+        // Update user card color in users list immediately
+        if (activeUser?.id && onUserCertificateUpdated) {
+          onUserCertificateUpdated(activeUser.id, certificateData);
+        }
+        
         showToast('სერტიფიკატის მონაცემები შეინახა', 'success');
       } catch (error) {
         console.error('[certificate] Failed to save certificate', error);

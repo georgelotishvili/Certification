@@ -66,11 +66,22 @@
       const safeCode = escapeHtml(user.code || '');
       const safeEmail = escapeHtml(user.email || '');
       const safeRegistered = escapeHtml(formatDateTime(user.created_at));
+      
+      // Determine certificate level color
+      const certificate = user.certificate || user.certificate_info || {};
+      const certLevel = certificate.level || '';
+      let nameColor = '#0f172a'; // default
+      if (certLevel === 'architect' || certLevel === 'architect_expert') {
+        nameColor = '#2563eb'; // მკვეთრი ლურჯი
+      } else if (certLevel === 'expert') {
+        nameColor = '#dc2626'; // მკვეთრი წითელი
+      }
+      
       return `
         <div class="block-tile block-card${user.has_unseen_statements ? ' has-new-statements' : ''}" data-id="${safeId}">
         <div class="block-head" style="grid-template-columns:auto 1fr auto auto auto;">
             <div class="block-order"></div>
-            <div style="font-size:16px;font-weight:700;color:#0f172a;">${safeFullName}</div>
+            <div style="font-size:16px;font-weight:700;color:${nameColor};">${safeFullName}</div>
             <label title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}" style="display:inline-flex;gap:4px;align-items:center;padding:4px 8px;border-radius:6px;border:2px solid #e5e7eb;background:#fff;user-select:none;">
               <input type="checkbox" class="chk-admin" ${checked} ${disabled} style="width:16px;height:16px;accent-color:#9500FF;" />
               <span style="font-size:12px;color:#0f172a;font-weight:600;">ადმინი</span>
@@ -224,7 +235,33 @@
       if (!DOM.usersGrid) return;
       DOM.usersGrid.innerHTML = '';
       cachedItems = items || [];
-      (items || []).forEach((user) => {
+      
+      // Apply certificate filters
+      let filteredItems = items || [];
+      const filterArchitects = DOM.filterArchitects?.checked;
+      const filterExperts = DOM.filterExperts?.checked;
+      const filterCertified = DOM.filterCertified?.checked;
+      
+      if (filterArchitects || filterExperts || filterCertified) {
+        filteredItems = filteredItems.filter((user) => {
+          const certificate = user.certificate || user.certificate_info || {};
+          const certLevel = certificate.level || '';
+          const hasCertificate = !!certificate.level;
+          
+          if (filterCertified) {
+            return hasCertificate && (certLevel === 'architect' || certLevel === 'expert');
+          }
+          if (filterArchitects) {
+            return certLevel === 'architect' || certLevel === 'architect_expert';
+          }
+          if (filterExperts) {
+            return certLevel === 'expert';
+          }
+          return true;
+        });
+      }
+      
+      filteredItems.forEach((user) => {
         const wrapper = document.createElement('div');
         wrapper.innerHTML = userRowHTML(user);
         const card = wrapper.firstElementChild;
@@ -430,6 +467,28 @@
       on(DOM.usersSearch, 'input', render);
       on(DOM.usersSort, 'change', render);
       on(DOM.onlyAdmins, 'change', render);
+      on(DOM.filterArchitects, 'change', () => {
+        // Ensure only one certificate filter is active at a time
+        if (DOM.filterArchitects?.checked) {
+          if (DOM.filterExperts) DOM.filterExperts.checked = false;
+          if (DOM.filterCertified) DOM.filterCertified.checked = false;
+        }
+        render();
+      });
+      on(DOM.filterExperts, 'change', () => {
+        if (DOM.filterExperts?.checked) {
+          if (DOM.filterArchitects) DOM.filterArchitects.checked = false;
+          if (DOM.filterCertified) DOM.filterCertified.checked = false;
+        }
+        render();
+      });
+      on(DOM.filterCertified, 'change', () => {
+        if (DOM.filterCertified?.checked) {
+          if (DOM.filterArchitects) DOM.filterArchitects.checked = false;
+          if (DOM.filterExperts) DOM.filterExperts.checked = false;
+        }
+        render();
+      });
       setupEditModal();
     }
 
@@ -447,6 +506,36 @@
         };
       }
       updateNavBadge(cachedItems.some((item) => item.has_unseen_statements));
+    }
+
+    function updateUserCardColor(userId, certificateData) {
+      const card = DOM.usersGrid?.querySelector(`.block-card[data-id="${userId}"]`);
+      if (!card) return;
+      
+      const nameElement = card.querySelector('.block-head > div:nth-child(2)');
+      if (!nameElement) return;
+      
+      // Determine color based on certificate level
+      const certificate = certificateData || {};
+      const certLevel = certificate.level || '';
+      let nameColor = '#0f172a'; // default
+      if (certLevel === 'architect' || certLevel === 'architect_expert') {
+        nameColor = '#2563eb'; // მკვეთრი ლურჯი
+      } else if (certLevel === 'expert') {
+        nameColor = '#dc2626'; // მკვეთრი წითელი
+      }
+      
+      nameElement.style.color = nameColor;
+      
+      // Update cached data
+      const index = cachedItems.findIndex((item) => String(item.id) === String(userId));
+      if (index !== -1) {
+        cachedItems[index] = {
+          ...cachedItems[index],
+          certificate: certificateData,
+          certificate_info: certificateData,
+        };
+      }
     }
 
     function updateNavBadge(hasAny) {
@@ -475,6 +564,7 @@
       init,
       render: () => render(),
       updateUserUnseenStatus,
+      updateUserCardColor,
       refreshUnseenSummary,
     };
   }
