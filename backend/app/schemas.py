@@ -307,3 +307,11 @@ class StatementSeenRequest(BaseModel):
 class ToggleAdminRequest(BaseModel):
     is_admin: bool
 
+
+class AdminUserUpdateRequest(CamelModel):
+    personal_id: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    code: Optional[str] = None

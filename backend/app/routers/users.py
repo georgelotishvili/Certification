@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import select
+from sqlalchemy import select, or_, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -36,23 +36,39 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
     if len(payload.password) < 6:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="password too short")
 
-    # Uniqueness: personal_id
-    exists_pid = db.scalar(select(User).where(User.personal_id == payload.personal_id))
-    if exists_pid:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="personal_id already registered")
+    personal_id_norm = payload.personal_id.strip()
+    first_name_norm = payload.first_name.strip()
+    last_name_norm = payload.last_name.strip()
+    phone_norm = payload.phone.strip()
+    email_norm = payload.email.strip().lower()
+
+    existing_conflict = db.scalar(
+        select(User).where(
+            or_(
+                User.personal_id == personal_id_norm,
+                func.lower(User.email) == email_norm,
+                User.phone == phone_norm,
+            )
+        )
+    )
+    if existing_conflict:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="ეს მონაცემები სისტემაში უკვე რეგისტრირებულია",
+        )
 
     # Generate unique code
     code = _gen_code(db)
 
     settings = get_settings()
-    is_founder = (settings.founder_admin_email or "").lower() == payload.email.lower()
+    is_founder = (settings.founder_admin_email or "").lower() == email_norm
 
     user = User(
-        personal_id=payload.personal_id.strip(),
-        first_name=payload.first_name.strip(),
-        last_name=payload.last_name.strip(),
-        phone=payload.phone.strip(),
-        email=payload.email.lower().strip(),
+        personal_id=personal_id_norm,
+        first_name=first_name_norm,
+        last_name=last_name_norm,
+        phone=phone_norm,
+        email=email_norm,
         password_hash=hash_code(payload.password),
         code=code,
         is_admin=is_founder or False,

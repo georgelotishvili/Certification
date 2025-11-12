@@ -630,20 +630,13 @@ document.addEventListener('DOMContentLoaded', () => {
             let detail = '';
             try {
               const json = await response.json();
-              if (json && json.detail) detail = json.detail;
+              detail = json?.detail || '';
             } catch {}
-            if (response.status === 409 || /already registered/i.test(detail || '')) {
-              alert('ეს პირადი ნომერი უკვე რეგისტრირებულია. გადავდივართ ავტორიზაციაზე.');
-              try {
-                localStorage.setItem(KEYS.SAVED_EMAIL, email);
-                localStorage.setItem(KEYS.SAVED_PASSWORD, password);
-              } catch {}
-              alert('ეს პირადი ნომერი უკვე რეგისტრირებულია. გაიარეთ ავტორიზაცია თქვენს ელფოსტასა და პაროლზე.');
-              closeModal();
-              setLoggedIn(false);
+            if (response.status === 409) {
+              alert(detail || 'ეს მონაცემები სისტემაში უკვე რეგისტრირებულია');
               return;
             }
-            alert(String(detail || 'რეგისტრაცია ვერ შესრულდა'));
+            alert(detail || 'რეგისტრაცია ვერ შესრულდა');
             return;
           }
           const data = await response.json();

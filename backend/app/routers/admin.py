@@ -30,6 +30,7 @@ from ..schemas import (
     UsersListResponse,
     UserOut,
     ToggleAdminRequest,
+    AdminUserUpdateRequest,
     AdminStatementsResponse,
     AdminStatementOut,
     StatementSeenRequest,
@@ -888,6 +889,120 @@ def admin_toggle_user(
     db.commit()
     return
 
+
+@router.patch("/users/{user_id}", response_model=UserOut)
+def admin_update_user(
+    user_id: int,
+    payload: AdminUserUpdateRequest,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    if not _is_founder_actor(x_actor_email):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can modify user data")
+
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    updates_made = False
+
+    if payload.first_name is not None:
+        first_name = (payload.first_name or "").strip()
+        if not first_name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="first_name must not be empty")
+        if first_name != user.first_name:
+            user.first_name = first_name
+            updates_made = True
+
+    if payload.last_name is not None:
+        last_name = (payload.last_name or "").strip()
+        if not last_name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="last_name must not be empty")
+        if last_name != user.last_name:
+            user.last_name = last_name
+            updates_made = True
+
+    if payload.personal_id is not None:
+        personal_id = (payload.personal_id or "").strip()
+        if len(personal_id) != 11 or not personal_id.isdigit():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="personal_id must be 11 digits")
+        exists_pid = db.scalar(
+            select(User.id).where(
+                User.personal_id == personal_id,
+                User.id != user.id,
+            )
+        )
+        if exists_pid:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="personal_id already registered")
+        if personal_id != user.personal_id:
+            user.personal_id = personal_id
+            updates_made = True
+
+    if payload.phone is not None:
+        phone = (payload.phone or "").strip()
+        if not phone:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="phone must not be empty")
+        if phone != user.phone:
+            user.phone = phone
+            updates_made = True
+
+    if payload.email is not None:
+        email = (payload.email or "").strip().lower()
+        if not email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="email must not be empty")
+        if user.email.lower() == founder_email and email != founder_email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Founder email cannot be changed")
+        existing_email = db.scalar(
+            select(User.id).where(
+                func.lower(User.email) == email,
+                User.id != user.id,
+            )
+        )
+        if existing_email:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="email already in use")
+        if email != user.email.lower():
+            user.email = email
+            updates_made = True
+        else:
+            # Ensure canonical lowercase storage
+            user.email = email
+
+    if payload.code is not None:
+        code_candidate = (payload.code or "").strip()
+        if code_candidate != user.code:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="code cannot be modified")
+
+    if updates_made:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        db.refresh(user)
+
+    unseen_count = db.scalar(
+        select(func.count()).select_from(Statement).where(
+            Statement.user_id == user.id,
+            Statement.seen_at.is_(None),
+        )
+    ) or 0
+
+    return UserOut(
+        id=user.id,
+        personal_id=user.personal_id,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        phone=user.phone,
+        email=user.email,
+        code=user.code,
+        is_admin=(user.email.lower() == founder_email) or bool(user.is_admin),
+        is_founder=(user.email.lower() == founder_email),
+        created_at=user.created_at,
+        has_unseen_statements=unseen_count > 0,
+        unseen_statement_count=unseen_count,
+    )
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_user(

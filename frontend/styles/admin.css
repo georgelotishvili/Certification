@@ -885,6 +885,61 @@ body.modal-open {
   overflow-y: auto;
 }
 
+.user-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.user-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.user-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-edit-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.user-edit-field input {
+  padding: 10px 12px;
+  border: 2px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--surface-elevated);
+  font-size: 14px;
+  color: var(--text-strong);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.user-edit-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(134, 106, 213, 0.2);
+}
+
+.user-edit-field input[readonly] {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.user-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .statements-list {
   display: flex;
   flex-direction: column;
@@ -1069,6 +1124,22 @@ body.modal-open {
 .primary-btn:hover {
   filter: brightness(1.03);
   transform: translateY(-1px);
+}
+
+.secondary-btn {
+  padding: 10px 18px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-elevated);
+  color: var(--text-strong);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  box-shadow: 0 10px 20px rgba(29, 39, 68, 0.12);
+}
+
+.secondary-btn:hover {
+  background: var(--surface-muted);
 }
 
 .attempts-list {

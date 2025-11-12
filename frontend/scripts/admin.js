@@ -68,12 +68,25 @@ document.addEventListener('DOMContentLoaded', () => {
     resultMediaPlayer: document.getElementById('resultMediaPlayer'),
     resultMediaDownload: document.getElementById('resultMediaDownload'),
     resultMediaInfo: document.getElementById('resultMediaInfo'),
+    userEditOverlay: document.getElementById('userEditOverlay'),
+    userEditForm: document.getElementById('userEditForm'),
+    userEditClose: document.getElementById('userEditClose'),
+    userEditCancel: document.getElementById('userEditCancel'),
+    userEditTitle: document.getElementById('userEditTitle'),
+    userEditFirstName: document.getElementById('userEditFirstName'),
+    userEditLastName: document.getElementById('userEditLastName'),
+    userEditPersonalId: document.getElementById('userEditPersonalId'),
+    userEditPhone: document.getElementById('userEditPhone'),
+    userEditEmail: document.getElementById('userEditEmail'),
+    userEditCode: document.getElementById('userEditCode'),
+    userEditSave: document.getElementById('userEditSave'),
   };
 
   const NAV_TARGETS = {
     'გამოცდა': 'exam',
     'რეგისტრაციები': 'registrations',
     'რეგისტრირებული პირები': 'registrations',
+    'პროექტი': null,
   };
 
   const on = (element, event, handler) => element && element.addEventListener(event, handler);

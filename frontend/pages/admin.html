@@ -33,9 +33,9 @@
         <button class="drawer-close" aria-label="დახურვა" type="button"></button>
         <div class="drawer-auth-banner">ადმინისტრატორის გვერდი</div>
         <nav class="drawer-nav">
-          <a href="#">რეესტრი</a>
           <a href="#">რეგისტრირებული პირები</a>
           <a href="#">გამოცდა</a>
+          <a href="#">პროექტი</a>
         </nav>
         <button class="drawer-login">მთავარი გვერდი</button>
       </aside>
@@ -43,9 +43,9 @@
     </header>
     <div class="nav-bar">
       <nav class="nav">
-        <a href="#">რეესტრი</a>
         <a href="#">რეგისტრაციები</a>
         <a href="#">გამოცდა</a>
+        <a href="#">პროექტი</a>
       </nav>
     </div>
 
@@ -141,6 +141,53 @@
         </div>
         <div class="results-modal-body">
           <div id="userStatementsList" class="statements-list" role="list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="userEditOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userEditTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="userEditTitle">მონაცემების რედაქტირება</h2>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="modal-close" id="userEditClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <form id="userEditForm" class="user-edit-form">
+            <div class="user-edit-grid">
+              <label class="user-edit-field">
+                <span class="user-edit-label">სახელი</span>
+                <input id="userEditFirstName" type="text" name="firstName" autocomplete="given-name" required />
+              </label>
+              <label class="user-edit-field">
+                <span class="user-edit-label">გვარი</span>
+                <input id="userEditLastName" type="text" name="lastName" autocomplete="family-name" required />
+              </label>
+              <label class="user-edit-field">
+                <span class="user-edit-label">პირადი ნომერი</span>
+                <input id="userEditPersonalId" type="text" name="personalId" inputmode="numeric" pattern="\d*" maxlength="11" required />
+              </label>
+              <label class="user-edit-field">
+                <span class="user-edit-label">ტელეფონი</span>
+                <input id="userEditPhone" type="tel" name="phone" autocomplete="tel" required />
+              </label>
+              <label class="user-edit-field">
+                <span class="user-edit-label">ელფოსტა</span>
+                <input id="userEditEmail" type="email" name="email" autocomplete="email" required />
+              </label>
+              <label class="user-edit-field">
+                <span class="user-edit-label">უნიკალური კოდი</span>
+                <input id="userEditCode" type="text" name="code" autocomplete="off" readonly />
+              </label>
+            </div>
+            <div class="user-edit-actions">
+              <button type="button" class="secondary-btn" id="userEditCancel">გაუქმება</button>
+              <button type="submit" class="primary-btn" id="userEditSave">შენახვა</button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
