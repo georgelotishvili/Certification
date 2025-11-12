@@ -80,8 +80,7 @@ header {
   bottom: -20px;
   left: 50%;
   transform: translateX(-50%);
-  max-width: 1200px;
-  width: 90%;
+  width: 96%;
   height: 40px;
   padding: 0 5px 0 15px;
   display: flex;
@@ -876,7 +875,13 @@ body.modal-open {
   outline: none;
 }
 
-@media (max-width: 940px) {
+@media (max-width: 1150px) {  
+  .header-hero {
+    height: 110px;
+  }
+}
+
+@media (max-width: 850px) {
   .nav-bar {
     display: none;
   }
@@ -895,11 +900,7 @@ body.modal-open {
 
   .burger {
     display: flex;
-  }
-  
-  .header-hero {
-    height: 110px;
-  }
+  }  
 }
 
 @media (max-width: 640px) {
