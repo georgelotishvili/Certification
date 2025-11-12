@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isStartingSession: false,
     gatePassed: false,
     examStarted: false,
-    mustStayFullscreen: true,
+    mustStayFullscreen: false,
     blocks: [],
     selectedByBlock: [],
     flatQuestions: [],
@@ -1572,9 +1572,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (DOM.examStart) DOM.examStart.disabled = true;
 
       state.gatePassed = true;
-      state.mustStayFullscreen = true;
+      state.mustStayFullscreen = false;
       hide(DOM.gateOverlay);
-      enterFullscreen();
 
       // სესია საჭიროა ჩანაწერების ატვირთვისთვის
       void beginSession();
@@ -1653,6 +1652,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const startButton = DOM.examStart;
     if (startButton) startButton.disabled = true;
 
+    state.mustStayFullscreen = true;
+    enterFullscreen();
+
     try {
       const cameraStream = await startCamera().catch(() => null);
       if (!cameraStream) return;
@@ -1677,6 +1679,9 @@ document.addEventListener('DOMContentLoaded', () => {
       await initExamData();
       startCountdown();
     } finally {
+      if (!state.examStarted) {
+        exitFullscreen();
+      }
       if (!state.examStarted && startButton) {
         startButton.disabled = false;
         startButton.focus?.();
