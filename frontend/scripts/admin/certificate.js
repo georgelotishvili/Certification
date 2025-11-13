@@ -451,9 +451,10 @@
       Object.values(TIER_CLASSES).forEach((className) => card.classList.remove(className));
       card.classList.remove('certificate-card--inactive');
 
-      const tierClass = TIER_CLASSES[data.level?.key] || TIER_CLASSES.architect;
+      const tierKey = resolveLevelKey(data.level || data.level?.key);
+      const tierClass = TIER_CLASSES[tierKey] || TIER_CLASSES.architect;
       card.classList.add(tierClass);
-      card.dataset.certTier = data.level?.key === 'expert' ? 'expert' : 'architect';
+      card.dataset.certTier = tierKey;
 
       if (data.isInactive) {
         card.classList.add('certificate-card--inactive');
@@ -479,6 +480,10 @@
       }
     }
 
+    function nextAnimationFrame() {
+      return new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+
     async function populateView(data) {
       if (!data) return;
       applyCardStyling(data);
@@ -487,21 +492,15 @@
       const levelKey = resolveLevelKey(data.level || data.level?.key);
       await loadCertificateTemplate(levelKey);
       
-      // Wait a bit for DOM to update
-      await new Promise(resolve => setTimeout(resolve, 10));
+      // Wait next frame for DOM render
+      await nextAnimationFrame();
       
       // Fit after DOM update
       fitCertificateToContainer();
       
-      // levelLabel აღარ არის საჭირო, რადგან SVG-ში უკვე არის
-      setField('statusLabel', data.hasCertificate ? data.status.label : '—');
       setField('uniqueCode', data.uniqueCode || '—');
       setField('fullName', data.fullName || buildFullName(activeUser) || '—');
       setField('personalId', activeUser?.personal_id || '—');
-      setField('firstName', data.firstName || activeUser?.first_name || '—');
-      setField('lastName', data.lastName || activeUser?.last_name || '—');
-      setField('phone', data.phone || activeUser?.phone || '—');
-      setField('email', data.email || activeUser?.email || '—');
       setField('issueDate', data.hasCertificate ? data.issueDate || '—' : '—');
       setField('validityTerm', data.hasCertificate ? data.validityTerm || '—' : '—');
       setField('validUntil', data.hasCertificate ? data.validUntil || '—' : '—');
