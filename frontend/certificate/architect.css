@@ -1,56 +1,78 @@
 .certificate-background {
   position: relative;
-  width: 1123px;
-  height: 793px;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1123 / 793;
   background-image: url('architect bac.svg');
   background-size: 100% 100%;
-  background-position: center;
+  background-position: 0 0;
   background-repeat: no-repeat;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  display: block;
+  overflow: hidden;
+  contain: layout style paint;
 }
+
 
 .certificate-background > div {
   position: absolute;
-  border: 1px solid #000;
+  border: none;
+  font-family: 'DejaVu Sans', sans-serif;
+  font-size: 16px;
+  color: #3944B7;
+  font-weight: 600;
+  text-align: left;
+  padding: 2px 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  margin: 0;
 }
 
 .owner-1 {
-  left: 116px;
-  top: 261px;
-  width: 653px;
-  height: 28px;
+  left: 10.33%;
+  top: 32.91%;
+  width: 58.24%;
+  height: 3.53%;
 }
 
 .personal-number-1 {
-  left: 149.7px;
-  top: 292px;
-  width: 117px;
-  height: 18.7px;
+  left: 13.33%;
+  top: 36.82%;
+  width: 10.42%;
+  height: 2.36%;
 }
 
 .identification-code-1 {
-  left: 837px;
-  top: 690px;
-  width: 126.5px;
-  height: 20px;
+  left: 74.58%;
+  top: 87.01%;
+  width: 11.27%;
+  height: 2.52%;
 }
 
 .issue-date-1 {
-  left: 129px;
-  top: 539.8px;
-  width: 85px;
-  height: 17px;
+  left: 11.49%;
+  top: 68.07%;
+  width: 7.57%;
+  height: 2.14%;
 }
 
 .validity-period-1 {
-  left: 383px;
-  top: 573px;
-  width: 41px;
-  height: 16px;
+  left: 34.10%;
+  top: 72.26%;
+  width: 3.65%;
+  height: 2.02%;
 }
 
 .expiry-date-1 {
-  left: 129px;
-  top: 605.5px;
-  width: 85px;
-  height: 17px;
+  left: 11.49%;
+  top: 76.35%;
+  width: 7.57%;
+  height: 2.14%;
 }

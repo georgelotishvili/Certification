@@ -50,11 +50,21 @@
       code: DOM.certificateFormCodeDisplay,
     };
 
+    const templateContainer = overlay?.querySelector('#certificateTemplateContainer');
+    
     const fieldNodes = {};
-    if (overlay) {
-      overlay.querySelectorAll('[data-cert-field]').forEach((node) => {
-        fieldNodes[node.dataset.certField] = node;
-      });
+    function updateFieldNodes() {
+      // Clear existing
+      Object.keys(fieldNodes).forEach(key => delete fieldNodes[key]);
+      // Find both old and new format
+      if (overlay) {
+        overlay.querySelectorAll('[data-cert-field]').forEach((node) => {
+          fieldNodes[node.dataset.certField] = node;
+        });
+        overlay.querySelectorAll('[data-field]').forEach((node) => {
+          fieldNodes[node.dataset.field] = node;
+        });
+      }
     }
 
     const STATUS_MAP = new Map([
@@ -69,11 +79,13 @@
     ]);
 
     const LEVEL_MAP = new Map([
-      ['architect', { key: 'architect', label: 'არქიტექტორი' }],
-      ['architect_expert', { key: 'expert', label: 'არქიტექტორი ექსპერტი' }],
-      ['expert', { key: 'expert', label: 'არქიტექტორი ექსპერტი' }],
-      ['არქიტექტორი', { key: 'architect', label: 'არქიტექტორი' }],
-      ['არქიტექტორი ექსპერტი', { key: 'expert', label: 'არქიტექტორი ექსპერტი' }],
+      ['architect', { key: 'architect', label: 'შენობა-ნაგებობის არქიტექტორი' }],
+      ['architect_expert', { key: 'expert', label: 'არქიტექტურული პროექტის ექსპერტი' }],
+      ['expert', { key: 'expert', label: 'არქიტექტურული პროექტის ექსპერტი' }],
+      ['არქიტექტორი', { key: 'architect', label: 'შენობა-ნაგებობის არქიტექტორი' }],
+      ['არქიტექტორი ექსპერტი', { key: 'expert', label: 'არქიტექტურული პროექტის ექსპერტი' }],
+      ['შენობა-ნაგებობის არქიტექტორი', { key: 'architect', label: 'შენობა-ნაგებობის არქიტექტორი' }],
+      ['არქიტექტურული პროექტის ექსპერტი', { key: 'expert', label: 'არქიტექტურული პროექტის ექსპერტი' }],
     ]);
 
     const TIER_CLASSES = {
@@ -331,6 +343,82 @@
       }
     }
 
+    async function loadCertificateTemplate(level) {
+      if (!templateContainer) return;
+      
+      const levelKey = level === 'expert' ? 'expert' : 'architect';
+      const templatePath = `../certificate/${levelKey}.html`;
+      
+      try {
+        const response = await fetch(templatePath);
+        if (!response.ok) {
+          console.error(`[certificate] Failed to load template: ${templatePath}`);
+          return;
+        }
+        const html = await response.text();
+        // Wrap template with a scale wrapper so transform scaling preserves layout centering
+        templateContainer.innerHTML = `<div class="certificate-scale-wrapper">${html}</div>`;
+        
+        // Update field nodes after loading template
+        updateFieldNodes();
+
+        // After the template is inserted, fit it to the container
+        requestAnimationFrame(() => {
+          fitCertificateToContainer();
+        });
+      } catch (error) {
+        console.error('[certificate] Error loading certificate template', error);
+      }
+    }
+
+    function fitCertificateToContainer() {
+      if (!templateContainer) return;
+      let wrapperEl = templateContainer.querySelector('.certificate-scale-wrapper');
+      const certificateEl = templateContainer.querySelector('.certificate-background');
+      if (!certificateEl) return;
+      if (!wrapperEl) {
+        // Create wrapper if missing
+        wrapperEl = document.createElement('div');
+        wrapperEl.className = 'certificate-scale-wrapper';
+        certificateEl.parentElement?.insertBefore(wrapperEl, certificateEl);
+        wrapperEl.appendChild(certificateEl);
+      }
+
+      // Base certificate size (px) – used for precise scaling
+      const BASE_WIDTH = 1123;
+      const BASE_HEIGHT = 793;
+
+      // Ensure base size so absolute/percent positions map predictably
+      certificateEl.style.width = `${BASE_WIDTH}px`;
+      certificateEl.style.height = `${BASE_HEIGHT}px`;
+      certificateEl.style.transformOrigin = 'top left';
+
+      // Available space: fit to viewport (with a small margin so header/actions don't overlap)
+      const viewportMargin = 24;
+      const availableWidth = Math.max(0, window.innerWidth - viewportMargin * 2);
+      const availableHeight = Math.max(0, window.innerHeight - viewportMargin * 2);
+
+      // Scale to fit while preserving aspect ratio
+      const scale = Math.max(
+        0.1,
+        Math.min(availableWidth / BASE_WIDTH, availableHeight / BASE_HEIGHT)
+      );
+
+      certificateEl.style.transform = `scale(${scale})`;
+
+      // Size the wrapper to the scaled dimensions so Flexbox can center correctly
+      const scaledWidth = BASE_WIDTH * scale;
+      const scaledHeight = BASE_HEIGHT * scale;
+      wrapperEl.style.width = `${scaledWidth}px`;
+      wrapperEl.style.height = `${scaledHeight}px`;
+      wrapperEl.style.position = 'relative';
+      wrapperEl.style.display = 'block';
+
+      // Ensure container does not show anything outside the certificate
+      templateContainer.style.display = 'block';
+      templateContainer.style.overflow = 'hidden';
+    }
+
     function applyCardStyling(data) {
       if (!card || !data) return;
       Object.values(TIER_CLASSES).forEach((className) => card.classList.remove(className));
@@ -364,13 +452,25 @@
       }
     }
 
-    function populateView(data) {
+    async function populateView(data) {
       if (!data) return;
       applyCardStyling(data);
-      setField('levelLabel', data.level?.label || 'არქიტექტორი');
+      
+      // Load certificate template based on level
+      const levelKey = data.level?.key || 'architect';
+      await loadCertificateTemplate(levelKey);
+      
+      // Wait a bit for DOM to update
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      // Fit after DOM update
+      fitCertificateToContainer();
+      
+      // levelLabel აღარ არის საჭირო, რადგან SVG-ში უკვე არის
       setField('statusLabel', data.hasCertificate ? data.status.label : '—');
       setField('uniqueCode', data.uniqueCode || '—');
       setField('fullName', data.fullName || buildFullName(activeUser) || '—');
+      setField('personalId', activeUser?.personal_id || '—');
       setField('firstName', data.firstName || activeUser?.first_name || '—');
       setField('lastName', data.lastName || activeUser?.last_name || '—');
       setField('phone', data.phone || activeUser?.phone || '—');
@@ -619,7 +719,7 @@
         }
 
         closeForm({ force: true });
-        populateView(activeData);
+        await populateView(activeData);
         updateView();
         
         // Update user card color in users list immediately
@@ -675,7 +775,7 @@
         activeUser = userAfterDelete;
         activeData = buildCertificateData(userAfterDelete);
         closeForm({ force: true });
-        populateView(activeData);
+        await populateView(activeData);
         updateView();
         showToast('სერტიფიკატი წაიშალა', 'success');
       } catch (error) {
@@ -781,9 +881,11 @@
       formOpen = false;
       formMode = activeData?.hasCertificate ? 'update' : 'create';
       resetForm();
-      populateView(activeData);
+      await populateView(activeData);
       updateView();
       openOverlay(overlay);
+      // Ensure the certificate fits when opened
+      requestAnimationFrame(() => fitCertificateToContainer());
     }
 
     function init() {
@@ -798,6 +900,26 @@
       formFields.issueDate?.addEventListener('change', () => updateAutoValidity());
       formFields.validityTerm?.addEventListener('input', () => updateAutoValidity());
       downloadBtn?.addEventListener('click', handleDownload);
+      
+      // Load template when level changes in form
+      formFields.level?.addEventListener('change', async (event) => {
+        const level = event.target.value;
+        await loadCertificateTemplate(level);
+        updateFieldNodes();
+        // Re-populate fields after template loads if we have data
+        if (activeData) {
+          await populateView(activeData);
+        }
+        fitCertificateToContainer();
+      });
+      
+      // Initial field nodes update
+      updateFieldNodes();
+
+      // Refit certificate on resize
+      window.addEventListener('resize', () => {
+        fitCertificateToContainer();
+      });
     }
 
     function close() {

@@ -14,6 +14,8 @@
     <script src="../scripts/admin/certificate.js" defer></script>
     <script src="../scripts/admin/users.js" defer></script>
     <link rel="stylesheet" href="../styles/admin.css" />
+    <link rel="stylesheet" href="../certificate/architect.css" />
+    <link rel="stylesheet" href="../certificate/expert.css" />
   </head>
   <body>
     <header>
@@ -183,66 +185,8 @@
             <div class="certificate-card__toolbar">
               <button type="button" class="certificate-card__edit" id="certificateEditBtn">რედაქტირება</button>
             </div>
-            <div class="certificate-card__decor certificate-card__decor--top"></div>
-            <div class="certificate-card__decor certificate-card__decor--bottom"></div>
-            <div class="certificate-card__org">საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი</div>
-            <div class="certificate-card__title">სერტიფიკატი</div>
-            <p class="certificate-card__statement">მასზედ რომ მან წარმატებით ჩააბარა სასერტიფიკაციო გამოცდები და მიენიჭა</p>
-            <div class="certificate-card__tier" data-cert-field="levelLabel">არქიტექტორი</div>
-            <div class="certificate-card__status" id="certificateStatusBadge" data-cert-field="statusLabel">მოქმედი</div>
-            <div class="certificate-card__code">
-              <span class="certificate-card__code-label">უნიკალური კოდი</span>
-              <span class="certificate-card__code-value" data-cert-field="uniqueCode">ARC-000000</span>
-            </div>
-            <div class="certificate-card__person">
-              <span class="certificate-card__person-label">სერტიფიკატის მფლობელი</span>
-              <span class="certificate-card__person-name" data-cert-field="fullName">—</span>
-            </div>
-            <div class="certificate-card__info-grid">
-              <div class="certificate-card__info-item">
-                <span class="certificate-card__info-label">სახელი</span>
-                <span class="certificate-card__info-value" data-cert-field="firstName">—</span>
-              </div>
-              <div class="certificate-card__info-item">
-                <span class="certificate-card__info-label">გვარი</span>
-                <span class="certificate-card__info-value" data-cert-field="lastName">—</span>
-              </div>
-              <div class="certificate-card__info-item">
-                <span class="certificate-card__info-label">ტელეფონი</span>
-                <span class="certificate-card__info-value" data-cert-field="phone">—</span>
-              </div>
-              <div class="certificate-card__info-item">
-                <span class="certificate-card__info-label">ელფოსტა</span>
-                <span class="certificate-card__info-value" data-cert-field="email">—</span>
-              </div>
-              <div class="certificate-card__info-item">
-                <span class="certificate-card__info-label">გაცემის თარიღი</span>
-                <span class="certificate-card__info-value" data-cert-field="issueDate">—</span>
-              </div>
-              <div class="certificate-card__info-item">
-                <span class="certificate-card__info-label">მოქმედების ვადა (წელი)</span>
-                <span class="certificate-card__info-value" data-cert-field="validityTerm">—</span>
-              </div>
-              <div class="certificate-card__info-item">
-                <span class="certificate-card__info-label">მოქმედების საბოლოო თარიღი</span>
-                <span class="certificate-card__info-value" data-cert-field="validUntil">—</span>
-              </div>
-            </div>
-            <div class="certificate-card__footnote">
-              <p>სერტიფიკატი ძალაშია მითითებულ ვადამდე, თუ სხვა გადაწყვეტილება არ იქნა მიღებული საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის მიერ.</p>
-            </div>
-            <div class="certificate-card__signatures">
-              <div class="certificate-card__signature">
-                <div class="certificate-card__signature-placeholder" id="certificateSignatureDirector"></div>
-                <span class="certificate-card__signature-label">აღმასრულებელი დირექტორი</span>
-                <span class="certificate-card__signature-name">ლაშა ფოფხაძე</span>
-              </div>
-              <div class="certificate-card__signature">
-                <div class="certificate-card__signature-placeholder" id="certificateSignatureOrganizer"></div>
-                <span class="certificate-card__signature-label">სასერტიფიკაციო პროცესის ორგანიზატორი</span>
-                <span class="certificate-card__signature-name">არქიტექტურის დოქტორი, სამშენებლო რეგულაციების ექსპერტი, პროფესორი გიორგი ლოთიშვილი</span>
-              </div>
-            </div>
+            <!-- აქ იტვირთება architect.html ან expert.html JavaScript-ით -->
+            <div id="certificateTemplateContainer"></div>
           </div>
           <div id="certificateEmptyState" class="certificate-empty hidden">
             <div class="certificate-empty__badge">სერტიფიკატი არ არის შექმნილი</div>
@@ -273,10 +217,10 @@
             </div>
             <div class="certificate-form__grid">
               <label class="certificate-form__field">
-                <span class="certificate-form__label">სერტიფიკატის ხარისხი</span>
+                <span class="certificate-form__label">კვალიფიკაცია</span>
                 <select id="certificateFormLevel" name="level" required>
-                  <option value="architect">არქიტექტორი</option>
-                  <option value="expert">არქიტექტორი ექსპერტი</option>
+                  <option value="architect">შენობა-ნაგებობის არქიტექტორი</option>
+                  <option value="expert">არქიტექტურული პროექტის ექსპერტი</option>
                 </select>
               </label>
               <label class="certificate-form__field">
