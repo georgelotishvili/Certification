@@ -19,7 +19,7 @@
 
 .certificate-background > div {
   position: absolute;
-  border: none;
+  border: solid 1px #000;
   font-family: 'DejaVu Sans', sans-serif;
   font-size: 16px;
   color: #dc2626;
@@ -39,7 +39,7 @@
   left: 10.33%;
   top: 32.91%;
   width: 58.24%;
-  height: 3.53%;
+  height: 3.40%;
 }
 
 .personal-number-2 {
@@ -97,4 +97,12 @@
   font-size: 24pt;
   font-weight: 700;
   color: #990000;
+  line-height: 1;
+  padding: 7px 4px 0 4px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
