@@ -1793,7 +1793,7 @@ body.modal-open {
   filter: grayscale(0.35) saturate(0.6);
   background: transparent;
   color: #36404f;
-  opacity: 0.3;
+  opacity: 0.2;
 }
 
 .certificate-card__org {
