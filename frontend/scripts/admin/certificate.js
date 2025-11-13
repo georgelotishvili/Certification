@@ -56,15 +56,11 @@
     function updateFieldNodes() {
       // Clear existing
       Object.keys(fieldNodes).forEach(key => delete fieldNodes[key]);
-      // Find both old and new format
-      if (overlay) {
-        overlay.querySelectorAll('[data-cert-field]').forEach((node) => {
-          fieldNodes[node.dataset.certField] = node;
-        });
-        overlay.querySelectorAll('[data-field]').forEach((node) => {
-          fieldNodes[node.dataset.field] = node;
-        });
-      }
+      // Bind new template fields
+      if (!overlay) return;
+      overlay.querySelectorAll('[data-field]').forEach((node) => {
+        fieldNodes[node.dataset.field] = node;
+      });
     }
 
     const STATUS_MAP = new Map([
@@ -87,6 +83,18 @@
       ['შენობა-ნაგებობის არქიტექტორი', { key: 'architect', label: 'შენობა-ნაგებობის არქიტექტორი' }],
       ['არქიტექტურული პროექტის ექსპერტი', { key: 'expert', label: 'არქიტექტურული პროექტის ექსპერტი' }],
     ]);
+
+    function resolveLevelKey(raw) {
+      if (!raw) return 'architect';
+      if (typeof raw === 'object') {
+        return raw.key === 'expert' ? 'expert' : 'architect';
+      }
+      const s = String(raw).trim().toLowerCase();
+      if (s === 'expert' || s === 'architect_expert' || s === 'არქიტექტორი ექსპერტი' || s === 'არქიტექტურული პროექტის ექსპერტი') {
+        return 'expert';
+      }
+      return 'architect';
+    }
 
     const TIER_CLASSES = {
       architect: 'certificate-card--architect',
@@ -343,11 +351,27 @@
       }
     }
 
+    let themeLinkEl = null;
+    function ensureThemeStyles() {
+      if (themeLinkEl && document.head.contains(themeLinkEl)) return themeLinkEl;
+      themeLinkEl = document.getElementById('certificateThemeStyles');
+      if (!themeLinkEl) {
+        themeLinkEl = document.createElement('link');
+        themeLinkEl.id = 'certificateThemeStyles';
+        themeLinkEl.rel = 'stylesheet';
+        document.head.appendChild(themeLinkEl);
+      } else {
+        document.head.appendChild(themeLinkEl);
+      }
+      return themeLinkEl;
+    }
+
     async function loadCertificateTemplate(level) {
       if (!templateContainer) return;
       
       const levelKey = level === 'expert' ? 'expert' : 'architect';
       const templatePath = `../certificate/${levelKey}.html`;
+      const cssPath = `../certificate/${levelKey}.css`;
       
       try {
         const response = await fetch(templatePath);
@@ -362,10 +386,13 @@
         // Update field nodes after loading template
         updateFieldNodes();
 
-        // After the template is inserted, fit it to the container
-        requestAnimationFrame(() => {
-          fitCertificateToContainer();
-        });
+        // Apply corresponding theme stylesheet (last in head to win CSS cascade)
+        const link = ensureThemeStyles();
+        if (link.getAttribute('href') !== cssPath) {
+          link.setAttribute('href', cssPath);
+        }
+
+        // Field nodes updated; scaling will be handled by caller
       } catch (error) {
         console.error('[certificate] Error loading certificate template', error);
       }
@@ -457,7 +484,7 @@
       applyCardStyling(data);
       
       // Load certificate template based on level
-      const levelKey = data.level?.key || 'architect';
+      const levelKey = resolveLevelKey(data.level || data.level?.key);
       await loadCertificateTemplate(levelKey);
       
       // Wait a bit for DOM to update
@@ -672,7 +699,8 @@
 
         const certificateData = await response.json();
 
-        const normalizedLevel = normalizeLevel(certificateData.level);
+        // Trust the selected level in the form for UI consistency
+        const normalizedLevel = normalizeLevel(levelValue);
         const normalizedStatus = normalizeStatus(certificateData.status, certificateData.valid_until);
 
         const formattedIssueDate = formatDate(certificateData.issue_date);
@@ -705,10 +733,10 @@
         };
 
         if (activeUserRef) {
-          activeUserRef.certificate = certificateData;
+          activeUserRef.certificate = { ...certificateData, level: levelValue };
           activeUserRef.certificate_info = {
             unique_code: certificateData.unique_code,
-            level: certificateData.level,
+            level: levelValue,
             status: certificateData.status,
             issue_date: certificateData.issue_date,
             validity_term: certificateData.validity_term,
@@ -884,8 +912,7 @@
       await populateView(activeData);
       updateView();
       openOverlay(overlay);
-      // Ensure the certificate fits when opened
-      requestAnimationFrame(() => fitCertificateToContainer());
+      // Fit after content is populated by populateView
     }
 
     function init() {
@@ -904,13 +931,12 @@
       // Load template when level changes in form
       formFields.level?.addEventListener('change', async (event) => {
         const level = event.target.value;
-        await loadCertificateTemplate(level);
-        updateFieldNodes();
-        // Re-populate fields after template loads if we have data
-        if (activeData) {
-          await populateView(activeData);
-        }
-        fitCertificateToContainer();
+      // Update activeData level and re-render; populateView will load correct template
+      if (activeData) {
+        const normalized = normalizeLevel(level);
+        activeData.level = normalized;
+      }
+        await populateView(activeData);
       });
       
       // Initial field nodes update
