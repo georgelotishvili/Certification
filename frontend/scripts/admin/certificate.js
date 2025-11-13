@@ -328,9 +328,7 @@
         validityTerm:
           termNumber == null
             ? ''
-            : termNumber === 1
-            ? '1 წელი'
-            : `${termNumber} წელი`,
+            : String(termNumber),
         validUntil: formatDate(validUntilDate),
         validUntilInputValue: formatInputDate(validUntilDate),
         rawValidUntil: validUntilSource,
@@ -707,9 +705,9 @@
         const formattedIssueDate = formatDate(certificateData.issue_date);
         const formattedValidUntil = formatDate(certificateData.valid_until);
         const validityLabel =
-          certificateData.validity_term === 1
-            ? '1 წელი'
-            : `${certificateData.validity_term ?? ''} წელი`;
+          certificateData.validity_term != null
+            ? String(certificateData.validity_term)
+            : '';
 
         activeData = {
           ...(activeData || {}),

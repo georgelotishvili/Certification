@@ -19,18 +19,17 @@
 
 .certificate-background > div {
   position: absolute;
-  border: solid 1px #000;
   font-family: 'DejaVu Sans', sans-serif;
-  font-size: 16px;
-  color: #3944B7;
-  font-weight: 600;
-  text-align: left;
+  font-size: 12pt;
+  color: #000000;
+  font-weight: 100;
+  text-align: center;
   padding: 2px 4px;
-  overflow: hidden;
+  overflow: visible;
   white-space: nowrap;
-  text-overflow: ellipsis;
   display: flex;
   align-items: center;
+  justify-content: center;
   box-sizing: border-box;
   margin: 0;
 }
@@ -51,7 +50,7 @@
 
 .identification-code-1 {
   left: 74.58%;
-  top: 87.01%;
+  top: 87.2%;
   width: 11.27%;
   height: 2.52%;
 }
@@ -75,6 +74,14 @@
   top: 76.35%;
   width: 7.57%;
   height: 2.14%;
+}
+
+@font-face {
+  font-family: 'DejaVu Sans';
+  src: url('../assets/fonts/dejavu-sans.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
@@ -102,6 +109,8 @@
   box-sizing: border-box;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
+  text-align: left;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
