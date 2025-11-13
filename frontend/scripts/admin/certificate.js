@@ -426,9 +426,10 @@
       const availableHeight = Math.max(0, window.innerHeight - viewportMargin * 2);
 
       // Scale to fit while preserving aspect ratio
+      const SCALE_ADJUST = 0.9; // 10% smaller preview on screen
       const scale = Math.max(
         0.1,
-        Math.min(availableWidth / BASE_WIDTH, availableHeight / BASE_HEIGHT)
+        Math.min(availableWidth / BASE_WIDTH, availableHeight / BASE_HEIGHT) * SCALE_ADJUST
       );
 
       certificateEl.style.transform = `scale(${scale})`;
