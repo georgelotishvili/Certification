@@ -1,0 +1,90 @@
+<!-- 
+  არქიტექტორი ექსპერტის სერტიფიკატის HTML ტემპლეიტი
+  ეს ფაილი შეიცავს HTML სტრუქტურას SVG დიზაინის მიხედვით
+  ყველა შეცვლადი ელემენტს აქვს data-field attribute JavaScript-ისთვის
+  ექსპერტის სერტიფიკატს აქვს წითელი ფერის სქემა
+-->
+
+<div class="certificate-wrapper certificate-expert">
+  <!-- უძრავი წარწერები -->
+  <div class="cert-org">საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი</div>
+  <div class="cert-title">სერტიფიკატი</div>
+  
+  <!-- დეკორაციული ელემენტები -->
+  <div class="cert-decor cert-decor-top"></div>
+  <div class="cert-decor cert-decor-bottom"></div>
+  <div class="cert-panel-right"></div>
+  
+  <!-- სერტიფიკატის ძირითადი ინფორმაცია -->
+  <div class="cert-statement">მასზედ რომ მან წარმატებით ჩააბარა სასერტიფიკაციო გამოცდები და მიენიჭა</div>
+  
+  <!-- დონე (არქიტექტორი ექსპერტი) -->
+  <div class="cert-tier" data-field="levelLabel">არქიტექტორი ექსპერტი</div>
+  
+  <!-- სტატუსი -->
+  <div class="cert-status" data-field="statusLabel">მოქმედი</div>
+  
+  <!-- უნიკალური კოდი -->
+  <div class="cert-code">
+    <span class="cert-code-label">უნიკალური კოდი</span>
+    <span class="cert-code-value" data-field="uniqueCode">EXP-000000</span>
+  </div>
+  
+  <!-- პიროვნების სახელი -->
+  <div class="cert-person">
+    <span class="cert-person-label">სერტიფიკატის მფლობელი</span>
+    <span class="cert-person-name" data-field="fullName">—</span>
+  </div>
+  
+  <!-- დეტალური ინფორმაცია -->
+  <div class="cert-info-grid">
+    <div class="cert-info-item">
+      <span class="cert-info-label">სახელი</span>
+      <span class="cert-info-value" data-field="firstName">—</span>
+    </div>
+    <div class="cert-info-item">
+      <span class="cert-info-label">გვარი</span>
+      <span class="cert-info-value" data-field="lastName">—</span>
+    </div>
+    <div class="cert-info-item">
+      <span class="cert-info-label">ტელეფონი</span>
+      <span class="cert-info-value" data-field="phone">—</span>
+    </div>
+    <div class="cert-info-item">
+      <span class="cert-info-label">ელფოსტა</span>
+      <span class="cert-info-value" data-field="email">—</span>
+    </div>
+    <div class="cert-info-item">
+      <span class="cert-info-label">გაცემის თარიღი</span>
+      <span class="cert-info-value" data-field="issueDate">—</span>
+    </div>
+    <div class="cert-info-item">
+      <span class="cert-info-label">მოქმედების ვადა (წელი)</span>
+      <span class="cert-info-value" data-field="validityTerm">—</span>
+    </div>
+    <div class="cert-info-item">
+      <span class="cert-info-label">მოქმედების საბოლოო თარიღი</span>
+      <span class="cert-info-value" data-field="validUntil">—</span>
+    </div>
+  </div>
+  
+  <!-- ქვედა შენიშვნა -->
+  <div class="cert-footnote">
+    <p>სერტიფიკატი ძალაშია მითითებულ ვადამდე, თუ სხვა გადაწყვეტილება არ იქნა მიღებული საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის მიერ.</p>
+  </div>
+  
+  <!-- ხელმოწერები -->
+  <div class="cert-signatures">
+    <div class="cert-signature">
+      <div class="cert-signature-placeholder" id="certSignatureDirector"></div>
+      <span class="cert-signature-label">აღმასრულებელი დირექტორი</span>
+      <span class="cert-signature-name">ლაშა ფოფხაძე</span>
+    </div>
+    <div class="cert-signature">
+      <div class="cert-signature-placeholder" id="certSignatureOrganizer"></div>
+      <span class="cert-signature-label">სასერტიფიკაციო პროცესის ორგანიზატორი</span>
+      <span class="cert-signature-name">არქიტექტურის დოქტორი, სამშენებლო რეგულაციების ექსპერტი, პროფესორი გიორგი ლოთიშვილი</span>
+    </div>
+  </div>
+</div>
+

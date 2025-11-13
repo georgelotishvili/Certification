@@ -1,0 +1,63 @@
+.certificate-background {
+  position: relative;
+  width: 1123px;
+  height: 793px;
+  background-image: url('expert bac.svg');
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.certificate-background > div {
+  position: absolute;
+  border: 1px solid #000;
+}
+
+.qualification-2 {
+  left: 116px;
+  top: 185px;
+  width: 653px;
+  height: 28px;
+}
+
+.owner-2 {
+  left: 116px;
+  top: 261px;
+  width: 653px;
+  height: 28px;
+}
+
+.personal-number-2 {
+  left: 149.7px;
+  top: 292px;
+  width: 117px;
+  height: 18.7px;
+}
+
+.identification-code-2 {
+  left: 837px;
+  top: 690px;
+  width: 126.5px;
+  height: 20px;
+}
+
+.issue-date-2 {
+  left: 129px;
+  top: 539.8px;
+  width: 85px;
+  height: 17px;
+}
+
+.validity-period-2 {
+  left: 383px;
+  top: 573px;
+  width: 41px;
+  height: 16px;
+}
+
+.expiry-date-2 {
+  left: 129px;
+  top: 605.5px;
+  width: 85px;
+  height: 17px;
+}
