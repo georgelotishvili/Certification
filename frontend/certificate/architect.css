@@ -76,3 +76,25 @@
   width: 7.57%;
   height: 2.14%;
 }
+
+@font-face {
+  font-family: 'BPG Nino Mtavruli Bold';
+  src: url('../assets/fonts/bpg-nino-mtavruli-bold-webfont.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+.owner-1 {
+  font-family: 'BPG Nino Mtavruli Bold', 'DejaVu Sans', sans-serif;
+  font-size: 24pt;
+  font-weight: 700;
+  color: #3944B7;
+}
+
+.certificate-background .owner-1 {
+  font-family: 'BPG Nino Mtavruli Bold', 'DejaVu Sans', sans-serif;
+  font-size: 24pt;
+  font-weight: 700;
+  color: #3944B7;
+}

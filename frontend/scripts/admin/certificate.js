@@ -372,6 +372,7 @@
       const levelKey = level === 'expert' ? 'expert' : 'architect';
       const templatePath = `../certificate/${levelKey}.html`;
       const cssPath = `../certificate/${levelKey}.css`;
+      const themeVersion = '20251113';
       
       try {
         const response = await fetch(templatePath);
@@ -388,8 +389,9 @@
 
         // Apply corresponding theme stylesheet (last in head to win CSS cascade)
         const link = ensureThemeStyles();
-        if (link.getAttribute('href') !== cssPath) {
-          link.setAttribute('href', cssPath);
+        const versionedCssPath = `${cssPath}?v=${themeVersion}`;
+        if (link.getAttribute('href') !== versionedCssPath) {
+          link.setAttribute('href', versionedCssPath);
         }
 
         // Field nodes updated; scaling will be handled by caller
