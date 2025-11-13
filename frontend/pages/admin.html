@@ -168,21 +168,15 @@
     <div id="userCertificateOverlay" class="results-overlay" aria-hidden="true">
       <div class="certificate-modal" role="dialog" aria-modal="true" aria-labelledby="userCertificateTitle">
         <div class="certificate-modal-head">
-          <div class="certificate-modal-titles">
-            <h2 id="userCertificateTitle">სერტიფიკატი</h2>
-            <p class="certificate-modal-subtitle">სერტიფიცირებული პირის დეტალური მონაცემები</p>
-          </div>
           <div class="certificate-modal-actions">
             <button type="button" class="secondary-btn certificate-action-btn certificate-action-btn--danger" id="userCertificateDelete" disabled>სერტიფიკატის წაშლა</button>
             <button type="button" class="secondary-btn certificate-action-btn" id="userCertificateDownload">PDF</button>
+            <button type="button" class="secondary-btn certificate-action-btn" id="certificateEditBtn">რედაქტირება</button>
             <button type="button" class="modal-close" id="userCertificateClose" aria-label="დახურვა">×</button>
           </div>
         </div>
         <div class="certificate-modal-body">
           <div id="certificateCard" class="certificate-card" data-cert-tier="architect">
-            <div class="certificate-card__toolbar">
-              <button type="button" class="certificate-card__edit" id="certificateEditBtn">რედაქტირება</button>
-            </div>
             <!-- აქ იტვირთება architect.html ან expert.html JavaScript-ით -->
             <div id="certificateTemplateContainer"></div>
           </div>
