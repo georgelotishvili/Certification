@@ -22,7 +22,7 @@
   font-family: 'DejaVu Sans', sans-serif;
   font-size: 12pt;
   color: #000000;
-  font-weight: 100;
+  font-weight: 700;
   text-align: center;
   padding: 2px 4px;
   overflow: visible;
@@ -57,7 +57,7 @@
 
 .issue-date-2 {
   left: 11.49%;
-  top: 68.07%;
+  top: 68.2%;
   width: 7.57%;
   height: 2.14%;
 }
@@ -79,7 +79,7 @@
 @font-face {
   font-family: 'DejaVu Sans';
   src: url('../assets/fonts/dejavu-sans.ttf') format('truetype');
-  font-weight: 100;
+  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }

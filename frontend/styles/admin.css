@@ -2232,7 +2232,7 @@ body.modal-open {
 
 .certificate-form__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: 2fr 1fr 1fr;
   gap: 18px 22px;
 }
 
@@ -2244,6 +2244,26 @@ body.modal-open {
 
 .certificate-form__field--wide {
   grid-column: 1 / -1;
+}
+
+.certificate-form__field--qualification {
+  grid-column: 1 / 2;
+  min-width: 0;
+}
+
+.certificate-form__field--status {
+  grid-column: 2 / 3;
+  min-width: 0;
+}
+
+.certificate-form__field--issue-date {
+  grid-column: 1 / 2;
+  min-width: 0;
+}
+
+.certificate-form__field--validity-term {
+  grid-column: 2 / 4;
+  min-width: 0;
 }
 
 .certificate-form__label {
@@ -2461,7 +2481,15 @@ body.modal-open {
   }
 
   .certificate-form__grid {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: 1fr;
+  }
+
+  .certificate-form__field--qualification,
+  .certificate-form__field--status,
+  .certificate-form__field--issue-date,
+  .certificate-form__field--validity-term {
+    grid-column: 1;
+    max-width: none;
   }
 
   .certificate-form__summary {
@@ -2511,6 +2539,14 @@ body.modal-open {
 
   .certificate-form__grid {
     grid-template-columns: 1fr;
+  }
+
+  .certificate-form__field--qualification,
+  .certificate-form__field--status,
+  .certificate-form__field--issue-date,
+  .certificate-form__field--validity-term {
+    grid-column: 1;
+    max-width: none;
   }
 
   .certificate-form__summary {
