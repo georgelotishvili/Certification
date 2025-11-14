@@ -10,6 +10,7 @@
       getActorHeaders = () => ({}),
       handleAdminErrorResponse = async () => {},
       onUserCertificateUpdated = () => {},
+      loadExternalScript = () => Promise.resolve(),
       escapeHtml = (value) => {
         if (value == null) return '';
         return String(value)
@@ -51,6 +52,9 @@
     };
 
     const templateContainer = overlay?.querySelector('#certificateTemplateContainer');
+    const BASE_CERTIFICATE_WIDTH = 1123;
+    const BASE_CERTIFICATE_HEIGHT = 793;
+    const downloadBtnDefaultLabel = downloadBtn?.textContent?.trim() || 'PDF';
     
     const fieldNodes = {};
     function updateFieldNodes() {
@@ -412,8 +416,8 @@
       }
 
       // Base certificate size (px) – used for precise scaling
-      const BASE_WIDTH = 1123;
-      const BASE_HEIGHT = 793;
+      const BASE_WIDTH = BASE_CERTIFICATE_WIDTH;
+      const BASE_HEIGHT = BASE_CERTIFICATE_HEIGHT;
 
       // Ensure base size so absolute/percent positions map predictably
       certificateEl.style.width = `${BASE_WIDTH}px`;
@@ -817,7 +821,44 @@
       return link ? link.href : null;
     }
 
-    function handleDownload() {
+    function getCertificateElement() {
+      if (!templateContainer) return null;
+      return templateContainer.querySelector('.certificate-background');
+    }
+
+    async function ensurePdfLibrariesLoaded() {
+      const hasHtml2Canvas = !!global.html2canvas;
+      const hasJsPdf = !!(global.jspdf && global.jspdf.jsPDF);
+      if (hasHtml2Canvas && hasJsPdf) return true;
+
+      const candidates = [];
+      if (!hasHtml2Canvas) {
+        candidates.push(
+          'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+          'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+          'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
+        );
+      }
+      if (!hasJsPdf) {
+        candidates.push(
+          'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+          'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+          'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'
+        );
+      }
+
+      for (const src of candidates) {
+        try {
+          await loadExternalScript(src);
+        } catch (e) {
+          // continue to next candidate
+        }
+      }
+
+      return !!global.html2canvas && !!(global.jspdf && global.jspdf.jsPDF);
+    }
+
+    async function handleDownload() {
       if (!activeData?.hasCertificate) {
         showToast('სერტიფიკატი ჯერ არ არის შექმნილი', 'error');
         return;
@@ -826,7 +867,106 @@
         showToast('PDF ექსპორტისთვის დახურეთ სერტიფიკატის ფორმა', 'info');
         return;
       }
-      showToast('PDF ფაილის ჩამოტვირთვის ფუნქცია მალე დაემატება', 'info');
+      // Ensure libraries are loaded (with dynamic fallback if CDN იყო დაბლოკილი)
+      const libsOk = await ensurePdfLibrariesLoaded();
+      if (!libsOk) {
+        showToast('PDF ბიბლიოთეკები ვერ ჩაიტვირთა', 'error');
+        return;
+      }
+
+      const certificateEl = getCertificateElement();
+      if (!certificateEl) {
+        showToast('სერტიფიკატის შაბლონი ჯერ არ არის ჩატვირთული', 'error');
+        return;
+      }
+
+      const html2canvasLib = global.html2canvas;
+      const jsPdfFactory = global.jspdf?.jsPDF;
+
+      const previousDisabled = downloadBtn?.disabled ?? false;
+      const previousLabel = downloadBtn?.textContent ?? downloadBtnDefaultLabel;
+      if (downloadBtn) {
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = 'მუშავდება...';
+      }
+
+      let sandbox = null;
+      try {
+        sandbox = document.createElement('div');
+        sandbox.style.position = 'fixed';
+        sandbox.style.left = '-10000px';
+        sandbox.style.top = '-10000px';
+        sandbox.style.width = `${BASE_CERTIFICATE_WIDTH}px`;
+        sandbox.style.height = `${BASE_CERTIFICATE_HEIGHT}px`;
+        sandbox.style.background = '#ffffff';
+        sandbox.style.zIndex = '-1';
+        // Do not set opacity to 0, otherwise html2canvas will render a transparent image.
+        sandbox.style.opacity = '1';
+        sandbox.style.pointerEvents = 'none';
+        sandbox.setAttribute('aria-hidden', 'true');
+        sandbox.className = 'certificate-print-sandbox';
+
+        const clone = certificateEl.cloneNode(true);
+        clone.style.transform = 'none';
+        clone.style.width = `${BASE_CERTIFICATE_WIDTH}px`;
+        clone.style.height = `${BASE_CERTIFICATE_HEIGHT}px`;
+        clone.style.transformOrigin = 'top left';
+        sandbox.appendChild(clone);
+        document.body.appendChild(sandbox);
+
+        await nextAnimationFrame();
+
+        const canvas = await html2canvasLib(sandbox, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          windowWidth: BASE_CERTIFICATE_WIDTH,
+          windowHeight: BASE_CERTIFICATE_HEIGHT,
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPdfFactory('l', 'mm', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 6;
+
+        let renderWidth = pageWidth - margin * 2;
+        let renderHeight = (canvas.height * renderWidth) / canvas.width;
+        const maxHeight = pageHeight - margin * 2;
+        if (renderHeight > maxHeight) {
+          renderHeight = maxHeight;
+          renderWidth = (canvas.width * renderHeight) / canvas.height;
+        }
+
+        const offsetX = (pageWidth - renderWidth) / 2;
+        const offsetY = (pageHeight - renderHeight) / 2;
+
+        pdf.addImage(imgData, 'PNG', offsetX, offsetY, renderWidth, renderHeight);
+
+        const safeFullName = (activeData.fullName || '')
+          .trim()
+          .replace(/[<>:"/\\|?*]+/g, '')
+          .replace(/\s+/g, '_');
+        const safeCode = (activeData.uniqueCode || '').trim().replace(/[<>:"/\\|?*]+/g, '');
+        const filenameParts = ['certificate'];
+        if (safeFullName) filenameParts.push(safeFullName);
+        if (safeCode) filenameParts.push(safeCode);
+        const filename = `${filenameParts.join('_')}.pdf`;
+        pdf.save(filename);
+        showToast('PDF ფაილი შეიქმნა', 'success');
+      } catch (error) {
+        console.error('[certificate] Failed to export PDF', error);
+        showToast('PDF ფაილის შექმნა ვერ მოხერხდა', 'error');
+      } finally {
+        if (sandbox?.parentNode) {
+          sandbox.parentNode.removeChild(sandbox);
+        }
+        if (downloadBtn) {
+          downloadBtn.disabled = previousDisabled;
+          downloadBtn.textContent = previousLabel || downloadBtnDefaultLabel;
+        }
+      }
     }
 
     function resetState() {
