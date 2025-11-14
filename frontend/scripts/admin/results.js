@@ -16,6 +16,8 @@
       openOverlay,
       closeOverlay,
       escapeHtml,
+      deliverPdf = async () => false,
+      preparePdfSaveHandle = async () => ({ handle: null, aborted: false }),
     } = context;
 
     const state = {
@@ -672,10 +674,15 @@
 
     async function downloadCurrentPdf() {
       if (!state.detail) return;
-      await downloadPdf(state.detail);
+      const session = state.detail.session || {};
+      const code = session.candidate_code ? String(session.candidate_code).replace(/\s+/g, '_') : 'result';
+      const filename = `result_${code}_${session.session_id || ''}.pdf`;
+      const prep = await preparePdfSaveHandle(filename, { showToast });
+      if (prep?.aborted) return;
+      await downloadPdf(state.detail, { saveHandle: prep?.handle || null, filename });
     }
 
-    async function downloadPdf(detail) {
+    async function downloadPdf(detail, options = {}) {
       try {
         const jsPDF = await ensureJsPdf();
         const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
@@ -910,9 +917,11 @@
           });
         }
 
-        const code = session.candidate_code ? session.candidate_code.replace(/\s+/g, '_') : 'result';
-        const filename = `result_${code}_${session.session_id || ''}.pdf`;
-        doc.save(filename);
+        const filename = options.filename || (() => {
+          const code = session.candidate_code ? session.candidate_code.replace(/\s+/g, '_') : 'result';
+          return `result_${code}_${session.session_id || ''}.pdf`;
+        })();
+        await deliverPdf(doc, filename, { showToast, handle: options.saveHandle || null });
       } catch (err) {
         console.error('PDF export failed', err);
         showToast('PDF ფაილის შექმნა ვერ მოხერხდა', 'error');

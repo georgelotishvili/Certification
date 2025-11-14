@@ -6,6 +6,8 @@
       openOverlay = () => {},
       closeOverlay = () => {},
       showToast = () => {},
+      deliverPdf = async () => false,
+      preparePdfSaveHandle = async () => ({ handle: null, aborted: false }),
       getAdminHeaders = () => ({}),
       getActorHeaders = () => ({}),
       handleAdminErrorResponse = async () => {},
@@ -150,16 +152,11 @@
     function formatDate(date) {
       const parsed = parseDate(date);
       if (!parsed) return '';
-      try {
-        return new Intl.DateTimeFormat('ka-GE', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        }).format(parsed);
-      } catch (error) {
-        console.warn('Failed to format date', date, error);
-        return '';
-      }
+      // Force DD/MM/YYYY regardless of browser locale
+      const day = String(parsed.getDate()).padStart(2, '0');
+      const month = String(parsed.getMonth() + 1).padStart(2, '0');
+      const year = String(parsed.getFullYear());
+      return `${day}/${month}/${year}`;
     }
 
     function formatInputDate(value) {
@@ -543,7 +540,8 @@
         uniqueCode: activeData.uniqueCode || activeUser?.code || '',
         level: activeData.level?.key || 'architect',
         status: activeData.status?.key || 'active',
-        issueDate: activeData.issueDateInputValue || '',
+        // Display DD/MM/YYYY in the input
+        issueDate: activeData.issueDate || '',
         validityTerm:
           activeData.rawValidityTerm != null
             ? String(activeData.rawValidityTerm)
@@ -678,7 +676,8 @@
         unique_code: uniqueCode || null,
         level: levelValue,
         status: statusValue,
-        issue_date: issueDateValue,
+        // Convert DD/MM/YYYY (UI) -> YYYY-MM-DD for backend
+        issue_date: formatInputDate(issueDateValue),
         validity_term: validityTermValue,
         valid_until: validUntilValue,
       };
@@ -867,6 +866,22 @@
         showToast('PDF ექსპორტისთვის დახურეთ სერტიფიკატის ფორმა', 'info');
         return;
       }
+      // Prepare Save As handle early while user activation is fresh
+      const safeFullNameEarly = (activeData?.fullName || '')
+        .trim()
+        .replace(/[<>:"/\\|?*]+/g, '')
+        .replace(/\s+/g, '_');
+      const safeCodeEarly = (activeData?.uniqueCode || '').trim().replace(/[<>:"/\\|?*]+/g, '');
+      const filenamePartsEarly = ['certificate'];
+      if (safeFullNameEarly) filenamePartsEarly.push(safeFullNameEarly);
+      if (safeCodeEarly) filenamePartsEarly.push(safeCodeEarly);
+      const earlyFilename = `${filenamePartsEarly.join('_')}.pdf`;
+      const prep = await preparePdfSaveHandle(earlyFilename, { showToast });
+      if (prep?.aborted) {
+        return;
+      }
+      const saveHandle = prep?.handle || null;
+
       // Ensure libraries are loaded (with dynamic fallback if CDN იყო დაბლოკილი)
       const libsOk = await ensurePdfLibrariesLoaded();
       if (!libsOk) {
@@ -953,8 +968,7 @@
         if (safeFullName) filenameParts.push(safeFullName);
         if (safeCode) filenameParts.push(safeCode);
         const filename = `${filenameParts.join('_')}.pdf`;
-        pdf.save(filename);
-        showToast('PDF ფაილი შეიქმნა', 'success');
+        await deliverPdf(pdf, filename, { showToast, handle: saveHandle });
       } catch (error) {
         console.error('[certificate] Failed to export PDF', error);
         showToast('PDF ფაილის შექმნა ვერ მოხერხდა', 'error');

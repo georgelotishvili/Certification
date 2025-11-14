@@ -184,6 +184,149 @@
     showToastFn(detail || fallbackMessage, 'error');
   };
 
+  shared.preparePdfSaveHandle = async function preparePdfSaveHandle(filename = 'document.pdf', options = {}) {
+    const showToastFn = options.showToast || shared.showToast;
+    if (typeof global.showSaveFilePicker !== 'function') {
+      return { handle: null, aborted: false };
+    }
+    try {
+      const handle = await global.showSaveFilePicker({
+        suggestedName: filename,
+        types: [
+          {
+            description: 'PDF',
+            accept: { 'application/pdf': ['.pdf'] },
+          },
+        ],
+      });
+      return { handle, aborted: false };
+    } catch (error) {
+      if (error && error.name === 'AbortError') {
+        if (typeof showToastFn === 'function') {
+          showToastFn('ფაილის შენახვა გაუქმდა', 'info');
+        }
+        return { handle: null, aborted: true };
+      }
+      return { handle: null, aborted: false };
+    }
+  };
+
+  async function toPdfBlob(pdfInstance) {
+    if (!pdfInstance || typeof pdfInstance.output !== 'function') {
+      throw new Error('Invalid PDF instance');
+    }
+    const raw = pdfInstance.output('blob');
+    if (raw instanceof Blob) {
+      return raw;
+    }
+    if (raw && typeof raw.then === 'function') {
+      const awaited = await raw;
+      return awaited instanceof Blob ? awaited : new Blob([awaited], { type: 'application/pdf' });
+    }
+    if (raw == null) {
+      throw new Error('PDF output was empty');
+    }
+    return raw instanceof Blob ? raw : new Blob([raw], { type: 'application/pdf' });
+  }
+
+  async function trySaveWithPicker(blob, filename, showToastFn) {
+    if (typeof global.showSaveFilePicker !== 'function') {
+      return false;
+    }
+    try {
+      const handle = await global.showSaveFilePicker({
+        suggestedName: filename,
+        types: [
+          {
+            description: 'PDF',
+            accept: { 'application/pdf': ['.pdf'] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      if (typeof showToastFn === 'function') {
+        showToastFn('PDF ფაილი შენახული იქნა', 'success');
+      }
+      return true;
+    } catch (error) {
+      if (error && error.name === 'AbortError') {
+        if (typeof showToastFn === 'function') {
+          showToastFn('ფაილის შენახვა გაუქმდა', 'info');
+        }
+        return true;
+      }
+      console.warn('showSaveFilePicker unavailable, falling back to new tab', error);
+      return false;
+    }
+  }
+
+  async function writeBlobToHandle(handle, blob, showToastFn) {
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    if (typeof showToastFn === 'function') {
+      showToastFn('PDF ფაილი შენახული იქნა', 'success');
+    }
+    return true;
+  }
+
+  function openPdfInNewTab(blob, showToastFn) {
+    const urlFactory = global.URL || global.webkitURL;
+    if (!urlFactory || typeof urlFactory.createObjectURL !== 'function') {
+      return false;
+    }
+    const blobUrl = urlFactory.createObjectURL(blob);
+    const newWindow = global.open(blobUrl, '_blank');
+    if (!newWindow || newWindow.closed) {
+      urlFactory.revokeObjectURL(blobUrl);
+      return false;
+    }
+    setTimeout(() => {
+      try {
+        urlFactory.revokeObjectURL(blobUrl);
+      } catch (err) {
+        console.warn('Failed to revoke object URL', err);
+      }
+    }, 120000);
+    if (typeof showToastFn === 'function') {
+      showToastFn('PDF გაიხსნა ახალ ჩანართში, იქიდან შეგიძლია შეინახო', 'info');
+    }
+    return true;
+  }
+
+  shared.deliverPdf = async function deliverPdf(pdfInstance, filename = 'certificate.pdf', options = {}) {
+    const showToastFn = options.showToast || shared.showToast;
+    const preHandle = options.handle || null;
+    try {
+      const blob = await toPdfBlob(pdfInstance);
+      if (preHandle) {
+        try {
+          await writeBlobToHandle(preHandle, blob, showToastFn);
+          return true;
+        } catch (e) {
+          console.warn('Writing via previously acquired handle failed, falling back', e);
+        }
+      }
+      const saved = await trySaveWithPicker(blob, filename, showToastFn);
+      if (saved) return true;
+      const opened = openPdfInNewTab(blob, showToastFn);
+      if (opened) return true;
+      pdfInstance.save(filename);
+      if (typeof showToastFn === 'function') {
+        showToastFn('ბრაუზერმა ავტომატურად ჩამოტვირთა PDF', 'info');
+      }
+      return true;
+    } catch (error) {
+      console.error('Failed to deliver PDF', error);
+      if (typeof showToastFn === 'function') {
+        showToastFn('PDF-ის ჩამოტვირთვა ვერ მოხერხდა', 'error');
+      }
+      return false;
+    }
+  };
+
   global.AdminShared = shared;
 })(window);
 

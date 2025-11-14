@@ -127,6 +127,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadExternalScript = () => Promise.resolve(),
     escapeHtml = (value) => String(value ?? ''),
     handleAdminErrorResponse = async () => {},
+    deliverPdf = async () => false,
+    preparePdfSaveHandle = async () => ({ handle: null, aborted: false }),
   } = shared;
 
   function openOverlay(element) {
@@ -286,6 +288,8 @@ document.addEventListener('DOMContentLoaded', () => {
       arrayBufferToBase64,
       loadExternalScript,
       handleAdminErrorResponse,
+      deliverPdf,
+      preparePdfSaveHandle,
       getAdminHeaders,
       getActorHeaders,
       getActorEmail,

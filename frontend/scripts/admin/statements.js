@@ -16,6 +16,8 @@
       isFounderActor = () => false,
       loadExternalScript = () => Promise.resolve(),
       arrayBufferToBase64 = () => '',
+      deliverPdf = async () => false,
+      preparePdfSaveHandle = async () => ({ handle: null, aborted: false }),
     } = context;
 
     const overlay = DOM.userStatementsOverlay;
@@ -83,7 +85,11 @@
         event.preventDefault();
         event.stopPropagation();
         try {
-          await downloadStatementPdf(statement);
+          const code = (activeUser?.code || `user-${activeUser?.id || 'unknown'}`).toString().trim().replace(/\s+/g, '_');
+          const filename = `statement_${code}_${statement.id}.pdf`;
+          const prep = await preparePdfSaveHandle(filename, { showToast });
+          if (prep?.aborted) return;
+          await downloadStatementPdf(statement, { saveHandle: prep?.handle || null, filename });
         } catch (error) {
           console.error('Failed to export statement pdf', error);
           showToast('PDF ფაილის შექმნა ვერ მოხერხდა', 'error');
@@ -301,7 +307,7 @@
       return fontName;
     }
 
-    async function downloadStatementPdf(statement) {
+    async function downloadStatementPdf(statement, options = {}) {
       if (!statement || !activeUser) throw new Error('Statement context missing');
       const jsPDF = await ensureJsPdf();
       const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
@@ -377,8 +383,8 @@
       writeParagraph('განცხადების ტექსტი', statement.message || '');
 
       const safeCode = code || `user-${activeUser.id || 'unknown'}`;
-      const fileName = `statement_${safeCode}_${statement.id}.pdf`;
-      doc.save(fileName);
+      const fileName = options.filename || `statement_${safeCode}_${statement.id}.pdf`;
+      await deliverPdf(doc, fileName, { showToast, handle: options.saveHandle || null });
     }
 
     function init() {
