@@ -436,6 +436,178 @@
       return `${year}-${month}-${day}`;
     }
 
+    // --- Lightweight inline date picker for issueDate (DD/MM/YYYY) ---
+    const _DP_MONTHS = ['იან', 'თებ', 'მარ', 'აპრ', 'მაი', 'ივნ', 'ივლ', 'აგვ', 'სექ', 'ოქტ', 'ნოე', 'დეკ'];
+    const _DP_WEEK = ['ორშ', 'სამ', 'ოთხ', 'ხუთ', 'პარ', 'შაბ', 'კვ'];
+    function _pad2(n) { return String(n).padStart(2, '0'); }
+    function _formatDDMMYYYY(d) { return `${_pad2(d.getDate())}/${_pad2(d.getMonth() + 1)}/${d.getFullYear()}`; }
+
+    const datePicker = (() => {
+      let panel = null;
+      let monthSel = null;
+      let yearSel = null;
+      let daysGrid = null;
+      let anchor = null;
+
+      function ensurePanel() {
+        if (panel) return;
+        panel = document.createElement('div');
+        panel.className = 'mini-date-picker';
+        Object.assign(panel.style, {
+          position: 'fixed',
+          zIndex: '99999',
+          background: '#fff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          boxShadow: '0 10px 25px rgba(0,0,0,.08)',
+          padding: '8px',
+          width: '240px',
+          fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
+          fontSize: '13px',
+        });
+
+        const controls = document.createElement('div');
+        Object.assign(controls.style, { display: 'flex', gap: '6px', marginBottom: '6px' });
+
+        monthSel = document.createElement('select');
+        _DP_MONTHS.forEach((m, i) => {
+          const opt = document.createElement('option');
+          opt.value = String(i);
+          opt.textContent = m;
+          monthSel.appendChild(opt);
+        });
+
+        yearSel = document.createElement('select');
+        const nowY = new Date().getFullYear();
+        for (let y = nowY + 5; y >= nowY - 60; y--) {
+          const opt = document.createElement('option');
+          opt.value = String(y);
+          opt.textContent = String(y);
+          yearSel.appendChild(opt);
+        }
+
+        monthSel.addEventListener('change', renderDays);
+        yearSel.addEventListener('change', renderDays);
+
+        controls.appendChild(monthSel);
+        controls.appendChild(yearSel);
+
+        const weekHead = document.createElement('div');
+        Object.assign(weekHead.style, {
+          display: 'grid',
+          gridTemplateColumns: 'repeat(7, 1fr)',
+          gap: '4px',
+          margin: '4px 0',
+          color: '#6b7280',
+          textAlign: 'center',
+          userSelect: 'none',
+        });
+        _DP_WEEK.forEach((w) => {
+          const span = document.createElement('div');
+          span.textContent = w;
+          span.style.fontWeight = '600';
+          weekHead.appendChild(span);
+        });
+
+        daysGrid = document.createElement('div');
+        Object.assign(daysGrid.style, {
+          display: 'grid',
+          gridTemplateColumns: 'repeat(7, 1fr)',
+          gap: '4px',
+        });
+
+        panel.appendChild(controls);
+        panel.appendChild(weekHead);
+        panel.appendChild(daysGrid);
+
+        document.body.appendChild(panel);
+
+        function onDocClick(e) {
+          if (!panel || panel.hidden) return;
+          if (panel.contains(e.target) || e.target === anchor) return;
+          close();
+        }
+        document.addEventListener('click', onDocClick, true);
+      }
+
+      function position(input) {
+        const r = input.getBoundingClientRect();
+        panel.style.left = `${Math.max(8, Math.min(window.innerWidth - 8 - panel.offsetWidth, r.left))}px`;
+        panel.style.top = `${Math.min(window.innerHeight - 8 - panel.offsetHeight, r.bottom + 4)}px`;
+      }
+
+      function renderDays() {
+        const y = parseInt(yearSel.value, 10);
+        const m = parseInt(monthSel.value, 10);
+        daysGrid.innerHTML = '';
+
+        const first = new Date(y, m, 1);
+        const total = new Date(y, m + 1, 0).getDate();
+        const offset = (first.getDay() + 6) % 7; // Monday-first
+
+        for (let i = 0; i < offset; i++) {
+          const spacer = document.createElement('div');
+          spacer.style.opacity = '.0';
+          spacer.textContent = '·';
+          daysGrid.appendChild(spacer);
+        }
+
+        for (let d = 1; d <= total; d++) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = String(d);
+          Object.assign(btn.style, {
+            padding: '6px 0',
+            border: '1px solid #e5e7eb',
+            borderRadius: '6px',
+            background: '#fff',
+            cursor: 'pointer',
+          });
+          btn.addEventListener('mouseenter', () => (btn.style.background = '#f3f4f6'));
+          btn.addEventListener('mouseleave', () => (btn.style.background = '#fff'));
+          btn.addEventListener('click', () => {
+            if (!anchor) return;
+            const picked = new Date(y, m, d);
+            anchor.value = _formatDDMMYYYY(picked);
+            anchor.dispatchEvent(new Event('input', { bubbles: true }));
+            anchor.dispatchEvent(new Event('change', { bubbles: true }));
+            close();
+            anchor.focus();
+          });
+          daysGrid.appendChild(btn);
+        }
+      }
+
+      function open(input, initialValue) {
+        ensurePanel();
+        anchor = input;
+        const base = parseDate(initialValue) || new Date();
+        monthSel.value = String(base.getMonth());
+        yearSel.value = String(base.getFullYear());
+        renderDays();
+        panel.hidden = false;
+        position(input);
+      }
+
+      function close() {
+        if (!panel) return;
+        panel.hidden = true;
+      }
+
+      return { open, close, isOpen: () => !!panel && !panel.hidden };
+    })();
+
+    function attachIssueDatePicker() {
+      const input = formFields.issueDate;
+      if (!input) return;
+      input.addEventListener('focus', () => datePicker.open(input, input.value));
+      input.addEventListener('click', () => datePicker.open(input, input.value));
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); datePicker.open(input, input.value); }
+        if (e.key === 'Escape') { datePicker.close(); }
+      });
+    }
+
     function parseNumber(value) {
       if (value == null || value === '') return null;
       if (typeof value === 'number') {
@@ -1363,6 +1535,9 @@
         if (!confirmed) return;
         closeForm({ force: true });
       }
+      if (typeof datePicker?.close === 'function') {
+        datePicker.close();
+      }
       resetState();
       closeOverlay(overlay);
     }
@@ -1445,6 +1620,7 @@
       formFields.issueDate?.addEventListener('change', () => updateAutoValidity());
       formFields.validityTerm?.addEventListener('input', () => updateAutoValidity());
       downloadBtn?.addEventListener('click', handleDownload);
+      attachIssueDatePicker();
       
       // Load template when level changes in form
       formFields.level?.addEventListener('change', async (event) => {
