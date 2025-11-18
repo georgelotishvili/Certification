@@ -1076,6 +1076,9 @@
         closeForm({ force: true });
         await populateView(activeData);
         updateView();
+        if (activeUser?.id && onUserCertificateUpdated) {
+          onUserCertificateUpdated(activeUser.id, null);
+        }
         showToast('სერტიფიკატი წაიშალა', 'success');
       } catch (error) {
         console.error('[certificate] Failed to delete certificate', error);
