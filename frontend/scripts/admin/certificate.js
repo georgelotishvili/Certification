@@ -56,6 +56,27 @@
     const templateContainer = overlay?.querySelector('#certificateTemplateContainer');
     const BASE_CERTIFICATE_WIDTH = 1123;
     const BASE_CERTIFICATE_HEIGHT = 793;
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const CERTIFICATE_BACKGROUND_FILES = {
+      architect: 'architect bac.svg',
+      expert: 'expert bac.svg',
+    };
+    const VECTOR_PDF_SOURCES = {
+      jspdf: [
+        '../vendor/jspdf.umd.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+        'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+        'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      ],
+      svg2pdf: [
+        '../vendor/svg2pdf.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/svg2pdf.js/2.2.3/svg2pdf.min.js',
+        'https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.3/dist/svg2pdf.min.js',
+        'https://unpkg.com/svg2pdf.js@2.2.3/dist/svg2pdf.min.js',
+      ],
+    };
+    const backgroundSvgCache = new Map();
+    const domParser = typeof DOMParser !== 'undefined' ? new DOMParser() : null;
     const downloadBtnDefaultLabel = downloadBtn?.textContent?.trim() || 'PDF';
     
     const fieldNodes = {};
@@ -67,6 +88,220 @@
       overlay.querySelectorAll('[data-field]').forEach((node) => {
         fieldNodes[node.dataset.field] = node;
       });
+    }
+
+    function getBackgroundFileName(levelKey) {
+      if (levelKey === 'expert') return CERTIFICATE_BACKGROUND_FILES.expert;
+      return CERTIFICATE_BACKGROUND_FILES.architect;
+    }
+
+    async function loadBackgroundSvgString(levelKey) {
+      const normalized = levelKey === 'expert' ? 'expert' : 'architect';
+      if (backgroundSvgCache.has(normalized)) {
+        return backgroundSvgCache.get(normalized);
+      }
+      const fileName = getBackgroundFileName(normalized);
+      try {
+        const response = await fetch(`../certificate/${fileName}`);
+        if (!response.ok) {
+          console.error(`[certificate] Failed to load background svg: ${fileName}`);
+          return null;
+        }
+        const text = await response.text();
+        backgroundSvgCache.set(normalized, text);
+        return text;
+      } catch (error) {
+        console.error('[certificate] Error fetching background svg', error);
+        return null;
+      }
+    }
+
+    async function buildBackgroundNode(levelKey) {
+      if (!domParser) return null;
+      const svgString = await loadBackgroundSvgString(levelKey);
+      if (!svgString) return null;
+      const parsed = domParser.parseFromString(svgString, 'image/svg+xml');
+      const sourceSvg = parsed?.documentElement;
+      if (!sourceSvg) return null;
+      const group = document.createElementNS(SVG_NS, 'g');
+      Array.from(sourceSvg.childNodes || []).forEach((child) => {
+        const clone = document.importNode(child, true);
+        group.appendChild(clone);
+      });
+      return group;
+    }
+
+    function toPx(value, fallback = '16px') {
+      if (!value || typeof value !== 'string') return fallback;
+      if (value.endsWith('px')) return value;
+      if (value.endsWith('pt')) {
+        const numeric = parseFloat(value);
+        if (!Number.isNaN(numeric)) {
+          const px = (numeric * 96) / 72;
+          return `${px}px`;
+        }
+      }
+      return value;
+    }
+
+    function computeTextAnchor(textAlign) {
+      const normalized = (textAlign || '').toLowerCase();
+      if (normalized === 'left' || normalized === 'start') return 'start';
+      if (normalized === 'right' || normalized === 'end') return 'end';
+      return 'middle';
+    }
+
+    function createSvgTextNodeFromField(fieldNode, baseRect) {
+      if (!fieldNode) return null;
+      const rect = fieldNode.getBoundingClientRect();
+      if (!rect || !baseRect) return null;
+      const x = rect.left - baseRect.left;
+      const y = rect.top - baseRect.top;
+      const width = rect.width;
+      const height = rect.height;
+      if (width <= 0 || height <= 0) return null;
+
+      const computed = global.getComputedStyle(fieldNode);
+      const textAnchor = computeTextAnchor(computed?.textAlign);
+      let anchorX = x + width / 2;
+      if (textAnchor === 'start') {
+        anchorX = x;
+      } else if (textAnchor === 'end') {
+        anchorX = x + width;
+      }
+
+      // Get text content - prefer textContent over innerText for SVG
+      const textContent = fieldNode.textContent || fieldNode.innerText || '';
+      
+      // Decide font per field
+      const fieldName = fieldNode.dataset?.field || '';
+      
+      const textNode = document.createElementNS(SVG_NS, 'text');
+      textNode.setAttribute('x', anchorX.toString());
+      textNode.setAttribute('y', (y + height / 2).toString());
+      textNode.setAttribute('dominant-baseline', 'middle');
+      textNode.setAttribute('text-anchor', textAnchor);
+      // Use dedicated font for full name; progressive fallback chain
+      if (fieldName === 'fullName') {
+        textNode.setAttribute('font-family', 'BPGNino, NotoSansGeorgian, DejaVuSans');
+        textNode.setAttribute('font-weight', 'bold');
+        textNode.setAttribute('font-style', 'normal');
+      } else {
+        // Force jsPDF-registered font to guarantee Georgian glyph support
+        textNode.setAttribute('font-family', 'DejaVuSans');
+        // Keep style normal to match the registered variant
+        textNode.setAttribute('font-weight', 'normal');
+        textNode.setAttribute('font-style', 'normal');
+      }
+      if (computed?.fontSize) {
+        textNode.setAttribute('font-size', toPx(computed.fontSize));
+      }
+      if (computed?.color) {
+        textNode.setAttribute('fill', computed.color);
+      }
+      if (computed?.letterSpacing && computed.letterSpacing !== 'normal') {
+        textNode.setAttribute('letter-spacing', computed.letterSpacing);
+      }
+      textNode.setAttribute('xml:space', 'preserve');
+      textNode.textContent = textContent;
+      
+      return textNode;
+    }
+
+    async function buildCertificateSvgElement(levelKey) {
+      const certificateEl = getCertificateElement();
+      if (!certificateEl) return null;
+      const clone = certificateEl.cloneNode(true);
+      clone.style.transform = 'none';
+      clone.style.width = `${BASE_CERTIFICATE_WIDTH}px`;
+      clone.style.height = `${BASE_CERTIFICATE_HEIGHT}px`;
+      const sandbox = document.createElement('div');
+      sandbox.style.position = 'fixed';
+      sandbox.style.left = '-10000px';
+      sandbox.style.top = '-10000px';
+      sandbox.style.width = `${BASE_CERTIFICATE_WIDTH}px`;
+      sandbox.style.height = `${BASE_CERTIFICATE_HEIGHT}px`;
+      sandbox.style.opacity = '0';
+      sandbox.style.pointerEvents = 'none';
+      sandbox.setAttribute('aria-hidden', 'true');
+      sandbox.className = 'certificate-vector-sandbox';
+      sandbox.appendChild(clone);
+      document.body.appendChild(sandbox);
+
+      try {
+        const baseRect = clone.getBoundingClientRect();
+        const svgEl = document.createElementNS(SVG_NS, 'svg');
+        svgEl.setAttribute('xmlns', SVG_NS);
+        svgEl.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+        svgEl.setAttribute('xml:space', 'preserve');
+        svgEl.setAttribute('width', `${BASE_CERTIFICATE_WIDTH}`);
+        svgEl.setAttribute('height', `${BASE_CERTIFICATE_HEIGHT}`);
+        svgEl.setAttribute('viewBox', `0 0 ${BASE_CERTIFICATE_WIDTH} ${BASE_CERTIFICATE_HEIGHT}`);
+
+        const styleEl = document.createElementNS(SVG_NS, 'style');
+        // Use absolute URLs for fonts so svg2pdf.js can load them
+        // Calculate base URL from current page location
+        const currentPath = window.location.pathname;
+        const pathParts = currentPath.split('/').filter(p => p);
+        // Remove the last part (e.g., 'admin.html') to get the base directory
+        if (pathParts.length > 0 && pathParts[pathParts.length - 1].includes('.')) {
+          pathParts.pop();
+        }
+        // If we're under /frontend/pages, go up to /frontend
+        if (pathParts.length > 0 && pathParts[pathParts.length - 1] === 'pages') {
+          pathParts.pop();
+        }
+        const basePath = pathParts.length > 0 ? '/' + pathParts.join('/') : '';
+        const fontBaseUrl = `${window.location.origin}${basePath}/assets/fonts`;
+        styleEl.textContent = `
+          @font-face {
+            font-family: 'DejaVu Sans';
+            src: url('${fontBaseUrl}/dejavu-sans.ttf') format('truetype');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+          }
+          @font-face {
+            font-family: 'BPG Nino Mtavruli Bold';
+            src: url('${fontBaseUrl}/bpg-nino-mtavruli-bold-webfont.woff2') format('woff2');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+          }
+        `;
+        svgEl.appendChild(styleEl);
+
+        try {
+          const backgroundNode = await buildBackgroundNode(levelKey);
+          if (backgroundNode) {
+            svgEl.appendChild(backgroundNode);
+          }
+        } catch (error) {
+          console.error('[certificate] Failed to append background svg', error);
+        }
+
+        const fieldNodesList = clone.querySelectorAll('[data-field]');
+        fieldNodesList.forEach((fieldNode) => {
+          const fieldName = fieldNode.dataset.field;
+          const textContent = fieldNode.textContent || '';
+          console.log(`[certificate] Processing field: ${fieldName}, text: "${textContent}", length: ${textContent.length}`);
+          
+          const textNode = createSvgTextNodeFromField(fieldNode, baseRect);
+          if (textNode) {
+            const svgTextContent = textNode.textContent || '';
+            console.log(`[certificate] SVG text node created for ${fieldName}, text: "${svgTextContent}", font-family: ${textNode.getAttribute('font-family')}`);
+            svgEl.appendChild(textNode);
+          } else {
+            console.warn(`[certificate] Failed to create SVG text node for field: ${fieldName}`);
+          }
+        });
+
+        return svgEl;
+      } finally {
+        if (sandbox?.parentNode) {
+          sandbox.parentNode.removeChild(sandbox);
+        }
+      }
     }
 
     const STATUS_MAP = new Map([
@@ -825,36 +1060,252 @@
       return templateContainer.querySelector('.certificate-background');
     }
 
-    async function ensurePdfLibrariesLoaded() {
-      const hasHtml2Canvas = !!global.html2canvas;
+    function getFontsBaseUrl() {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      if (parts.length && parts[parts.length - 1].includes('.')) parts.pop();
+      if (parts.length && parts[parts.length - 1] === 'pages') parts.pop();
+      const basePath = parts.length ? '/' + parts.join('/') : '';
+      return `${window.location.origin}${basePath}/assets/fonts`;
+    }
+
+    // Register a Unicode-capable font (DejaVuSans) with jsPDF so Georgian text renders correctly
+    let isDejaVuRegistered = false;
+    async function ensureDejaVuSansRegistered(pdf) {
+      if (!pdf || isDejaVuRegistered) return;
+      try {
+        const fontUrl = '../assets/fonts/dejavu-sans.ttf';
+        const res = await fetch(fontUrl);
+        if (!res.ok) {
+          console.warn('[certificate] Failed to fetch DejaVu Sans font', fontUrl, res.status);
+          return;
+        }
+        const buffer = await res.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        // Convert to base64 in chunks to avoid call stack limits
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+        const base64 = btoa(binary);
+        pdf.addFileToVFS('DejaVuSans.ttf', base64);
+        pdf.addFont('DejaVuSans.ttf', 'DejaVuSans', 'normal');
+        isDejaVuRegistered = true;
+        console.log('[certificate] DejaVuSans font registered with jsPDF');
+      } catch (e) {
+        console.warn('[certificate] Error registering DejaVu Sans font', e);
+      }
+    }
+
+    // Try to register BPG Nino Mtavruli Bold (TTF). If the TTF is missing, we fall back silently.
+    let isBpgNinoRegistered = false;
+    async function ensureBpgNinoRegistered(pdf) {
+      if (!pdf || isBpgNinoRegistered) return;
+      // Try local first, then CDN fallback
+      const fontsBase = getFontsBaseUrl();
+      const candidates = [
+        `${fontsBase}/bpg-nino-mtavruli-bold.ttf`,
+        `${fontsBase}/BPGNinoMtavruli-Bold.ttf`,
+        `${fontsBase}/BPG Nino Mtavruli Bold.ttf`,
+        `${fontsBase}/bpg_nino_mtavruli_bold.ttf`,
+        `${fontsBase}/bpg-nino-mtavruli.ttf`,
+        // Public CDN fallback (CORS-enabled)
+        'https://cdn.web-fonts.ge/fonts/bpg-nino-mtavruli-bold/bpg-nino-mtavruli-bold.ttf',
+      ];
+      try {
+        let res = null;
+        let ok = false;
+        let usedUrl = '';
+        for (const url of candidates) {
+          try {
+            res = await fetch(url, { mode: 'cors' });
+            if (res.ok) {
+              ok = true;
+              usedUrl = url;
+              break;
+            }
+          } catch (e) {
+            // ignore and try next
+          }
+        }
+        if (!ok || !res) {
+          console.warn('[certificate] BPG Nino Mtavruli Bold TTF not found locally or on CDN, falling back to DejaVuSans');
+          return; // fallback happens automatically
+        }
+        const buffer = await res.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+        const base64 = btoa(binary);
+        pdf.addFileToVFS('BPGNino.ttf', base64);
+        // Register as bold to match intended style
+        pdf.addFont('BPGNino.ttf', 'BPGNino', 'bold');
+        isBpgNinoRegistered = true;
+        console.log('[certificate] BPG Nino Mtavruli Bold font registered with jsPDF from', usedUrl);
+      } catch (e) {
+        console.warn('[certificate] Error registering BPG Nino Mtavruli Bold font', e);
+      }
+    }
+
+    // Optional: register Noto Sans Georgian Bold as another fallback
+    let isNotoGeorgianRegistered = false;
+    async function ensureNotoSansGeorgianRegistered(pdf) {
+      if (!pdf || isNotoGeorgianRegistered) return;
+      const candidates = [
+        'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansGeorgian/NotoSansGeorgian-Bold.ttf',
+        'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansGeorgian/NotoSansGeorgian-Bold.ttf',
+      ];
+      try {
+        let res = null;
+        let ok = false;
+        let usedUrl = '';
+        for (const url of candidates) {
+          try {
+            res = await fetch(url, { mode: 'cors' });
+            if (res.ok) {
+              ok = true;
+              usedUrl = url;
+              break;
+            }
+          } catch (_) {
+            // try next
+          }
+        }
+        if (!ok || !res) return;
+        const buffer = await res.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+        const base64 = btoa(binary);
+        pdf.addFileToVFS('NotoSansGeorgian-Bold.ttf', base64);
+        pdf.addFont('NotoSansGeorgian-Bold.ttf', 'NotoSansGeorgian', 'bold');
+        isNotoGeorgianRegistered = true;
+        console.log('[certificate] Noto Sans Georgian Bold font registered with jsPDF from', usedUrl);
+      } catch (e) {
+        // silent fallback
+      }
+    }
+
+    function findSvg2PdfFunction() {
+      // Check multiple possible locations
+      if (typeof global.svg2pdf === 'function') {
+        console.log('[certificate] Found svg2pdf at global.svg2pdf');
+        return global.svg2pdf;
+      }
+      // Check if svg2pdf is an object that might have been initialized but not yet assigned the function
+      if (global.svg2pdf && typeof global.svg2pdf === 'object') {
+        console.log('[certificate] svg2pdf is an object, checking properties:', Object.keys(global.svg2pdf));
+        // Sometimes the function is assigned later, wait a bit
+        if (typeof global.svg2pdf.svg2pdf === 'function') {
+          console.log('[certificate] Found svg2pdf at global.svg2pdf.svg2pdf');
+          return global.svg2pdf.svg2pdf;
+        }
+      }
+      // Check jsPDF.API.svg as alternative
+      if (global.jspdf && global.jspdf.jsPDF && global.jspdf.jsPDF.API && typeof global.jspdf.jsPDF.API.svg === 'function') {
+        console.log('[certificate] Found svg2pdf at jsPDF.API.svg');
+        return global.jspdf.jsPDF.API.svg;
+      }
+      if (global.svg2pdfjs && typeof global.svg2pdfjs === 'function') {
+        console.log('[certificate] Found svg2pdf at global.svg2pdfjs');
+        return global.svg2pdfjs;
+      }
+      if (global.svg2pdfjs && typeof global.svg2pdfjs.svg2pdf === 'function') {
+        console.log('[certificate] Found svg2pdf at global.svg2pdfjs.svg2pdf');
+        return global.svg2pdfjs.svg2pdf;
+      }
+      // Also check window directly (in case global !== window)
+      if (typeof window !== 'undefined') {
+        if (typeof window.svg2pdf === 'function') {
+          console.log('[certificate] Found svg2pdf at window.svg2pdf');
+          return window.svg2pdf;
+        }
+        if (window.svg2pdf && typeof window.svg2pdf === 'object' && typeof window.svg2pdf.svg2pdf === 'function') {
+          console.log('[certificate] Found svg2pdf at window.svg2pdf.svg2pdf');
+          return window.svg2pdf.svg2pdf;
+        }
+      }
+      console.log('[certificate] svg2pdf not found. Available keys:', Object.keys(global).filter(k => k.includes('svg') || k.includes('pdf')));
+      if (global.svg2pdf) {
+        console.log('[certificate] svg2pdf type:', typeof global.svg2pdf, 'value:', global.svg2pdf);
+      }
+      return null;
+    }
+
+    async function waitForScriptToLoad(src, checkFn, maxWait = 3000) {
+      const startTime = Date.now();
+      while (Date.now() - startTime < maxWait) {
+        if (checkFn()) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return false;
+    }
+
+    async function ensureVectorPdfLibrariesLoaded() {
       const hasJsPdf = !!(global.jspdf && global.jspdf.jsPDF);
-      if (hasHtml2Canvas && hasJsPdf) return true;
+      const svg2pdfFn = findSvg2PdfFunction();
+      if (hasJsPdf && svg2pdfFn) {
+        console.log('[certificate] PDF libraries already loaded');
+        return true;
+      }
+
+      console.log('[certificate] Checking for pre-loaded scripts...');
+      // Check if scripts are already in DOM (from admin.html)
+      const jspdfScript = document.querySelector('script[src*="jspdf"]');
+      const svg2pdfScript = document.querySelector('script[src*="svg2pdf"]');
+      
+      if (jspdfScript && !hasJsPdf) {
+        console.log('[certificate] Waiting for jsPDF to initialize...');
+        await waitForScriptToLoad('jspdf', () => !!(global.jspdf && global.jspdf.jsPDF));
+      }
+      
+      if (svg2pdfScript && !svg2pdfFn) {
+        console.log('[certificate] Waiting for svg2pdf to initialize...');
+        await waitForScriptToLoad('svg2pdf', () => !!findSvg2PdfFunction());
+      }
+
+      // Re-check after waiting
+      const hasJsPdfAfterWait = !!(global.jspdf && global.jspdf.jsPDF);
+      const svg2pdfFnAfterWait = findSvg2PdfFunction();
+      if (hasJsPdfAfterWait && svg2pdfFnAfterWait) {
+        console.log('[certificate] PDF libraries loaded after wait');
+        return true;
+      }
+
+      console.log('[certificate] Loading PDF libraries dynamically...', { hasJsPdf: hasJsPdfAfterWait, hasSvg2Pdf: !!svg2pdfFnAfterWait });
 
       const candidates = [];
-      if (!hasHtml2Canvas) {
-        candidates.push(
-          'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
-          'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
-          'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
-        );
+      if (!hasJsPdfAfterWait) {
+        candidates.push(...VECTOR_PDF_SOURCES.jspdf);
       }
-      if (!hasJsPdf) {
-        candidates.push(
-          'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-          'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
-          'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'
-        );
+      if (!svg2pdfFnAfterWait) {
+        candidates.push(...VECTOR_PDF_SOURCES.svg2pdf);
       }
 
       for (const src of candidates) {
         try {
+          console.log('[certificate] Attempting to load:', src);
           await loadExternalScript(src);
-        } catch (e) {
-          // continue to next candidate
+          // Give a moment for the script to register globally
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (error) {
+          console.warn('[certificate] Failed to load:', src, error);
         }
       }
 
-      return !!global.html2canvas && !!(global.jspdf && global.jspdf.jsPDF);
+      const finalHasJsPdf = !!(global.jspdf && global.jspdf.jsPDF);
+      const finalSvg2PdfFn = findSvg2PdfFunction();
+      console.log('[certificate] Final check:', { hasJsPdf: finalHasJsPdf, hasSvg2Pdf: !!finalSvg2PdfFn, globalKeys: Object.keys(global).filter(k => k.includes('svg') || k.includes('pdf')) });
+      return finalHasJsPdf && !!finalSvg2PdfFn;
     }
 
     async function handleDownload() {
@@ -866,7 +1317,7 @@
         showToast('PDF ექსპორტისთვის დახურეთ სერტიფიკატის ფორმა', 'info');
         return;
       }
-      // Prepare Save As handle early while user activation is fresh
+
       const safeFullNameEarly = (activeData?.fullName || '')
         .trim()
         .replace(/[<>:"/\\|?*]+/g, '')
@@ -882,21 +1333,33 @@
       }
       const saveHandle = prep?.handle || null;
 
-      // Ensure libraries are loaded (with dynamic fallback if CDN იყო დაბლოკილი)
-      const libsOk = await ensurePdfLibrariesLoaded();
+      const libsOk = await ensureVectorPdfLibrariesLoaded();
       if (!libsOk) {
         showToast('PDF ბიბლიოთეკები ვერ ჩაიტვირთა', 'error');
         return;
       }
 
-      const certificateEl = getCertificateElement();
-      if (!certificateEl) {
-        showToast('სერტიფიკატის შაბლონი ჯერ არ არის ჩატვირთული', 'error');
+      const levelKey = resolveLevelKey(activeData.level || activeData.level?.key);
+      let svgElement = null;
+      try {
+        svgElement = await buildCertificateSvgElement(levelKey);
+      } catch (error) {
+        console.error('[certificate] Failed to build SVG element', error);
+        showToast('სერტიფიკატის SVG ვერ შეიქმნა', 'error');
         return;
       }
 
-      const html2canvasLib = global.html2canvas;
+      if (!svgElement) {
+        showToast('სერტიფიკატის SVG ვერ შეიქმნა', 'error');
+        return;
+      }
+
       const jsPdfFactory = global.jspdf?.jsPDF;
+      const svg2pdfLib = findSvg2PdfFunction();
+      if (!jsPdfFactory || !svg2pdfLib) {
+        showToast('PDF ბიბლიოთეკები ვერ ჩაიტვირთა', 'error');
+        return;
+      }
 
       const previousDisabled = downloadBtn?.disabled ?? false;
       const previousLabel = downloadBtn?.textContent ?? downloadBtnDefaultLabel;
@@ -905,59 +1368,45 @@
         downloadBtn.textContent = 'მუშავდება...';
       }
 
-      let sandbox = null;
+      const svgSandbox = document.createElement('div');
+      svgSandbox.style.position = 'fixed';
+      svgSandbox.style.left = '-10000px';
+      svgSandbox.style.top = '-10000px';
+      svgSandbox.style.width = `${BASE_CERTIFICATE_WIDTH}px`;
+      svgSandbox.style.height = `${BASE_CERTIFICATE_HEIGHT}px`;
+      svgSandbox.style.opacity = '0';
+      svgSandbox.style.pointerEvents = 'none';
+      svgSandbox.setAttribute('aria-hidden', 'true');
+      svgSandbox.className = 'certificate-svg-export';
+      svgSandbox.appendChild(svgElement);
+      document.body.appendChild(svgSandbox);
+
       try {
-        sandbox = document.createElement('div');
-        sandbox.style.position = 'fixed';
-        sandbox.style.left = '-10000px';
-        sandbox.style.top = '-10000px';
-        sandbox.style.width = `${BASE_CERTIFICATE_WIDTH}px`;
-        sandbox.style.height = `${BASE_CERTIFICATE_HEIGHT}px`;
-        sandbox.style.background = '#ffffff';
-        sandbox.style.zIndex = '-1';
-        // Do not set opacity to 0, otherwise html2canvas will render a transparent image.
-        sandbox.style.opacity = '1';
-        sandbox.style.pointerEvents = 'none';
-        sandbox.setAttribute('aria-hidden', 'true');
-        sandbox.className = 'certificate-print-sandbox';
-
-        const clone = certificateEl.cloneNode(true);
-        clone.style.transform = 'none';
-        clone.style.width = `${BASE_CERTIFICATE_WIDTH}px`;
-        clone.style.height = `${BASE_CERTIFICATE_HEIGHT}px`;
-        clone.style.transformOrigin = 'top left';
-        sandbox.appendChild(clone);
-        document.body.appendChild(sandbox);
-
-        await nextAnimationFrame();
-
-        const canvas = await html2canvasLib(sandbox, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-          windowWidth: BASE_CERTIFICATE_WIDTH,
-          windowHeight: BASE_CERTIFICATE_HEIGHT,
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPdfFactory('l', 'mm', 'a4');
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const margin = 6;
-
-        let renderWidth = pageWidth - margin * 2;
-        let renderHeight = (canvas.height * renderWidth) / canvas.width;
-        const maxHeight = pageHeight - margin * 2;
-        if (renderHeight > maxHeight) {
-          renderHeight = maxHeight;
-          renderWidth = (canvas.width * renderHeight) / canvas.height;
+        const pdf = new jsPdfFactory('l', 'pt', [BASE_CERTIFICATE_WIDTH, BASE_CERTIFICATE_HEIGHT]);
+        // Ensure DejaVu Sans is available in jsPDF before rendering
+        await ensureDejaVuSansRegistered(pdf);
+        // Try to register BPG Nino and Noto Sans Georgian (optional). If missing, DejaVuSans is used.
+        await ensureNotoSansGeorgianRegistered(pdf);
+        await ensureBpgNinoRegistered(pdf);
+        
+        // svg2pdf can be called directly or via jsPDF.API.svg
+        if (typeof svg2pdfLib === 'function') {
+          await Promise.resolve(svg2pdfLib(svgElement, pdf, {
+            x: 0,
+            y: 0,
+            width: BASE_CERTIFICATE_WIDTH,
+            height: BASE_CERTIFICATE_HEIGHT,
+          }));
+        } else if (global.jspdf && global.jspdf.jsPDF && global.jspdf.jsPDF.API && typeof global.jspdf.jsPDF.API.svg === 'function') {
+          await Promise.resolve(global.jspdf.jsPDF.API.svg(svgElement, pdf, {
+            x: 0,
+            y: 0,
+            width: BASE_CERTIFICATE_WIDTH,
+            height: BASE_CERTIFICATE_HEIGHT,
+          }));
+        } else {
+          throw new Error('svg2pdf function not available');
         }
-
-        const offsetX = (pageWidth - renderWidth) / 2;
-        const offsetY = (pageHeight - renderHeight) / 2;
-
-        pdf.addImage(imgData, 'PNG', offsetX, offsetY, renderWidth, renderHeight);
 
         const safeFullName = (activeData.fullName || '')
           .trim()
@@ -973,8 +1422,8 @@
         console.error('[certificate] Failed to export PDF', error);
         showToast('PDF ფაილის შექმნა ვერ მოხერხდა', 'error');
       } finally {
-        if (sandbox?.parentNode) {
-          sandbox.parentNode.removeChild(sandbox);
+        if (svgSandbox?.parentNode) {
+          svgSandbox.parentNode.removeChild(svgSandbox);
         }
         if (downloadBtn) {
           downloadBtn.disabled = previousDisabled;
