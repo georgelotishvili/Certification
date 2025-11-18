@@ -137,23 +137,103 @@
       return 'middle';
     }
 
+    // CSS class name to percentage position mapping
+    // Based on architect.css and expert.css
+    const FIELD_POSITIONS = {
+      'owner-1': { left: 10.33, top: 34.3, width: 58.24, height: 3.53 },
+      'owner-2': { left: 10.33, top: 34.3, width: 58.24, height: 3.40 },
+      'personal-number-1': { left: 12.33, top: 37.7, width: 10.42, height: 2.36 },
+      'personal-number-2': { left: 12.33, top: 37.7, width: 10.42, height: 2.36 },
+      'identification-code-1': { left: 74.0, top: 88, width: 11.27, height: 2.52 },
+      'identification-code-2': { left: 74.0, top: 88, width: 11.27, height: 2.52 },
+      'issue-date-1': { left: 11, top: 69, width: 7.57, height: 2.14 },
+      'issue-date-2': { left: 11, top: 69, width: 7.57, height: 2.14 },
+      'validity-period-1': { left: 34.10, top: 73.16, width: 3.65, height: 2.02 },
+      'validity-period-2': { left: 34.10, top: 73.16, width: 3.65, height: 2.02 },
+      'expiry-date-1': { left: 11, top: 77.20, width: 7.57, height: 2.14 },
+      'expiry-date-2': { left: 11, top: 77.20, width: 7.57, height: 2.14 },
+    };
+
+    function getFieldPositionFromCss(fieldNode, levelKey) {
+      // Try to find CSS class name from fieldNode
+      const classList = Array.from(fieldNode.classList || []);
+      for (const className of classList) {
+        if (FIELD_POSITIONS[className]) {
+          return FIELD_POSITIONS[className];
+        }
+      }
+      // Fallback: try to match by field name and level
+      const fieldName = fieldNode.dataset?.field || '';
+      const suffix = levelKey === 'expert' ? '2' : '1';
+      const className = `${fieldName.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '')}-${suffix}`;
+      // Try common mappings
+      const fieldMap = {
+        'fullname': 'owner',
+        'full-name': 'owner',
+        'personalid': 'personal-number',
+        'personal-id': 'personal-number',
+        'uniquecode': 'identification-code',
+        'unique-code': 'identification-code',
+        'issuedate': 'issue-date',
+        'issue-date': 'issue-date',
+        'validityterm': 'validity-period',
+        'validity-term': 'validity-period',
+        'validuntil': 'expiry-date',
+        'valid-until': 'expiry-date',
+      };
+      const baseName = fieldMap[fieldName.toLowerCase()] || fieldName.toLowerCase();
+      const mappedClassName = `${baseName}-${suffix}`;
+      if (FIELD_POSITIONS[mappedClassName]) {
+        return FIELD_POSITIONS[mappedClassName];
+      }
+      return null;
+    }
+
     function createSvgTextNodeFromField(fieldNode, baseRect, levelKey) {
       if (!fieldNode) return null;
-      const rect = fieldNode.getBoundingClientRect();
-      if (!rect || !baseRect) return null;
-      const x = rect.left - baseRect.left;
-      const y = rect.top - baseRect.top;
-      const width = rect.width;
-      const height = rect.height;
+
+      // Prefer exact CSS percentage mapping to ensure parity with on-screen layout
+      const position = getFieldPositionFromCss(fieldNode, levelKey);
+
+      let x, y, width, height;
+      if (position) {
+        x = (position.left / 100) * BASE_CERTIFICATE_WIDTH;
+        y = (position.top / 100) * BASE_CERTIFICATE_HEIGHT;
+        width = (position.width / 100) * BASE_CERTIFICATE_WIDTH;
+        height = (position.height / 100) * BASE_CERTIFICATE_HEIGHT;
+      } else {
+        // Fallback to DOM rects (should rarely be needed)
+        const rect = fieldNode.getBoundingClientRect();
+        if (!rect || !baseRect) return null;
+        x = rect.left - baseRect.left;
+        y = rect.top - baseRect.top;
+        width = rect.width;
+        height = rect.height;
+      }
+
       if (width <= 0 || height <= 0) return null;
 
       const computed = global.getComputedStyle(fieldNode);
       const textAnchor = computeTextAnchor(computed?.textAlign);
-      let anchorX = x + width / 2;
+      
+      // Get padding values to adjust text position
+      const paddingLeft = parseFloat(computed.paddingLeft || '0') || 0;
+      const paddingRight = parseFloat(computed.paddingRight || '0') || 0;
+      const paddingTop = parseFloat(computed.paddingTop || '0') || 0;
+      const paddingBottom = parseFloat(computed.paddingBottom || '0') || 0;
+      
+      // Calculate anchorX based on text alignment and padding
+      let anchorX;
       if (textAnchor === 'start') {
-        anchorX = x;
+        // Left-aligned text starts at x + paddingLeft
+        anchorX = x + paddingLeft;
       } else if (textAnchor === 'end') {
-        anchorX = x + width;
+        // Right-aligned text ends at x + width - paddingRight
+        anchorX = x + width - paddingRight;
+      } else {
+        // Center-aligned text is at the center of the content area (excluding padding)
+        const contentWidth = width - paddingLeft - paddingRight;
+        anchorX = x + paddingLeft + contentWidth / 2;
       }
 
       // Get text content - prefer textContent over innerText for SVG
@@ -162,9 +242,13 @@
       // Decide font per field
       const fieldName = fieldNode.dataset?.field || '';
       
+      // Compute vertical anchor: center of the content box (height minus vertical padding)
+      const contentHeight = Math.max(0, height - paddingTop - paddingBottom);
+      const anchorY = y + paddingTop + contentHeight / 2;
+
       const textNode = document.createElementNS(SVG_NS, 'text');
       textNode.setAttribute('x', anchorX.toString());
-      textNode.setAttribute('y', (y + height / 2).toString());
+      textNode.setAttribute('y', anchorY.toString());
       textNode.setAttribute('dominant-baseline', 'middle');
       textNode.setAttribute('text-anchor', textAnchor);
       // Use dedicated font for full name; progressive fallback chain
@@ -216,6 +300,11 @@
       document.body.appendChild(sandbox);
 
       try {
+        // Force a reflow to ensure CSS is applied
+        void sandbox.offsetHeight;
+        // Wait for next frame to ensure layout is complete
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        
         const baseRect = clone.getBoundingClientRect();
         const svgEl = document.createElementNS(SVG_NS, 'svg');
         svgEl.setAttribute('xmlns', SVG_NS);
