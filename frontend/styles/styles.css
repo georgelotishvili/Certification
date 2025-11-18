@@ -111,7 +111,7 @@ header {
   bottom: -20px;
   left: 50%;
   transform: translateX(-50%);
-  width: 96%;
+  width: 98%;
   height: 40px;
   padding: 0 4px 0 10px;
   display: flex;
@@ -179,9 +179,11 @@ header {
 .nav a:hover,
 .nav a:focus-visible {
   color: var(--color-text);
-  background: var(--brand-soft);
+  /* brighter hover on green navbar */
+  background: rgba(255, 255, 255, 0.14);
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px var(--brand-shadow);
+  /* stronger shadow like earlier design + subtle inner outline */
+  box-shadow: 0 12px 28px rgba(5, 12, 30, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.25);
 }
 
 .nav a:focus-visible {
