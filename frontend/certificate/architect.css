@@ -85,7 +85,8 @@
 
 @font-face {
   font-family: 'BPG Nino Mtavruli Bold';
-  src: url('../assets/fonts/bpg-nino-mtavruli-bold-webfont.woff2') format('woff2');
+  /* Use local TTF available in assets */
+  src: url('../assets/fonts/bpg_nino_mtavruli_bold.ttf') format('truetype');
   font-weight: 700;
   font-style: normal;
   font-display: swap;

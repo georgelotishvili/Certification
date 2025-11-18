@@ -1057,10 +1057,10 @@
       // Try local first, then CDN fallback
       const fontsBase = getFontsBaseUrl();
       const candidates = [
+        `${fontsBase}/bpg_nino_mtavruli_bold.ttf`,
         `${fontsBase}/bpg-nino-mtavruli-bold.ttf`,
         `${fontsBase}/BPGNinoMtavruli-Bold.ttf`,
         `${fontsBase}/BPG Nino Mtavruli Bold.ttf`,
-        `${fontsBase}/bpg_nino_mtavruli_bold.ttf`,
         `${fontsBase}/bpg-nino-mtavruli.ttf`,
         // Public CDN fallback (CORS-enabled)
         'https://cdn.web-fonts.ge/fonts/bpg-nino-mtavruli-bold/bpg-nino-mtavruli-bold.ttf',
