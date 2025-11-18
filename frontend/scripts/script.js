@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     root: document.documentElement,
     header: document.querySelector('header'),
     navLogo: document.querySelector('.nav-bar .logo'),
+    headerVideo: document.querySelector('.header-video'),
     burger: document.querySelector('.burger'),
     overlay: document.querySelector('.overlay'),
     drawer: document.querySelector('.drawer'),
@@ -140,6 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
   statementsModule.init();
   footerFormModule.init();
   setupContactScroll();
+  setupHeaderVideoPlaybackRate();
 
   // Global escape handling (modal first, then menu)
   document.addEventListener('keydown', (event) => {
@@ -177,6 +179,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     utils.on(DOM.navContact, 'click', (event) => scrollToFooter(event));
     utils.on(DOM.drawerContact, 'click', (event) => scrollToFooter(event, true));
+  }
+
+  function setupHeaderVideoPlaybackRate() {
+    const video = DOM.headerVideo;
+    if (!video) return;
+    const desired = parseFloat(video.dataset.speed || '0.6');
+    const rate = Number.isFinite(desired) ? Math.max(0.1, Math.min(desired, 4)) : 0.6;
+    const apply = () => {
+      try { video.playbackRate = rate; } catch {}
+    };
+    // Apply now and on common lifecycle events to survive browser quirks
+    apply();
+    video.addEventListener('loadedmetadata', apply);
+    video.addEventListener('canplay', apply);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) apply();
+    });
   }
 
   function createLayoutModule() {
