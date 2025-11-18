@@ -61,20 +61,6 @@
       architect: 'architect bac.svg',
       expert: 'expert bac.svg',
     };
-    const VECTOR_PDF_SOURCES = {
-      jspdf: [
-        '../vendor/jspdf.umd.min.js',
-        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-        'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
-        'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js',
-      ],
-      svg2pdf: [
-        '../vendor/svg2pdf.min.js',
-        'https://cdnjs.cloudflare.com/ajax/libs/svg2pdf.js/2.2.3/svg2pdf.min.js',
-        'https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.3/dist/svg2pdf.min.js',
-        'https://unpkg.com/svg2pdf.js@2.2.3/dist/svg2pdf.min.js',
-      ],
-    };
     const backgroundSvgCache = new Map();
     const domParser = typeof DOMParser !== 'undefined' ? new DOMParser() : null;
     const downloadBtnDefaultLabel = downloadBtn?.textContent?.trim() || 'PDF';
@@ -151,7 +137,7 @@
       return 'middle';
     }
 
-    function createSvgTextNodeFromField(fieldNode, baseRect) {
+    function createSvgTextNodeFromField(fieldNode, baseRect, levelKey) {
       if (!fieldNode) return null;
       const rect = fieldNode.getBoundingClientRect();
       if (!rect || !baseRect) return null;
@@ -183,7 +169,8 @@
       textNode.setAttribute('text-anchor', textAnchor);
       // Use dedicated font for full name; progressive fallback chain
       if (fieldName === 'fullName') {
-        textNode.setAttribute('font-family', 'BPGNino, NotoSansGeorgian, DejaVuSans');
+        // Both certificate types: strictly BPGNino for full name
+        textNode.setAttribute('font-family', 'BPGNino');
         textNode.setAttribute('font-weight', 'bold');
         textNode.setAttribute('font-style', 'normal');
       } else {
@@ -238,62 +225,19 @@
         svgEl.setAttribute('height', `${BASE_CERTIFICATE_HEIGHT}`);
         svgEl.setAttribute('viewBox', `0 0 ${BASE_CERTIFICATE_WIDTH} ${BASE_CERTIFICATE_HEIGHT}`);
 
-        const styleEl = document.createElementNS(SVG_NS, 'style');
-        // Use absolute URLs for fonts so svg2pdf.js can load them
-        // Calculate base URL from current page location
-        const currentPath = window.location.pathname;
-        const pathParts = currentPath.split('/').filter(p => p);
-        // Remove the last part (e.g., 'admin.html') to get the base directory
-        if (pathParts.length > 0 && pathParts[pathParts.length - 1].includes('.')) {
-          pathParts.pop();
-        }
-        // If we're under /frontend/pages, go up to /frontend
-        if (pathParts.length > 0 && pathParts[pathParts.length - 1] === 'pages') {
-          pathParts.pop();
-        }
-        const basePath = pathParts.length > 0 ? '/' + pathParts.join('/') : '';
-        const fontBaseUrl = `${window.location.origin}${basePath}/assets/fonts`;
-        styleEl.textContent = `
-          @font-face {
-            font-family: 'DejaVu Sans';
-            src: url('${fontBaseUrl}/dejavu-sans.ttf') format('truetype');
-            font-weight: 700;
-            font-style: normal;
-            font-display: swap;
-          }
-          @font-face {
-            font-family: 'BPG Nino Mtavruli Bold';
-            src: url('${fontBaseUrl}/bpg-nino-mtavruli-bold-webfont.woff2') format('woff2');
-            font-weight: 700;
-            font-style: normal;
-            font-display: swap;
-          }
-        `;
-        svgEl.appendChild(styleEl);
+        // No SVG @font-face needed; fonts are embedded into PDF by jsPDF
 
         try {
           const backgroundNode = await buildBackgroundNode(levelKey);
           if (backgroundNode) {
             svgEl.appendChild(backgroundNode);
           }
-        } catch (error) {
-          console.error('[certificate] Failed to append background svg', error);
-        }
+        } catch (_error) {}
 
         const fieldNodesList = clone.querySelectorAll('[data-field]');
         fieldNodesList.forEach((fieldNode) => {
-          const fieldName = fieldNode.dataset.field;
-          const textContent = fieldNode.textContent || '';
-          console.log(`[certificate] Processing field: ${fieldName}, text: "${textContent}", length: ${textContent.length}`);
-          
-          const textNode = createSvgTextNodeFromField(fieldNode, baseRect);
-          if (textNode) {
-            const svgTextContent = textNode.textContent || '';
-            console.log(`[certificate] SVG text node created for ${fieldName}, text: "${svgTextContent}", font-family: ${textNode.getAttribute('font-family')}`);
-            svgEl.appendChild(textNode);
-          } else {
-            console.warn(`[certificate] Failed to create SVG text node for field: ${fieldName}`);
-          }
+          const textNode = createSvgTextNodeFromField(fieldNode, baseRect, levelKey);
+          if (textNode) svgEl.appendChild(textNode);
         });
 
         return svgEl;
@@ -1069,10 +1013,14 @@
     }
 
     // Register a Unicode-capable font (DejaVuSans) with jsPDF so Georgian text renders correctly
-    let isDejaVuRegistered = false;
     async function ensureDejaVuSansRegistered(pdf) {
-      if (!pdf || isDejaVuRegistered) return;
+      if (!pdf) return;
       try {
+        // Per-PDF check: if already registered in this document, skip
+        const list = typeof pdf.getFontList === 'function' ? pdf.getFontList() : {};
+        const has = !!(list && (list.DejaVuSans || list['DejaVuSans']));
+        if (has) return;
+
         const fontUrl = '../assets/fonts/dejavu-sans.ttf';
         const res = await fetch(fontUrl);
         if (!res.ok) {
@@ -1090,17 +1038,22 @@
         const base64 = btoa(binary);
         pdf.addFileToVFS('DejaVuSans.ttf', base64);
         pdf.addFont('DejaVuSans.ttf', 'DejaVuSans', 'normal');
-        isDejaVuRegistered = true;
-        console.log('[certificate] DejaVuSans font registered with jsPDF');
+        // console.log('[certificate] DejaVuSans font registered with jsPDF');
       } catch (e) {
         console.warn('[certificate] Error registering DejaVu Sans font', e);
       }
     }
 
     // Try to register BPG Nino Mtavruli Bold (TTF). If the TTF is missing, we fall back silently.
-    let isBpgNinoRegistered = false;
     async function ensureBpgNinoRegistered(pdf) {
-      if (!pdf || isBpgNinoRegistered) return;
+      if (!pdf) return;
+      // Per-PDF check first
+      try {
+        const list = typeof pdf.getFontList === 'function' ? pdf.getFontList() : {};
+        const has = !!(list && (list.BPGNino || list['BPGNino']));
+        if (has) return;
+      } catch (_) {}
+
       // Try local first, then CDN fallback
       const fontsBase = getFontsBaseUrl();
       const candidates = [
@@ -1143,169 +1096,36 @@
         pdf.addFileToVFS('BPGNino.ttf', base64);
         // Register as bold to match intended style
         pdf.addFont('BPGNino.ttf', 'BPGNino', 'bold');
-        isBpgNinoRegistered = true;
-        console.log('[certificate] BPG Nino Mtavruli Bold font registered with jsPDF from', usedUrl);
+        // console.log('[certificate] BPG Nino Mtavruli Bold font registered with jsPDF from', usedUrl);
       } catch (e) {
         console.warn('[certificate] Error registering BPG Nino Mtavruli Bold font', e);
       }
     }
 
-    // Optional: register Noto Sans Georgian Bold as another fallback
-    let isNotoGeorgianRegistered = false;
-    async function ensureNotoSansGeorgianRegistered(pdf) {
-      if (!pdf || isNotoGeorgianRegistered) return;
-      const candidates = [
-        'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansGeorgian/NotoSansGeorgian-Bold.ttf',
-        'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansGeorgian/NotoSansGeorgian-Bold.ttf',
-      ];
-      try {
-        let res = null;
-        let ok = false;
-        let usedUrl = '';
-        for (const url of candidates) {
-          try {
-            res = await fetch(url, { mode: 'cors' });
-            if (res.ok) {
-              ok = true;
-              usedUrl = url;
-              break;
-            }
-          } catch (_) {
-            // try next
-          }
-        }
-        if (!ok || !res) return;
-        const buffer = await res.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        const chunkSize = 0x8000;
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-        }
-        const base64 = btoa(binary);
-        pdf.addFileToVFS('NotoSansGeorgian-Bold.ttf', base64);
-        pdf.addFont('NotoSansGeorgian-Bold.ttf', 'NotoSansGeorgian', 'bold');
-        isNotoGeorgianRegistered = true;
-        console.log('[certificate] Noto Sans Georgian Bold font registered with jsPDF from', usedUrl);
-      } catch (e) {
-        // silent fallback
-      }
-    }
 
     function findSvg2PdfFunction() {
-      // Check multiple possible locations
-      if (typeof global.svg2pdf === 'function') {
-        console.log('[certificate] Found svg2pdf at global.svg2pdf');
-        return global.svg2pdf;
-      }
-      // Check if svg2pdf is an object that might have been initialized but not yet assigned the function
-      if (global.svg2pdf && typeof global.svg2pdf === 'object') {
-        console.log('[certificate] svg2pdf is an object, checking properties:', Object.keys(global.svg2pdf));
-        // Sometimes the function is assigned later, wait a bit
-        if (typeof global.svg2pdf.svg2pdf === 'function') {
-          console.log('[certificate] Found svg2pdf at global.svg2pdf.svg2pdf');
-          return global.svg2pdf.svg2pdf;
-        }
-      }
-      // Check jsPDF.API.svg as alternative
-      if (global.jspdf && global.jspdf.jsPDF && global.jspdf.jsPDF.API && typeof global.jspdf.jsPDF.API.svg === 'function') {
-        console.log('[certificate] Found svg2pdf at jsPDF.API.svg');
-        return global.jspdf.jsPDF.API.svg;
-      }
-      if (global.svg2pdfjs && typeof global.svg2pdfjs === 'function') {
-        console.log('[certificate] Found svg2pdf at global.svg2pdfjs');
-        return global.svg2pdfjs;
-      }
-      if (global.svg2pdfjs && typeof global.svg2pdfjs.svg2pdf === 'function') {
-        console.log('[certificate] Found svg2pdf at global.svg2pdfjs.svg2pdf');
-        return global.svg2pdfjs.svg2pdf;
-      }
-      // Also check window directly (in case global !== window)
-      if (typeof window !== 'undefined') {
-        if (typeof window.svg2pdf === 'function') {
-          console.log('[certificate] Found svg2pdf at window.svg2pdf');
-          return window.svg2pdf;
-        }
-        if (window.svg2pdf && typeof window.svg2pdf === 'object' && typeof window.svg2pdf.svg2pdf === 'function') {
-          console.log('[certificate] Found svg2pdf at window.svg2pdf.svg2pdf');
-          return window.svg2pdf.svg2pdf;
-        }
-      }
-      console.log('[certificate] svg2pdf not found. Available keys:', Object.keys(global).filter(k => k.includes('svg') || k.includes('pdf')));
-      if (global.svg2pdf) {
-        console.log('[certificate] svg2pdf type:', typeof global.svg2pdf, 'value:', global.svg2pdf);
-      }
+      if (typeof global.svg2pdf === 'function') return global.svg2pdf;
+      if (global.svg2pdf && typeof global.svg2pdf.svg2pdf === 'function') return global.svg2pdf.svg2pdf;
+      if (global.jspdf?.jsPDF?.API && typeof global.jspdf.jsPDF.API.svg === 'function') return global.jspdf.jsPDF.API.svg;
+      if (typeof window !== 'undefined' && typeof window.svg2pdf === 'function') return window.svg2pdf;
+      if (typeof window !== 'undefined' && window.svg2pdf?.svg2pdf) return window.svg2pdf.svg2pdf;
       return null;
     }
 
-    async function waitForScriptToLoad(src, checkFn, maxWait = 3000) {
+    async function waitForScriptToLoad(_src, checkFn, maxWait = 1500) {
       const startTime = Date.now();
       while (Date.now() - startTime < maxWait) {
-        if (checkFn()) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          return true;
-        }
+        if (checkFn()) return true;
         await new Promise(resolve => setTimeout(resolve, 100));
       }
       return false;
     }
 
     async function ensureVectorPdfLibrariesLoaded() {
-      const hasJsPdf = !!(global.jspdf && global.jspdf.jsPDF);
-      const svg2pdfFn = findSvg2PdfFunction();
-      if (hasJsPdf && svg2pdfFn) {
-        console.log('[certificate] PDF libraries already loaded');
-        return true;
-      }
-
-      console.log('[certificate] Checking for pre-loaded scripts...');
-      // Check if scripts are already in DOM (from admin.html)
-      const jspdfScript = document.querySelector('script[src*="jspdf"]');
-      const svg2pdfScript = document.querySelector('script[src*="svg2pdf"]');
-      
-      if (jspdfScript && !hasJsPdf) {
-        console.log('[certificate] Waiting for jsPDF to initialize...');
-        await waitForScriptToLoad('jspdf', () => !!(global.jspdf && global.jspdf.jsPDF));
-      }
-      
-      if (svg2pdfScript && !svg2pdfFn) {
-        console.log('[certificate] Waiting for svg2pdf to initialize...');
-        await waitForScriptToLoad('svg2pdf', () => !!findSvg2PdfFunction());
-      }
-
-      // Re-check after waiting
-      const hasJsPdfAfterWait = !!(global.jspdf && global.jspdf.jsPDF);
-      const svg2pdfFnAfterWait = findSvg2PdfFunction();
-      if (hasJsPdfAfterWait && svg2pdfFnAfterWait) {
-        console.log('[certificate] PDF libraries loaded after wait');
-        return true;
-      }
-
-      console.log('[certificate] Loading PDF libraries dynamically...', { hasJsPdf: hasJsPdfAfterWait, hasSvg2Pdf: !!svg2pdfFnAfterWait });
-
-      const candidates = [];
-      if (!hasJsPdfAfterWait) {
-        candidates.push(...VECTOR_PDF_SOURCES.jspdf);
-      }
-      if (!svg2pdfFnAfterWait) {
-        candidates.push(...VECTOR_PDF_SOURCES.svg2pdf);
-      }
-
-      for (const src of candidates) {
-        try {
-          console.log('[certificate] Attempting to load:', src);
-          await loadExternalScript(src);
-          // Give a moment for the script to register globally
-          await new Promise(resolve => setTimeout(resolve, 200));
-        } catch (error) {
-          console.warn('[certificate] Failed to load:', src, error);
-        }
-      }
-
-      const finalHasJsPdf = !!(global.jspdf && global.jspdf.jsPDF);
-      const finalSvg2PdfFn = findSvg2PdfFunction();
-      console.log('[certificate] Final check:', { hasJsPdf: finalHasJsPdf, hasSvg2Pdf: !!finalSvg2PdfFn, globalKeys: Object.keys(global).filter(k => k.includes('svg') || k.includes('pdf')) });
-      return finalHasJsPdf && !!finalSvg2PdfFn;
+      if (global.jspdf?.jsPDF && findSvg2PdfFunction()) return true;
+      // If scripts are present in DOM but not yet initialized, wait briefly
+      await waitForScriptToLoad('', () => !!(global.jspdf?.jsPDF && findSvg2PdfFunction()), 1500);
+      return !!(global.jspdf?.jsPDF && findSvg2PdfFunction());
     }
 
     async function handleDownload() {
@@ -1385,8 +1205,7 @@
         const pdf = new jsPdfFactory('l', 'pt', [BASE_CERTIFICATE_WIDTH, BASE_CERTIFICATE_HEIGHT]);
         // Ensure DejaVu Sans is available in jsPDF before rendering
         await ensureDejaVuSansRegistered(pdf);
-        // Try to register BPG Nino and Noto Sans Georgian (optional). If missing, DejaVuSans is used.
-        await ensureNotoSansGeorgianRegistered(pdf);
+        // Register BPG Nino (required for fullName). If missing, DejaVuSans will be used (but requirement is BPGNino).
         await ensureBpgNinoRegistered(pdf);
         
         // svg2pdf can be called directly or via jsPDF.API.svg
