@@ -64,7 +64,6 @@ header {
   right: 0;
   z-index: 120;
   background: var(--color-surface);
-  border-bottom: 2px solid var(--color-border);
   box-shadow: 0 18px 48px rgba(3, 6, 16, 0.6);
 }
 
@@ -81,8 +80,8 @@ header {
   left: 50%;
   transform: translateX(-50%);
   width: 96%;
-  height: 40px;
-  padding: 0 5px 0 15px;
+  height: 44px;
+  padding: 0 5px 0 11px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -90,9 +89,32 @@ header {
   gap: 16px;
   background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
   box-shadow: 0 16px 36px rgba(3, 6, 16, 0.6);
-  border-radius: var(--radius-md);
+  border-radius: 22px;
 }
 
+.logo {
+  display: flex;
+  align-items: center; /* vertical center within .nav-bar */
+  cursor: pointer;
+}
+.logo img {
+  height: 26px;        /* match .login-btn height */
+  width: auto;         /* keep aspect ratio */
+  display: block;
+  object-fit: contain; /* ensure full logo fits */
+  transition: transform var(--transition-base), box-shadow var(--transition-base), opacity var(--transition-base);
+  /* match default button shadow */
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+.logo:hover img {
+  /* match hover button shadow */
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
+}
+.logo:active img {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
 .auth-banner {
   color: rgba(224, 233, 255, 0.82);
 }
@@ -170,10 +192,12 @@ header {
 
 .login-btn {
   padding: 6px 30px;
+  width: 100px;
+  height: 32px;
   background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
   color: var(--color-text);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: var(--radius-sm);
+  border-radius: 16px;
   cursor: pointer;
   transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);

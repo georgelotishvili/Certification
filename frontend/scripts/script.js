@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     body: document.body,
     root: document.documentElement,
     header: document.querySelector('header'),
+    navLogo: document.querySelector('.nav-bar .logo'),
     burger: document.querySelector('.burger'),
     overlay: document.querySelector('.overlay'),
     drawer: document.querySelector('.drawer'),
@@ -188,6 +189,11 @@ document.addEventListener('DOMContentLoaded', () => {
       setBodyOffset();
       utils.on(window, 'load', setBodyOffset);
       utils.on(window, 'resize', setBodyOffset);
+      // Click logo to scroll to top
+      utils.on(DOM.navLogo, 'click', (event) => {
+        if (event && typeof event.preventDefault === 'function') event.preventDefault();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
     }
 
     return { init };
