@@ -69,8 +69,9 @@ header {
 
 .header-hero {
   width: 100%;
-  /* height: 140px; */
+  height: 140px;
   object-fit: cover;
+  object-position: center;
   display: block;
 }
 
@@ -80,16 +81,17 @@ header {
   left: 50%;
   transform: translateX(-50%);
   width: 96%;
-  height: 44px;
+  height: 40px;
   padding: 0 5px 0 11px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: nowrap;
   border: 1px solid var(--color-border);
   gap: 16px;
   background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
   box-shadow: 0 16px 36px rgba(3, 6, 16, 0.6);
-  border-radius: 22px;
+  border-radius: 20px;
 }
 
 .logo {
@@ -117,13 +119,19 @@ header {
 }
 .auth-banner {
   color: rgba(224, 233, 255, 0.82);
+  margin-left: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 36vw;
 }
 
 .nav {
-  position: absolute;
-  right: 130px;
-  top: 50%;
-  transform: translateY(-50%);
+  position: static;
+  right: auto;
+  top: auto;
+  transform: none;
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -907,13 +915,10 @@ body.modal-open {
   outline: none;
 }
 
-@media (max-width: 1150px) {  
-  .header-hero {
-    height: 110px;
-  }
-}
+/* keep header height consistent across responsive widths */
 
-@media (max-width: 850px) {
+
+@media (max-width: 910px) {
   .nav-bar {
     display: none;
   }
