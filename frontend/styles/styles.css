@@ -41,6 +41,11 @@ body {
   --accent-soft: rgba(90, 164, 255, 0.2);
   --danger: #f87171;
   --danger-soft: rgba(248, 113, 113, 0.18);
+  /* brand (match nav-bar green) */
+  --brand-primary: #085400;
+  --brand-soft: rgba(8, 84, 0, 0.18);
+  --brand-shadow-soft: rgba(8, 84, 0, 0.30);
+  --brand-shadow: rgba(8, 84, 0, 0.50);
 }
 
 @font-face {
@@ -108,15 +113,15 @@ header {
   transform: translateX(-50%);
   width: 96%;
   height: 40px;
-  padding: 0 5px 0 11px;
+  padding: 0 4px 0 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: nowrap;
   z-index: 3; /* above header layers */
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(255, 255, 255, 0.3); /* match 'გაგზავნა' button border */
   gap: 16px;
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
+  background-color: #085400;
   box-shadow: 0 16px 36px rgba(3, 6, 16, 0.6);
   border-radius: 20px;
 }
@@ -132,17 +137,17 @@ header {
   display: block;
   object-fit: contain; /* ensure full logo fits */
   transition: transform var(--transition-base), box-shadow var(--transition-base), opacity var(--transition-base);
-  /* match default button shadow */
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  /* match default button shadow (brand) */
+  box-shadow: 0 4px 12px var(--brand-shadow-soft);
 }
 .logo:hover img {
   /* match hover button shadow */
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 12px 28px var(--brand-shadow);
 }
 .logo:active img {
   transform: translateY(0) scale(0.98);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px var(--brand-shadow-soft);
 }
 .auth-banner {
   color: rgba(224, 233, 255, 0.82);
@@ -174,9 +179,9 @@ header {
 .nav a:hover,
 .nav a:focus-visible {
   color: var(--color-text);
-  background: rgba(90, 164, 255, 0.18);
+  background: var(--brand-soft);
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px rgba(5, 12, 30, 0.45);
+  box-shadow: 0 12px 28px var(--brand-shadow);
 }
 
 .nav a:focus-visible {
@@ -229,22 +234,22 @@ header {
   padding: 6px 30px;
   width: 100px;
   height: 32px;
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+  background: var(--brand-primary);
   color: var(--color-text);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 16px;
   cursor: pointer;
   transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px var(--brand-shadow-soft);
 }
 
 .login-btn:hover,
 .login-btn:focus-visible {
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
+  background: #0a6f00;
   color: var(--color-text);
   border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 12px 28px var(--brand-shadow);
 }
 
 .login-btn:focus-visible {
@@ -312,21 +317,37 @@ header {
 
 .drawer-close {
   align-self: flex-end;
-  width: 32px;
-  height: 32px;
-  background: var(--color-surface);
-  border: 2px solid var(--color-border-strong);
-  color: var(--color-accent);
-  border-radius: var(--radius-sm);
-  transition: background var(--transition-base), border-color var(--transition-base), transform var(--transition-base);
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: 0;
+  color: var(--color-text); /* match burger color */
+  border-radius: 6px;
+  transition: background var(--transition-base), transform var(--transition-base);
   cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
+
+.drawer-close::before,
+.drawer-close::after {
+  content: '';
+  position: absolute;
+  width: 24px;           /* match burger visual width */
+  height: 3px;           /* thickness similar to burger bars */
+  background: currentColor;
+  border-radius: 2px;
+  box-shadow: 0 1px 2px rgba(29, 39, 68, 0.12); /* same as burger span */
+}
+.drawer-close::before { transform: rotate(45deg); }
+.drawer-close::after  { transform: rotate(-45deg); }
 
 .drawer-close:hover,
 .drawer-close:focus-visible {
-  background: var(--color-accent-soft);
-  border-color: var(--color-accent);
-  transform: scale(1.05);
+  background: rgba(47, 91, 168, 0.1); /* same hover backdrop as burger */
+  transform: none;
 }
 
 .drawer-close:focus-visible {
@@ -390,11 +411,11 @@ header {
 
 .drawer-login {
   margin-top: auto;
-  background: linear-gradient(135deg, rgba(26, 40, 70, 0.94), rgba(31, 45, 74, 0.94));
+  background: var(--brand-primary);
   color: var(--color-text);
-  border: 1px solid var(--color-border-strong);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: var(--radius-sm);
-  box-shadow: 0 14px 32px rgba(5, 9, 21, 0.55);
+  box-shadow: 0 4px 12px var(--brand-shadow-soft);
   padding: 10px;
   cursor: pointer;
   transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base), transform var(--transition-base), box-shadow var(--transition-base);
@@ -402,10 +423,10 @@ header {
 
 .drawer-login:hover,
 .drawer-login:focus-visible {
-  background: linear-gradient(135deg, rgba(58, 92, 150, 0.98), rgba(41, 68, 115, 0.98));
-  border-color: var(--color-accent);
+  background: #0a6f00;
+  border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-2px);
-  box-shadow: 0 18px 38px rgba(5, 12, 30, 0.62);
+  box-shadow: 0 12px 28px var(--brand-shadow);
 }
 
 .drawer-login:focus-visible {
@@ -431,6 +452,10 @@ body.menu-open .burger span:nth-child(2) {
 
 body.menu-open .burger span:nth-child(3) {
   transform: translateY(-6px) rotate(-45deg);
+}
+/* Hide burger entirely when drawer is open to avoid double X in mobile */
+body.menu-open .burger {
+  display: none;
 }
 
 main {
@@ -547,22 +572,22 @@ footer {
 }
 
 .footer-form button {
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+  background: var(--brand-primary);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 10px;
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: 16px; /* match .login-btn rounded corners */
   transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), border-color var(--transition-base);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px var(--brand-shadow-soft);
 }
 
 .footer-form button:hover,
 .footer-form button:focus-visible {
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
+  background: #0a6f00;
   color: var(--color-text);
   border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 12px 28px var(--brand-shadow);
   transform: translateY(-1px);
 }
 
@@ -806,23 +831,23 @@ body.modal-open {
 }
 
 .modal-btn {
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+  background: var(--brand-primary);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 12px;
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), border-color var(--transition-base);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px var(--brand-shadow-soft);
 }
 
 .modal-btn:hover,
 .modal-btn:focus-visible {
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
+  background: #0a6f00;
   color: #ffffff;
   border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 12px 28px var(--brand-shadow);
 }
 
 .modal-btn:focus-visible {
@@ -830,18 +855,18 @@ body.modal-open {
 }
 
 .login-option {
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+  background: var(--brand-primary);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px var(--brand-shadow-soft);
 }
 
 .login-option:hover,
 .login-option:focus-visible {
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
+  background: #0a6f00;
   border-color: rgba(255, 255, 255, 0.5);
   color: #ffffff;
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 12px 28px var(--brand-shadow);
   transform: translateY(-1px);
 }
 
@@ -882,7 +907,7 @@ body.modal-open {
 }
 
 .submit {
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+  background: var(--brand-primary);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 12px;
@@ -890,11 +915,11 @@ body.modal-open {
   width: 100%;
   border-radius: var(--radius-sm);
   transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), border-color var(--transition-base);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px var(--brand-shadow-soft);
 }
 
 .back-to-login {
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+  background: var(--brand-primary);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 12px;
@@ -902,7 +927,7 @@ body.modal-open {
   width: 100%;
   border-radius: var(--radius-sm);
   transition: background var(--transition-base), color var(--transition-base), transform var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px var(--brand-shadow-soft);
 }
 
 .forgot-password-link {
@@ -921,20 +946,20 @@ body.modal-open {
 
 .submit:hover,
 .submit:focus-visible {
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
+  background: #0a6f00;
   border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 12px 28px var(--brand-shadow);
   transform: translateY(-1px);
   color: #ffffff;
 }
 
 .back-to-login:hover,
 .back-to-login:focus-visible {
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #7c3aed 60%, #9333ea 100%);
+  background: #0a6f00;
   color: #ffffff;
   border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 12px 28px var(--brand-shadow);
 }
 
 .submit:focus-visible,
@@ -964,6 +989,11 @@ body.modal-open {
 
   .burger {
     display: flex;
+    top: 24px; /* align vertically with drawer-close inside padded drawer */
+    bottom: auto;
+    right: 16px;
+    transform: none;
+    z-index: 200;
   }  
 }
 
