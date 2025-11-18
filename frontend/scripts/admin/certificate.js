@@ -876,7 +876,7 @@
       if (form) form.classList.toggle('hidden', !formOpen);
 
       if (downloadBtn) {
-        downloadBtn.disabled = !hasCertificate || formOpen;
+        downloadBtn.disabled = !hasCertificate || formOpen || !!(activeData && activeData.isInactive);
       }
       if (emptyCreateBtn && !hasCertificate && !formOpen) {
         emptyCreateBtn.textContent = 'სერტიფიკატის შექმნა';
@@ -1224,6 +1224,10 @@
       }
       if (formOpen) {
         showToast('PDF ექსპორტისთვის დახურეთ სერტიფიკატის ფორმა', 'info');
+        return;
+      }
+      if (activeData?.isInactive) {
+        showToast('სერტიფიკატი არ არის მოქმედი', 'error');
         return;
       }
 
