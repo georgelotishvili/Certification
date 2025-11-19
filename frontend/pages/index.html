@@ -12,12 +12,7 @@
     <header>
       <!-- Background video layer (behind city silhouette) -->
       <div class="header-background">
-        <video class="header-video" autoplay muted playsinline preload="auto" poster="../assets/svg/header.svg" data-speed="0.3">
-          <source src="../assets/video/video.mp4" type="video/mp4" />
-        </video>
-        <video class="header-video" autoplay muted playsinline preload="auto" poster="../assets/svg/header.svg" data-speed="0.3">
-          <source src="../assets/video/video.mp4" type="video/mp4" />
-        </video>
+        <div class="header-carousel" aria-hidden="true" style="--clouds-image: url('../assets/video/clouds.jpg');"></div>
       </div>
       <!-- City silhouette SVG (sky is transparent) -->
       <img src="../assets/svg/header.svg" alt="" class="header-hero" />

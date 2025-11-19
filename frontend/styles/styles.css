@@ -91,6 +91,51 @@ header {
   z-index: 1;
   overflow: hidden;
 }
+.header-carousel {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  /* Customize via inline --clouds-image and --clouds-speed if needed */
+  background: var(--clouds-bg, #5aa4ff); /* sky-blue base to hide any seam */
+}
+.header-carousel::before,
+.header-carousel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  background-image: var(--clouds-image, url('../assets/video/clouds.jpg'));
+  background-repeat: no-repeat;
+  /* Fill full width to avoid gaps between slides */
+  background-size: cover;
+  background-position: center;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  animation: headerCloudsSlide var(--clouds-speed, 90s) linear infinite;
+}
+.header-carousel::before {
+  left: 0;
+}
+.header-carousel::after {
+  /* slight overlap to hide potential subpixel hairline */
+  left: calc(100% - 1px);
+}
+@keyframes headerCloudsSlide {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+@keyframes headerCloudsMove {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-carousel::before,
+  .header-carousel::after {
+    animation: none;
+  }
+}
 .header-video {
   position: absolute;
   inset: 0;
