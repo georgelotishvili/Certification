@@ -64,3 +64,17 @@ def resolve_storage_path(storage_path: str) -> Path:
     return candidate
 
 
+def ensure_certificate_dir(user_id: int) -> Path:
+    """Ensure and return the directory for a specific user's certificate files."""
+    root = ensure_media_root()
+    cert_dir = root / "certificates" / str(user_id)
+    cert_dir.mkdir(parents=True, exist_ok=True)
+    return cert_dir
+
+
+def certificate_file_path(user_id: int, filename: str = "certificate.pdf") -> Path:
+    """Return an absolute path for storing the user's certificate PDF."""
+    safe_name = filename or "certificate.pdf"
+    return ensure_certificate_dir(user_id) / safe_name
+
+

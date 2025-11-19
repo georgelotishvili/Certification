@@ -232,7 +232,25 @@ document.addEventListener('DOMContentLoaded', () => {
         card.dataset.status = String(data.status || '').toLowerCase();
         card.dataset.level = String(data.level || '').toLowerCase();
       } catch {}
-      if (DOM.certDownloadBtn) DOM.certDownloadBtn.removeAttribute('disabled');
+      // Disable download if inactive (suspended/expired) or expired by date
+      const isExpired = (() => {
+        try {
+          const dt = parseUtcDate(data.valid_until);
+          if (!dt) return false;
+          const end = new Date(dt);
+          end.setHours(23, 59, 59, 999);
+          return end.getTime() < Date.now();
+        } catch { return false; }
+      })();
+      const statusKey = String(data.status || '').trim().toLowerCase();
+      const inactive = statusKey === 'suspended' || statusKey === 'expired' || isExpired;
+      if (DOM.certDownloadBtn) {
+        if (inactive) {
+          DOM.certDownloadBtn.setAttribute('disabled', 'true');
+        } else {
+          DOM.certDownloadBtn.removeAttribute('disabled');
+        }
+      }
       if (DOM.certCode) DOM.certCode.textContent = data.unique_code || '—';
       if (DOM.certLevel) DOM.certLevel.textContent = (data.level || '—');
       if (DOM.certStatus) DOM.certStatus.textContent = (data.status || '—');
@@ -250,39 +268,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function handleCertDownload() {
+    const user = getCurrentUser();
+    if (!user || !user.id) {
+      alert('გთხოვთ გაიაროთ ავტორიზაცია');
+      return;
+    }
     if (!certData) {
       alert('სერტიფიკატი არ არის შექმნილი');
       return;
     }
-    const jsPDF = getJsPdf();
-    if (!jsPDF) {
-      alert('PDF ბიბლიოთეკა ვერ ჩაიტვირთა');
-      return;
-    }
-    const user = getCurrentUser() || {};
-    const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-    const code = certData.unique_code || user.code || '';
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    let y = 72;
-    doc.setFontSize(16);
-    doc.text('სერტიფიკატი', 72, y); y += 28;
-    doc.setFontSize(12);
-    if (fullName) { doc.text(`სახელი, გვარი: ${fullName}`, 72, y); y += 20; }
-    if (code) { doc.text(`უნიკალური კოდი: ${code}`, 72, y); y += 20; }
-    if (certData.level) { doc.text(`დონე: ${certData.level}`, 72, y); y += 20; }
-    if (certData.status) { doc.text(`სტატუსი: ${certData.status}`, 72, y); y += 20; }
-    if (certData.issue_date) { doc.text(`გაცემის თარიღი: ${utils.formatDateTime(certData.issue_date)}`, 72, y); y += 20; }
-    if (certData.validity_term != null) { doc.text(`ვადა (წელი): ${String(certData.validity_term)}`, 72, y); y += 20; }
-    if (certData.valid_until) { doc.text(`ვარგისიანობის ბოლო დღე: ${utils.formatDateTime(certData.valid_until)}`, 72, y); y += 20; }
-    if (certData.exam_score != null) { doc.text(`გამოცდის ქულა: ${Math.round(Number(certData.exam_score))}%`, 72, y); y += 20; }
-    const filenameParts = ['certificate'];
-    if (fullName) filenameParts.push(fullName.replace(/\s+/g, '_'));
-    if (code) filenameParts.push(code);
-    const filename = `${filenameParts.join('_')}.pdf`;
-    try {
-      doc.save(filename);
-    } catch {
-      alert('PDF-ის ჩამოტვირთვა ვერ მოხერხდა');
+    const savedEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
+    const url = new URL(`${API_BASE}/users/${encodeURIComponent(user.id)}/certificate/file`);
+    if (savedEmail) url.searchParams.set('actor', savedEmail);
+    url.searchParams.set('t', String(Date.now()));
+    const opened = window.open(url.toString(), '_blank');
+    if (!opened || opened.closed) {
+      window.location.href = url.toString();
     }
   }
   if (DOM.certDownloadBtn) DOM.certDownloadBtn.addEventListener('click', handleCertDownload);

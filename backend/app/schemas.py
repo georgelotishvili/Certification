@@ -330,6 +330,9 @@ class CertificateOut(BaseModel):
     validity_term: int | None = None  # years
     valid_until: datetime | None = None
     exam_score: int | None = None
+    filename: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -215,6 +215,11 @@ class Certificate(Base):
     validity_term: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # years
     valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     exam_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=0)
+    # File metadata
+    file_path: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    mime_type: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, default="application/pdf")
+    size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

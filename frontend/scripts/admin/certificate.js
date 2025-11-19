@@ -1416,6 +1416,30 @@
       return !!(global.jspdf?.jsPDF && findSvg2PdfFunction());
     }
 
+    // Upload generated PDF to backend for persistent storage
+    async function uploadCertificatePdf(pdf, filename) {
+      try {
+        if (!activeUser?.id) return false;
+        const blob = await pdf.output('blob');
+        const form = new FormData();
+        form.append('file', blob, filename || 'certificate.pdf');
+        const res = await fetch(`${API_BASE}/users/${activeUser.id}/certificate/file`, {
+          method: 'POST',
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+          body: form,
+        });
+        if (!res.ok) {
+          await handleAdminErrorResponse(res, 'სერვერზე ატვირთვა ვერ მოხერხდა');
+          return false;
+        }
+        return true;
+      } catch (e) {
+        console.error('[certificate] Upload failed', e);
+        showToast('სერვერზე ატვირთვა ვერ მოხერხდა', 'error');
+        return false;
+      }
+    }
+
     async function handleDownload() {
       if (!activeData?.hasCertificate) {
         showToast('სერტიფიკატი ჯერ არ არის შექმნილი', 'error');
@@ -1528,6 +1552,9 @@
         if (safeFullName) filenameParts.push(safeFullName);
         if (safeCode) filenameParts.push(safeCode);
         const filename = `${filenameParts.join('_')}.pdf`;
+
+        // Upload to server (replace existing), then offer local save
+        await uploadCertificatePdf(pdf, filename);
         await deliverPdf(pdf, filename, { showToast, handle: saveHandle });
       } catch (error) {
         console.error('[certificate] Failed to export PDF', error);
