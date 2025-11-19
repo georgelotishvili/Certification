@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ჩემი გვერდი</title>
+    <meta name="api-base" content="http://127.0.0.1:8000" />
+    <script src="../scripts/config.js" defer></script>
+    <link rel="stylesheet" href="../styles/styles.css" />
+    <link rel="stylesheet" href="../styles/my.css" />
+  </head>
+  <body>
+    <header>
+      <div class="header-placeholder" aria-hidden="true"></div>
+
+      <button class="burger" aria-controls="mobile-drawer" aria-label="მენიუს გახსნა" aria-expanded="false" type="button">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="overlay" aria-hidden="true"></div>
+      <aside id="mobile-drawer" class="drawer" aria-label="მობილური მენიუ">
+        <button class="drawer-close" aria-label="დახურვა" type="button"></button>
+        <div class="drawer-auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
+        <nav class="drawer-nav">
+          <a href="#" class="nav-statements">განცხადებები</a>
+        </nav>
+        <button class="drawer-login">მთავარი გვერდი</button>
+      </aside>
+
+      <div class="nav-bar">
+        <div class="logo">
+          <img src="../assets/svg/logo.svg" alt="logo" />
+        </div>
+        <div class="auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
+        <nav class="nav">
+          <a href="#" class="drawer-statements">განცხადებები</a>
+        </nav>
+        <button class="login-btn home-btn">მთავარი გვერდი</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-section">
+        <h1>ჩემი გვერდი</h1>
+        <p class="muted">ეს არის თქვენი პერსონალური სივრცე.</p>
+      </section>
+
+      <div class="my-grid">
+        <div class="col col-left">
+          <section class="profile-section" aria-labelledby="profileTitle">
+            <div class="profile-card">
+              <h2 id="profileTitle">პირადი ინფორმაცია</h2>
+              <div class="profile-grid">
+                <div class="profile-row">
+                  <span class="profile-label">სახელი</span>
+                  <span class="profile-value" id="myFirstName">—</span>
+                </div>
+                <div class="profile-row">
+                  <span class="profile-label">გვარი</span>
+                  <span class="profile-value" id="myLastName">—</span>
+                </div>
+                <div class="profile-row">
+                  <span class="profile-label">პირადი ნომერი</span>
+                  <span class="profile-value" id="myPersonalId">—</span>
+                </div>
+                <div class="profile-row">
+                  <span class="profile-label">ტელეფონი</span>
+                  <span class="profile-value" id="myPhone">—</span>
+                </div>
+                <div class="profile-row">
+                  <span class="profile-label">ელფოსტა</span>
+                  <span class="profile-value" id="myEmail">—</span>
+                </div>
+                <div class="profile-row">
+                  <span class="profile-label">უნიკალური კოდი</span>
+                  <span class="profile-value" id="myCode">—</span>
+                </div>
+                <div class="profile-row">
+                  <span class="profile-label">რეგისტრაციის დრო</span>
+                  <span class="profile-value" id="myCreatedAt">—</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="cert-section" aria-labelledby="certTitle">
+            <div class="cert-card is-empty" id="certCard">
+              <div class="cert-head">
+                <h2 id="certTitle">სერტიფიკატი</h2>
+                <button type="button" class="cert-download" id="certDownloadBtn" disabled>სერტიფიკატის ჩამოტვირთვა</button>
+              </div>
+              <div class="cert-grid">
+                <div class="cert-row"><span class="cert-label">უნიკალური კოდი</span><span class="cert-value" id="myCertCode">—</span></div>
+                <div class="cert-row"><span class="cert-label">დონე</span><span class="cert-value" id="myCertLevel">—</span></div>
+                <div class="cert-row"><span class="cert-label">სტატუსი</span><span class="cert-value" id="myCertStatus">—</span></div>
+                <div class="cert-row"><span class="cert-label">გაცემის თარიღი</span><span class="cert-value" id="myCertIssueDate">—</span></div>
+                <div class="cert-row"><span class="cert-label">ვადა (წელი)</span><span class="cert-value" id="myCertValidityTerm">—</span></div>
+                <div class="cert-row"><span class="cert-label">ვარგისიანობის ბოლო დღე</span><span class="cert-value" id="myCertValidUntil">—</span></div>
+                <div class="cert-row"><span class="cert-label">გამოცდის ქულა</span><span class="cert-value" id="myCertExamScore">—</span></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="col col-right">
+          <section class="reviews-section" aria-labelledby="reviewsTitle">
+            <div class="reviews-card disabled" id="reviewsCard">
+              <div class="reviews-head">
+                <h2 id="reviewsTitle">შეფასებები და კომენტარები</h2>
+                <div class="reviews-average" id="reviewsAverage" aria-label="საშუალო შეფასება">0.0</div>
+              </div>
+              <div class="reviews-rating">
+                <div class="stars" id="reviewStars" aria-label="შეფასება 1-10">
+                  <button type="button" class="star" data-value="1" aria-label="1">★</button>
+                  <button type="button" class="star" data-value="2" aria-label="2">★</button>
+                  <button type="button" class="star" data-value="3" aria-label="3">★</button>
+                  <button type="button" class="star" data-value="4" aria-label="4">★</button>
+                  <button type="button" class="star" data-value="5" aria-label="5">★</button>
+                  <button type="button" class="star" data-value="6" aria-label="6">★</button>
+                  <button type="button" class="star" data-value="7" aria-label="7">★</button>
+                  <button type="button" class="star" data-value="8" aria-label="8">★</button>
+                  <button type="button" class="star" data-value="9" aria-label="9">★</button>
+                  <button type="button" class="star" data-value="10" aria-label="10">★</button>
+                </div>
+                <div class="rating-note" id="ratingNote">საკუთარი თავის შეფასება აკრძალულია</div>
+              </div>
+              <div class="reviews-comments">
+                <form class="comment-form" id="reviewCommentForm">
+                  <textarea name="message" id="reviewCommentMessage" rows="3" placeholder="დაწერეთ კომენტარი" required></textarea>
+                  <div class="comment-actions">
+                    <button type="submit" class="comment-submit">კომენტარის დამატება</button>
+                  </div>
+                </form>
+                <div class="comments-list" id="reviewsComments" role="list"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="expert-section" aria-labelledby="expertTitle">
+            <div class="expert-card disabled" id="expertCard">
+              <div class="expert-head">
+                <h2 id="expertTitle">ექსპერტის ატვირთვა</h2>
+                <div class="expert-code" id="expertCurrentCode">—</div>
+              </div>
+              <form id="expertForm" class="expert-form" enctype="multipart/form-data">
+                <div class="expert-grid">
+                  <label class="expert-field">
+                    <span class="expert-label">შენობის ფუნქცია</span>
+                    <input type="text" id="expertFunction" name="building_function" placeholder="მაგ: საცხოვრებელი" />
+                  </label>
+                  <label class="expert-field">
+                    <span class="expert-label">საკადასტრო კოდი</span>
+                    <input type="text" id="expertCadastral" name="cadastral_code" placeholder="მაგ: 01.11.22.333" />
+                  </label>
+                </div>
+                <div class="expert-files">
+                  <div class="file-row">
+                    <label class="expert-label">ექსპერტიზა</label>
+                    <input type="file" id="expertFileExpertise" name="expertise" accept=".pdf,.zip,.rar" />
+                    <div class="file-actions">
+                      <a href="#" id="expertExpertiseDownload" class="file-link" style="display:none" target="_blank">ჩამოტვირთვა</a>
+                      <button type="button" id="expertExpertiseDelete" class="file-delete" style="display:none">წაშლა</button>
+                    </div>
+                  </div>
+                  <div class="file-row">
+                    <label class="expert-label">პროექტი</label>
+                    <input type="file" id="expertFileProject" name="project" accept=".pdf,.zip,.rar" />
+                    <div class="file-actions">
+                      <a href="#" id="expertProjectDownload" class="file-link" style="display:none" target="_blank">ჩამოტვირთვა</a>
+                      <button type="button" id="expertProjectDelete" class="file-delete" style="display:none">წაშლა</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="expert-actions">
+                  <button type="button" id="expertSaveBtn" class="expert-btn primary">შენახვა</button>
+                  <button type="button" id="expertSubmitBtn" class="expert-btn" disabled>გაგზავნა</button>
+                </div>
+              </form>
+              <div class="expert-list" id="expertList" role="list"></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <div class="results-overlay" id="userStatementsOverlay" aria-hidden="true">
+      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userStatementsTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="userStatementsTitle">განცხადებები</h2>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="modal-close" id="userStatementsClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <form id="userStatementForm" class="statement-compose">
+            <textarea name="message" placeholder="განცხადების ტექსტი" rows="4" required></textarea>
+            <div class="compose-actions">
+              <button type="submit" class="submit">გაგზავნა</button>
+            </div>
+          </form>
+          <div id="userStatementsList" class="statements-list" role="list"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="footer-content footer-only-contact">
+        <div class="footer-section footer-contact">
+          <h4>კონტაქტი</h4>
+          <ul>
+            <li>
+              <svg class="footer-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                <polyline points="22,6 12,13 2,6"></polyline>
+              </svg>
+              <a href="mailto:naormala@gmail.com" aria-label="ელფოსტა">naormala@gmail.com</a>
+            </li>
+            <li>
+              <svg class="footer-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+              </svg>
+              <a href="tel:+995593222033" aria-label="ტელეფონი">+995 593 222 033</a>
+            </li>
+            <li>
+              <svg class="footer-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              <span aria-label="მისამართი">თბილისი, საქართველო</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია <a href="admin.html" class="admin-link" style="display:none">/ ადმინ გვერდი</a></p>
+      </div>
+    </footer>
+
+    <script src="../vendor/jspdf.umd.min.js"></script>
+    <script src="../scripts/my.js" defer></script>
+  </body>
+  </html>
+
+

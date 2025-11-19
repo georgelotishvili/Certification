@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
 from sqlalchemy import select, or_, func
 from sqlalchemy.orm import Session
 
@@ -104,17 +104,31 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/profile", response_model=UserOut)
-def profile(email: str = Query(..., description="User email to lookup"), db: Session = Depends(get_db)):
+def profile(
+    email: str = Query(..., description="User email to lookup"),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
     # Return public profile (no password) by email
     eml = (email or "").strip().lower()
     if not eml:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="email required")
+    # Require authorized session (actor)
+    actor_email = (x_actor_email or "").strip().lower()
+    if not actor_email:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor required")
     u = db.scalar(select(User).where(User.email == eml))
     if not u:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     settings = get_settings()
     founder_email = (settings.founder_admin_email or "").lower()
     is_founder = eml == founder_email
+    # Only self or admin/founder can view
+    actor = db.scalar(select(User).where(User.email == actor_email))
+    if not actor:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor not found")
+    if actor.email != eml and not (actor.is_admin or actor.email.lower() == founder_email):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     return UserOut(
         id=u.id,
         personal_id=u.personal_id,
@@ -130,11 +144,26 @@ def profile(email: str = Query(..., description="User email to lookup"), db: Ses
 
 
 @router.get("/{user_id}/certificate", response_model=CertificateOut)
-def get_certificate(user_id: int, db: Session = Depends(get_db)):
+def get_certificate(
+    user_id: int,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
     """Get certificate for a user"""
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    # AuthZ: only self or admin/founder
+    actor_email = (x_actor_email or "").strip().lower()
+    if not actor_email:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor required")
+    actor = db.scalar(select(User).where(User.email == actor_email))
+    if not actor:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor not found")
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    if actor.id != user.id and not (actor.is_admin or actor.email.lower() == founder_email):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
@@ -156,11 +185,23 @@ def get_certificate(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{user_id}/certificate", response_model=CertificateOut, status_code=status.HTTP_201_CREATED)
-def create_certificate(user_id: int, payload: CertificateCreate, db: Session = Depends(get_db)):
+def create_certificate(
+    user_id: int,
+    payload: CertificateCreate,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
     """Create certificate for a user"""
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    # Only admin/founder can create
+    actor_email = (x_actor_email or "").strip().lower()
+    actor = db.scalar(select(User).where(User.email == actor_email)) if actor_email else None
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    if not actor or not (actor.is_admin or actor.email.lower() == founder_email):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
     
     existing = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if existing:
@@ -197,11 +238,23 @@ def create_certificate(user_id: int, payload: CertificateCreate, db: Session = D
 
 
 @router.put("/{user_id}/certificate", response_model=CertificateOut)
-def update_certificate(user_id: int, payload: CertificateUpdate, db: Session = Depends(get_db)):
+def update_certificate(
+    user_id: int,
+    payload: CertificateUpdate,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
     """Update certificate for a user"""
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    # Only admin/founder can update
+    actor_email = (x_actor_email or "").strip().lower()
+    actor = db.scalar(select(User).where(User.email == actor_email)) if actor_email else None
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    if not actor or not (actor.is_admin or actor.email.lower() == founder_email):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
     
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
@@ -242,11 +295,22 @@ def update_certificate(user_id: int, payload: CertificateUpdate, db: Session = D
 
 
 @router.delete("/{user_id}/certificate", status_code=status.HTTP_204_NO_CONTENT)
-def delete_certificate(user_id: int, db: Session = Depends(get_db)):
+def delete_certificate(
+    user_id: int,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
     """Delete certificate for a user"""
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    # Only admin/founder can delete
+    actor_email = (x_actor_email or "").strip().lower()
+    actor = db.scalar(select(User).where(User.email == actor_email)) if actor_email else None
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    if not actor or not (actor.is_admin or actor.email.lower() == founder_email):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
     
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:

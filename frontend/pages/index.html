@@ -97,7 +97,6 @@
         <div class="drawer-auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
         <nav class="drawer-nav">
           <a href="#" class="drawer-registry">რეესტრი</a>
-          <a href="#" class="nav-statements">განცხადებები</a>
           <div class="drawer-item drawer-exam">
             <a href="#" class="drawer-exam-trigger" aria-haspopup="true" aria-expanded="false">გამოცდა</a>
             <div class="drawer-submenu" role="menu" hidden>
@@ -117,7 +116,6 @@
         <div class="auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
         <nav class="nav">
           <a href="#" class="nav-registry">რეესტრი</a>
-          <a href="#" class="drawer-statements">განცხადებები</a>
           <div class="nav-item nav-exam">
             <a href="#" class="exam-trigger" aria-haspopup="true" aria-expanded="false">გამოცდა</a>
             <div class="dropdown" role="menu" aria-hidden="true">
@@ -133,27 +131,7 @@
 
     <main></main>
 
-    <div class="results-overlay" id="userStatementsOverlay" aria-hidden="true">
-      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userStatementsTitle">
-        <div class="results-modal-head">
-          <div class="results-modal-titles">
-            <h2 id="userStatementsTitle">განცხადებები</h2>
-          </div>
-          <div class="results-modal-actions">
-            <button type="button" class="modal-close" id="userStatementsClose" aria-label="დახურვა">×</button>
-          </div>
-        </div>
-        <div class="results-modal-body">
-          <form id="userStatementForm" class="statement-compose">
-            <textarea name="message" placeholder="განცხადების ტექსტი" rows="4" required></textarea>
-            <div class="compose-actions">
-              <button type="submit" class="submit">გაგზავნა</button>
-            </div>
-          </form>
-          <div id="userStatementsList" class="statements-list" role="list"></div>
-        </div>
-      </div>
-    </div>
+
 
     <div class="registry-overlay" id="registryOverlay" aria-hidden="true">
       <div class="registry-modal" role="dialog" aria-modal="true" aria-labelledby="registryTitle">

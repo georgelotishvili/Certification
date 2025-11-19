@@ -36,12 +36,13 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
+        allow_origin_regex=r".*",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    from .routers import auth, exam, admin, users, statements, registry
+    from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
@@ -49,6 +50,8 @@ def create_app() -> FastAPI:
     app.include_router(users.router, prefix="/users", tags=["users"])
     app.include_router(statements.router, prefix="/statements", tags=["statements"])
     app.include_router(registry.router, prefix="/certified-persons", tags=["registry"])
+    app.include_router(reviews.router, prefix="/reviews", tags=["reviews"])
+    app.include_router(expert_uploads.router, prefix="/expert-uploads", tags=["expert-uploads"])
 
     return app
 

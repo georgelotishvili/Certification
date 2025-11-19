@@ -366,3 +366,53 @@ class RegistryPersonOut(BaseModel):
     rating: float | None = None
     exam_score: int | None = None
     registration_date: datetime
+
+
+# Reviews (ratings and comments)
+class ReviewRatingCreate(BaseModel):
+    score: int
+
+
+class ReviewCommentCreate(BaseModel):
+    message: str
+
+
+class ReviewCommentOut(BaseModel):
+    id: int
+    target_user_id: int
+    author_user_id: int
+    author_first_name: str | None = None
+    author_last_name: str | None = None
+    message: str
+    created_at: datetime
+
+
+class ReviewsSummaryOut(BaseModel):
+    target_user_id: int
+    average: float
+    ratings_count: int
+    actor_score: int | None = None
+    comments: List[ReviewCommentOut] = Field(default_factory=list)
+
+
+# Expert uploads
+class ExpertUploadOut(BaseModel):
+    id: int
+    unique_code: str
+    status: str
+    building_function: str
+    cadastral_code: str
+    expertise_filename: str | None = None
+    project_filename: str | None = None
+    created_at: datetime
+    submitted_at: datetime | None = None
+
+
+class ExpertUploadCreate(BaseModel):
+    building_function: str
+    cadastral_code: str
+
+
+class ExpertUploadUpdate(BaseModel):
+    building_function: str | None = None
+    cadastral_code: str | None = None
