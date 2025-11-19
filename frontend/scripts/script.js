@@ -62,6 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
     statementsClose: document.getElementById('userStatementsClose'),
     statementsList: document.getElementById('userStatementsList'),
     statementsMeta: document.getElementById('userStatementsMeta'),
+    statementsForm: document.getElementById('userStatementForm'),
+    statementsTextarea: document.querySelector('#userStatementForm textarea[name="message"]'),
   };
 
   const regionsForIsolation = Array.from(document.querySelectorAll('header, .nav-bar, main, footer, .overlay, .drawer, #loginModal'));
@@ -812,6 +814,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let isLoading = false;
     let cache = [];
 
+    function ensureAuthForCompose(event) {
+      if (authModule.isLoggedIn()) return true;
+      if (event?.cancelable) event.preventDefault();
+      alert('გთხოვთ გაიაროთ ავტორიზაცია');
+      return false;
+    }
+
     function getActorEmail() {
       return (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
     }
@@ -964,6 +973,57 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    async function handleComposeSubmit(event) {
+      event.preventDefault();
+      if (!DOM.statementsForm) return;
+      if (!authModule.isLoggedIn()) {
+        alert('გთხოვთ გაიაროთ ავტორიზაცია');
+        return;
+      }
+      const formData = new FormData(DOM.statementsForm);
+      const message = utils.getTrimmed(formData, 'message');
+      if (!message) return alert('გთხოვთ შეიყვანოთ შეტყობინება');
+      const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
+      if (!actorEmail) {
+        alert('ავტორიზაცია ვერ დადასტურდა');
+        return;
+      }
+      const submitBtn = DOM.statementsForm.querySelector('button[type="submit"]');
+      submitBtn?.setAttribute('disabled', 'true');
+      try {
+        const response = await fetch(`${API_BASE}/statements`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-actor-email': actorEmail,
+          },
+          body: JSON.stringify({ message }),
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          let detail = '';
+          try {
+            const json = await response.clone().json();
+            detail = json?.detail || '';
+          } catch {
+            try {
+              detail = (await response.clone().text()).trim();
+            } catch {}
+          }
+          throw new Error(detail || 'გაგზავნა ვერ შესრულდა');
+        }
+        const data = await response.json();
+        alert('თქვენი განცხადება მიღებულია!');
+        DOM.statementsForm.reset();
+        handleNewStatement(data);
+      } catch (error) {
+        console.error('Failed to submit statement', error);
+        alert(error.message || 'გაგზავნა ვერ შესრულდა');
+      } finally {
+        submitBtn?.removeAttribute('disabled');
+      }
+    }
+
     function handleNewStatement(statement) {
       if (!statement || typeof statement !== 'object') return;
       cache = [statement, ...cache.filter((item) => item.id !== statement.id)];
@@ -986,6 +1046,9 @@ document.addEventListener('DOMContentLoaded', () => {
       utils.on(DOM.drawerStatements, 'click', handleOpenRequest);
       utils.on(DOM.statementsClose, 'click', closeOverlay);
       utils.on(DOM.statementsOverlay, 'click', handleBackdropClick);
+      utils.on(DOM.statementsForm, 'submit', handleComposeSubmit);
+      utils.on(DOM.statementsTextarea, 'mousedown', ensureAuthForCompose);
+      utils.on(DOM.statementsTextarea, 'focus', ensureAuthForCompose);
       document.addEventListener('auth:logout', reset);
       document.addEventListener('auth:login', setMetaFromUser);
       setMetaFromUser();
