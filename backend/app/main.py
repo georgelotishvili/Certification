@@ -11,9 +11,11 @@ try:
     # When running from project root (e.g. `python -m backend.app.main`)
     from backend.scripts.migrate_results_cols import run as run_results_migration
     from backend.scripts.migrate_media_table import run as run_media_migration
+    from backend.scripts.migrate_certificate_score import run as run_certificate_score_migration
 except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.main:app`
     from scripts.migrate_results_cols import run as run_results_migration  # type: ignore
     from scripts.migrate_media_table import run as run_media_migration  # type: ignore
+    from scripts.migrate_certificate_score import run as run_certificate_score_migration  # type: ignore
 
 
 def create_app() -> FastAPI:
@@ -21,7 +23,7 @@ def create_app() -> FastAPI:
 
     Base.metadata.create_all(bind=engine)
     # Ensure additive columns for results exist (idempotent)
-    for migrate in (run_results_migration, run_media_migration):
+    for migrate in (run_results_migration, run_media_migration, run_certificate_score_migration):
         try:
             migrate()
         except Exception:
@@ -39,13 +41,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from .routers import auth, exam, admin, users, statements
+    from .routers import auth, exam, admin, users, statements, registry
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
     app.include_router(users.router, prefix="/users", tags=["users"])
     app.include_router(statements.router, prefix="/statements", tags=["statements"])
+    app.include_router(registry.router, prefix="/certified-persons", tags=["registry"])
 
     return app
 

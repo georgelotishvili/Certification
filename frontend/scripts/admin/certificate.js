@@ -44,6 +44,7 @@
       issueDate: DOM.certificateFormIssueDate,
       validityTerm: DOM.certificateFormValidityTerm,
       validUntil: DOM.certificateFormValidUntil,
+      examScore: DOM.certificateFormScore,
     };
 
     const formSummaryNodes = {
@@ -753,6 +754,9 @@
         validUntilDate
       );
       const termNumber = parseNumber(validityTermRaw);
+      const examScoreRaw = parseNumber(
+        certificate.exam_score ?? certificate.examScore ?? user?.exam_score ?? user?.examScore
+      );
       return {
         firstName,
         lastName,
@@ -773,6 +777,8 @@
         validUntil: formatDate(validUntilDate),
         validUntilInputValue: formatInputDate(validUntilDate),
         rawValidUntil: validUntilSource,
+        rawExamScore: examScoreRaw,
+        examScore: examScoreRaw,
         isInactive: status.key === 'suspended' || status.key === 'expired',
         hasCertificate,
       };
@@ -968,6 +974,9 @@
       if (formFields.validUntil) {
         formFields.validUntil.value = '';
       }
+      if (formFields.examScore) {
+        formFields.examScore.value = '';
+      }
       if (validUntilDisplayNode) {
         validUntilDisplayNode.textContent = '—';
       }
@@ -988,6 +997,10 @@
             : formFields.validityTerm?.defaultValue || '5',
         validUntil: activeData.validUntilInputValue || '',
         validUntilDisplay: activeData.validUntil || '—',
+        examScore:
+          activeData.rawExamScore != null && !Number.isNaN(activeData.rawExamScore)
+            ? String(activeData.rawExamScore)
+            : '',
       };
 
       if (formFields.uniqueCode) formFields.uniqueCode.value = defaults.uniqueCode;
@@ -997,6 +1010,7 @@
       if (formFields.issueDate) formFields.issueDate.value = defaults.issueDate;
       if (formFields.validityTerm) formFields.validityTerm.value = defaults.validityTerm;
       if (formFields.validUntil) formFields.validUntil.value = defaults.validUntil;
+      if (formFields.examScore) formFields.examScore.value = defaults.examScore;
       if (validUntilDisplayNode) validUntilDisplayNode.textContent = defaults.validUntilDisplay || '—';
       setFormSummary(activeData);
 
@@ -1101,6 +1115,7 @@
       const issueDateValue = formFields.issueDate?.value || null;
       const validityTermValue = parseNumber(formFields.validityTerm?.value);
       const validUntilValue = formFields.validUntil?.value || null;
+      const examScoreValue = parseNumber(formFields.examScore?.value);
 
       if (!issueDateValue) {
         showToast('გთხოვ მიუთითო გაცემის თარიღი', 'error');
@@ -1112,6 +1127,11 @@
         return;
       }
 
+      if (examScoreValue == null || examScoreValue < 1 || examScoreValue > 100) {
+        showToast('შეფასება უნდა იყოს 1-დან 100-მდე', 'error');
+        return;
+      }
+
       const payload = {
         unique_code: uniqueCode || null,
         level: levelValue,
@@ -1120,6 +1140,7 @@
         issue_date: formatInputDate(issueDateValue),
         validity_term: validityTermValue,
         valid_until: validUntilValue,
+        exam_score: examScoreValue,
       };
 
       try {
@@ -1171,6 +1192,8 @@
           validUntil: formattedValidUntil,
           validUntilInputValue: certificateData.valid_until,
           rawValidUntil: certificateData.valid_until,
+          rawExamScore: certificateData.exam_score,
+          examScore: certificateData.exam_score,
           isInactive: normalizedStatus.key === 'suspended' || normalizedStatus.key === 'expired',
           hasCertificate: true,
         };
@@ -1184,6 +1207,7 @@
             issue_date: certificateData.issue_date,
             validity_term: certificateData.validity_term,
             valid_until: certificateData.valid_until,
+            exam_score: certificateData.exam_score,
           };
           activeUserRef.certificate_status = certificateData.status;
           activeUserRef.certificate_valid_until = certificateData.valid_until;

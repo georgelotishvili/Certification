@@ -2218,6 +2218,10 @@ body.modal-open {
   grid-column: 2 / 3;
   min-width: 0;
 }
+.certificate-form__field--score {
+  grid-column: 3 / 4;
+  min-width: 0;
+}
 
 .certificate-form__field--issue-date {
   grid-column: 1 / 2;
@@ -2449,6 +2453,7 @@ body.modal-open {
 
   .certificate-form__field--qualification,
   .certificate-form__field--status,
+  .certificate-form__field--score,
   .certificate-form__field--issue-date,
   .certificate-form__field--validity-term {
     grid-column: 1;
@@ -2506,6 +2511,7 @@ body.modal-open {
 
   .certificate-form__field--qualification,
   .certificate-form__field--status,
+  .certificate-form__field--score,
   .certificate-form__field--issue-date,
   .certificate-form__field--validity-term {
     grid-column: 1;

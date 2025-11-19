@@ -214,6 +214,7 @@ class Certificate(Base):
     issue_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     validity_term: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # years
     valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    exam_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -329,6 +329,7 @@ class CertificateOut(BaseModel):
     issue_date: datetime | None = None
     validity_term: int | None = None  # years
     valid_until: datetime | None = None
+    exam_score: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -340,6 +341,7 @@ class CertificateCreate(BaseModel):
     issue_date: datetime | None = None
     validity_term: int | None = None  # years
     valid_until: datetime | None = None
+    exam_score: int | None = None
 
 
 class CertificateUpdate(CamelModel):
@@ -349,3 +351,18 @@ class CertificateUpdate(CamelModel):
     issue_date: Optional[datetime] = None
     validity_term: Optional[int] = None
     valid_until: Optional[datetime] = None
+    exam_score: Optional[int] = None
+
+
+class RegistryPersonOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    full_name: str
+    photo_url: str
+    unique_code: str
+    qualification: str
+    certificate_status: str
+    rating: float | None = None
+    exam_score: int | None = None
+    registration_date: datetime

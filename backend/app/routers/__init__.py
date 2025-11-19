@@ -4,5 +4,6 @@ __all__ = [
     "admin",
     "users",
     "statements",
+    "registry",
 ]
 
