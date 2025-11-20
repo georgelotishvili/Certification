@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     navLogo: document.querySelector('.nav-bar .logo'),
     authBanner: document.querySelector('.auth-banner'),
     drawerAuthBanner: document.querySelector('.drawer-auth-banner'),
+    pageTitle: document.getElementById('pageTitle'),
     burger: document.querySelector('.burger'),
     overlay: document.querySelector('.overlay'),
     drawer: document.querySelector('.drawer'),
@@ -180,6 +181,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   updateBanners();
 
+  function updatePageTitleFrom(source) {
+    if (!DOM.pageTitle) return;
+    try {
+      const first = (source?.firstName || source?.first_name || '').trim();
+      const last = (source?.lastName || source?.last_name || '').trim();
+      const full = `${first} ${last}`.trim();
+      DOM.pageTitle.textContent = full || 'ჩემი გვერდი';
+    } catch {
+      /* no-op */
+    }
+  }
+  // Initial title from local user, fallback to default
+  updatePageTitleFrom(getCurrentUser());
+
   // Load read-only profile info
   async function loadProfile() {
     const user = getCurrentUser();
@@ -190,6 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (DOM.pfLastName) DOM.pfLastName.textContent = user.lastName || '—';
       if (DOM.pfEmail) DOM.pfEmail.textContent = user.email || savedEmail || '—';
       if (DOM.pfCode) DOM.pfCode.textContent = user.code || '—';
+      updatePageTitleFrom(user);
     }
     if (!savedEmail) return;
     try {
@@ -203,6 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (DOM.pfEmail) DOM.pfEmail.textContent = data.email || '—';
       if (DOM.pfCode) DOM.pfCode.textContent = data.code || '—';
       if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = utils.formatDateTime(data.created_at);
+      updatePageTitleFrom(data);
     } catch {}
   }
   loadProfile();
@@ -252,8 +269,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
       if (DOM.certCode) DOM.certCode.textContent = data.unique_code || '—';
-      if (DOM.certLevel) DOM.certLevel.textContent = (data.level || '—');
-      if (DOM.certStatus) DOM.certStatus.textContent = (data.status || '—');
+      if (DOM.certLevel) DOM.certLevel.textContent = formatCertificateLevel(data.level);
+      if (DOM.certStatus) DOM.certStatus.textContent = formatCertificateStatus(statusKey, isExpired);
       if (DOM.certIssueDate) DOM.certIssueDate.textContent = utils.formatDateTime(data.issue_date);
       if (DOM.certValidityTerm) DOM.certValidityTerm.textContent = (data.validity_term != null ? String(data.validity_term) : '—');
       if (DOM.certValidUntil) DOM.certValidUntil.textContent = utils.formatDateTime(data.valid_until);
@@ -265,6 +282,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function getJsPdf() {
     try { return window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : null; } catch { return null; }
+  }
+
+  // Convert certificate level to full Georgian label as printed on the certificate
+  function formatCertificateLevel(rawLevel) {
+    if (!rawLevel) return '—';
+    const value = typeof rawLevel === 'object' ? (rawLevel.key || rawLevel.label || rawLevel) : rawLevel;
+    const s = String(value).trim().toLowerCase();
+    if (s === 'expert' || s === 'architect_expert' || s === 'არქიტექტორი ექსპერტი' || s === 'არქიტექტურული პროექტის ექსპერტი') {
+      return 'არქიტექტურული პროექტის ექსპერტი';
+    }
+    if (s === 'architect' || s === 'არქიტექტორი' || s === 'შენობა-ნაგებობის არქიტექტორი') {
+      return 'შენობა-ნაგებობის არქიტექტორი';
+    }
+    return String(rawLevel);
+  }
+
+  // Convert certificate status to Georgian label
+  function formatCertificateStatus(rawStatus, isExpiredFlag) {
+    if (isExpiredFlag) return 'ვადაგასული';
+    const s = String(rawStatus || '').trim().toLowerCase();
+    if (s === 'expired') return 'ვადაგასული';
+    if (s === 'suspended' || s === 'paused' || s === 'inactive') return 'შეჩერებული';
+    return 'მოქმედი';
   }
 
   async function handleCertDownload() {
