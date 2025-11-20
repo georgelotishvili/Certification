@@ -100,6 +100,7 @@ def _to_out(eu: ExpertUpload) -> ExpertUploadOut:
         status=eu.status,
         building_function=eu.building_function or "",
         cadastral_code=eu.cadastral_code or "",
+        project_address=eu.project_address or "",
         expertise_filename=eu.expertise_filename,
         project_filename=eu.project_filename,
         created_at=eu.created_at,
@@ -139,6 +140,7 @@ def list_public_of(user_id: int, db: Session = Depends(get_db)):
 async def create_upload(
     building_function: str = Form(""),
     cadastral_code: str = Form(""),
+    project_address: str = Form(""),
     expertise: UploadFile | None = File(None),
     project: UploadFile | None = File(None),
     x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
@@ -153,6 +155,7 @@ async def create_upload(
         status="draft",
         building_function=building_function.strip(),
         cadastral_code=cadastral_code.strip(),
+        project_address=project_address.strip(),
     )
     _validate_file(expertise)
     _validate_file(project)
@@ -171,6 +174,7 @@ async def update_upload(
     upload_id: int = FPath(..., ge=1),
     building_function: str | None = Form(None),
     cadastral_code: str | None = Form(None),
+    project_address: str | None = Form(None),
     expertise: UploadFile | None = File(None),
     project: UploadFile | None = File(None),
     x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
@@ -189,6 +193,8 @@ async def update_upload(
         eu.building_function = building_function.strip()
     if cadastral_code is not None:
         eu.cadastral_code = cadastral_code.strip()
+    if project_address is not None:
+        eu.project_address = project_address.strip()
     _validate_file(expertise)
     _validate_file(project)
     if expertise:

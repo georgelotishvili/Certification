@@ -414,6 +414,7 @@ class ExpertUploadOut(BaseModel):
     status: str
     building_function: str
     cadastral_code: str
+    project_address: str
     expertise_filename: str | None = None
     project_filename: str | None = None
     created_at: datetime

@@ -266,6 +266,7 @@ class ExpertUpload(Base):
     status: Mapped[str] = mapped_column(String(16), default="draft")  # draft, submitted
     building_function: Mapped[str] = mapped_column(String(255), default="")
     cadastral_code: Mapped[str] = mapped_column(String(255), default="")
+    project_address: Mapped[str] = mapped_column(String(255), default="")
     expertise_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     expertise_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     project_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
