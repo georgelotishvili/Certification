@@ -221,6 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (DOM.pfLastName) DOM.pfLastName.textContent = parts.slice(1).join(' ') || '—';
             if (DOM.pfEmail) DOM.pfEmail.textContent = '—';
             if (DOM.pfCode) DOM.pfCode.textContent = item.unique_code || '—';
+            if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = utils.formatDateTime(item.registration_date);
             updatePageTitleFrom({ firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '' });
           }
         }
@@ -360,7 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const state = {
       targetUserId: VIEW_USER_ID || getCurrentUser()?.id || null,
       actor: getCurrentUser(),
-      actorEmail: (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim(),
+      actorEmail: (localStorage.getItem(KEYS.SAVED_EMAIL) || (getCurrentUser()?.email || '')).trim(),
       average: 0,
       ratingsCount: 0,
       actorCriteria: null,
@@ -411,6 +412,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const val = Number(btn.dataset.value || '0');
         btn.classList.toggle('active', val <= n);
       });
+      try {
+        const out = document.getElementById('reviewStarsScore');
+        if (out && Number.isFinite(Number(state.average))) {
+          out.textContent = `${Number(state.average).toFixed(2)}`;
+        }
+      } catch {}
     }
 
     function scrollCommentsToBottom() {
@@ -453,7 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.ratingsCount = Number(data.ratings_count || 0);
         state.actorCriteria = data.actor_criteria || null;
         if (DOM.reviewsAverage) DOM.reviewsAverage.textContent = state.average.toFixed(2);
-        const myAvg = state.actorCriteria ? (Object.values(state.actorCriteria).reduce((a,b)=>a+Number(b||0),0)/5) : 0;
+        const myAvg = state.actorCriteria ? (Object.values(state.actorCriteria).reduce((a,b)=>a+Number(b||0),0)/5) : state.average;
         renderStars(myAvg);
         renderComments(Array.isArray(data.comments) ? data.comments : []);
       } catch {}
@@ -493,7 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.average = Number(data.average || 0);
         state.actorCriteria = data.actor_criteria || null;
         if (DOM.reviewsAverage) DOM.reviewsAverage.textContent = state.average.toFixed(2);
-        const myAvg = state.actorCriteria ? (Object.values(state.actorCriteria).reduce((a,b)=>a+Number(b||0),0)/5) : 0;
+        const myAvg = state.actorCriteria ? (Object.values(state.actorCriteria).reduce((a,b)=>a+Number(b||0),0)/5) : state.average;
         renderStars(myAvg);
       } catch { alert('ქულა ვერ შეინახა'); }
     }
@@ -553,6 +560,12 @@ document.addEventListener('DOMContentLoaded', () => {
       // Self rating disabled
       const isSelf = !!(state.actor && state.targetUserId && state.actor.id === state.targetUserId);
       setCanRate(state.isCertified && !isSelf && !!state.actorEmail);
+      // React to certificate loading later
+      document.addEventListener('certificate:loaded', (ev) => {
+        const cd = ev?.detail?.certData || null;
+        setCertified(!!cd);
+        setCanRate(!!cd && !isSelf && !!state.actorEmail);
+      });
       bindEvents();
       loadSummary();
     }

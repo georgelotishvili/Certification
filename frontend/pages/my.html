@@ -105,17 +105,16 @@
           <div class="reviews-card disabled" id="reviewsCard">
             <div class="reviews-head">
               <h2 id="reviewsTitle">შეფასებები და კომენტარები</h2>
-              <div class="reviews-average" id="reviewsAverage" aria-label="საშუალო შეფასება">0.00</div>
-            </div>
-            <div class="reviews-rating">
-              <div class="stars" id="reviewStars" aria-label="შეფასება 1-5">
-                <button type="button" class="star" data-value="1" aria-label="1">★</button>
-                <button type="button" class="star" data-value="2" aria-label="2">★</button>
-                <button type="button" class="star" data-value="3" aria-label="3">★</button>
-                <button type="button" class="star" data-value="4" aria-label="4">★</button>
-                <button type="button" class="star" data-value="5" aria-label="5">★</button>
+              <div class="reviews-rating">
+                <div class="stars" id="reviewStars" aria-label="შეფასება 0-დან 5-მდე">
+                  <button type="button" class="star" data-value="1" aria-label="1">★</button>
+                  <button type="button" class="star" data-value="2" aria-label="2">★</button>
+                  <button type="button" class="star" data-value="3" aria-label="3">★</button>
+                  <button type="button" class="star" data-value="4" aria-label="4">★</button>
+                  <button type="button" class="star" data-value="5" aria-label="5">★</button>
+                </div>
+                <span class="stars-score" id="reviewStarsScore" aria-live="polite">0.00</span>
               </div>
-              <div class="rating-note" id="ratingNote">საკუთარი თავის შეფასება აკრძალულია</div>
             </div>
             <div class="reviews-comments">
               <form class="comment-form" id="reviewCommentForm">

@@ -164,6 +164,7 @@ main {
 .reviews-average { font-size: 18px; font-weight: 700; color: var(--text-strong); }
 
 .reviews-rating { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.reviews-head .reviews-rating { margin: 0; }
 .stars { display: inline-flex; gap: 4px; }
 .stars .star {
   background: transparent;
@@ -180,6 +181,7 @@ main {
   color: #ffc107;
   transform: translateY(-1px);
 }
+.stars-score { color: #ffc107; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .rating-note { color: var(--text-muted); font-size: 12px; }
 
 .reviews-comments { display: flex; flex-direction: column; gap: 12px; }
