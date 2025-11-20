@@ -646,6 +646,13 @@ document.addEventListener('DOMContentLoaded', () => {
       list: [],
     };
 
+    function canActorAdminDelete() {
+      const actor = state.user || getCurrentUser();
+      const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || state.actorEmail || (actor && actor.email) || '').trim().toLowerCase();
+      const founderEmail = (FOUNDER_EMAIL || '').toLowerCase();
+      return !!(actor && (actor.isAdmin || (actorEmail && founderEmail && actorEmail === founderEmail)));
+    }
+
     function setEnabled(value) {
       state.enabled = !!value;
       if (DOM.expertCard) DOM.expertCard.classList.toggle('disabled', !state.enabled);
@@ -660,6 +667,25 @@ document.addEventListener('DOMContentLoaded', () => {
     function buildHeaders() {
       const email = (localStorage.getItem(KEYS.SAVED_EMAIL) || state.actorEmail || (state.user && state.user.email) || '').trim();
       return email ? { 'x-actor-email': email } : {};
+    }
+
+    async function adminDeleteUpload(uploadId) {
+      try {
+        // Prefer POST fallback first to avoid DELETE blockers
+        let res = await fetch(`${API_BASE}/expert-uploads/${encodeURIComponent(uploadId)}/delete`, {
+          method: 'POST',
+          headers: { ...buildHeaders() },
+        });
+        if (res.status === 405) {
+          res = await fetch(`${API_BASE}/expert-uploads/${encodeURIComponent(uploadId)}`, {
+            method: 'DELETE',
+            headers: { ...buildHeaders() },
+          });
+        }
+        return res;
+      } catch {
+        return { ok: false, status: 0 };
+      }
     }
 
     async function loadList() {
@@ -686,22 +712,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!state.list.length) { wrap.innerHTML = ''; return; }
       const frag = document.createDocumentFragment();
 
-      async function adminDeleteUpload(uploadId) {
-        try {
-          const email = (localStorage.getItem(KEYS.SAVED_EMAIL) || state.actorEmail || (state.user && state.user.email) || '').trim();
-          let url = `${API_BASE}/expert-uploads/${encodeURIComponent(uploadId)}/delete`;
-          if (email) url += `?actor=${encodeURIComponent(email)}`;
-          let res = await fetch(url, { method: 'POST', headers: { ...buildHeaders() } });
-          if (res.status === 405) {
-            let fallback = `${API_BASE}/expert-uploads/${encodeURIComponent(uploadId)}`;
-            if (email) fallback += `?actor=${encodeURIComponent(email)}`;
-            res = await fetch(fallback, { method: 'DELETE', headers: { ...buildHeaders() } });
-          }
-          return res;
-        } catch (e) {
-          return { ok: false, status: 0 };
-        }
-      }
       state.list.forEach((item) => {
         const el = document.createElement('div');
         el.className = 'expert-item';
@@ -730,11 +740,7 @@ document.addEventListener('DOMContentLoaded', () => {
         el.appendChild(meta);
         el.appendChild(files);
         // Admin/founder-only delete
-        const actor = state.user || getCurrentUser();
-        const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || state.actorEmail || (actor && actor.email) || '').trim().toLowerCase();
-        const founderEmail = (FOUNDER_EMAIL || '').toLowerCase();
-        const canAdminDelete = !!(actor && (actor.isAdmin || (actorEmail && founderEmail && actorEmail === founderEmail)));
-        if (canAdminDelete) {
+        if (canActorAdminDelete()) {
           const del = document.createElement('button');
           del.className = 'item-delete';
           del.type = 'button';
@@ -992,11 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
               el.appendChild(meta);
               el.appendChild(files);
               // Admin/founder-only delete in public view
-              const actor = getCurrentUser();
-              const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || (actor && actor.email) || '').trim().toLowerCase();
-              const founderEmail = (FOUNDER_EMAIL || '').toLowerCase();
-              const canAdminDelete = !!(actor && (actor.isAdmin || (actorEmail && founderEmail && actorEmail === founderEmail)));
-              if (canAdminDelete) {
+            if (canActorAdminDelete()) {
                 const del = document.createElement('button');
                 del.className = 'item-delete';
                 del.type = 'button';
@@ -1007,20 +1009,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   e.preventDefault();
                   e.stopPropagation();
                   if (!confirm('წავშალო ელემენტი?')) return;
-                  const res2 = await (async () => {
-                    try {
-                      const email = actorEmail;
-                      let url2 = `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/delete`;
-                      if (email) url2 += `?actor=${encodeURIComponent(email)}`;
-                      let r = await fetch(url2, { method: 'POST', headers: { ...buildHeaders() } });
-                      if (r.status === 405) {
-                        let fb = `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}`;
-                        if (email) fb += `?actor=${encodeURIComponent(email)}`;
-                        r = await fetch(fb, { method: 'DELETE', headers: { ...buildHeaders() } });
-                      }
-                      return r;
-                    } catch { return { ok: false, status: 0 }; }
-                  })();
+                const res2 = await adminDeleteUpload(item.id);
                   if (!res2.ok) {
                     let detail = '';
                     try { const j = await res2.clone().json(); detail = j?.detail || ''; } catch { try { detail = (await res2.clone().text()).trim(); } catch {} }
