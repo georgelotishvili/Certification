@@ -713,12 +713,31 @@ document.addEventListener('DOMContentLoaded', () => {
       const frag = document.createDocumentFragment();
 
       state.list.forEach((item) => {
-        const el = document.createElement('div');
+        const el = document.createElement('details');
         el.className = 'expert-item';
+
+        // Narrow summary row: unique code (left) + created at (right)
+        const summary = document.createElement('summary');
+        summary.className = 'item-summary';
+        const sumCode = document.createElement('span');
+        sumCode.className = 'sum-code';
+        sumCode.textContent = item.unique_code;
+        const sumDate = document.createElement('span');
+        sumDate.className = 'sum-date';
+        sumDate.textContent = utils.formatDateTime(item.created_at);
+        summary.appendChild(sumCode);
+        summary.appendChild(sumDate);
+        el.appendChild(summary);
+
+        // Expanded content: meta + files
+        const content = document.createElement('div');
+        content.className = 'content';
+
         const meta = document.createElement('div');
         meta.className = 'meta';
-        const created = utils.formatDateTime(item.created_at);
-        meta.textContent = `${item.unique_code} · ${created} · ${item.cadastral_code || '—'} · ${item.building_function || '—'}`;
+        meta.textContent = `${item.unique_code} · ${utils.formatDateTime(item.created_at)} · ${item.cadastral_code || '—'} · ${item.building_function || '—'}`;
+        content.appendChild(meta);
+
         const files = document.createElement('div');
         files.className = 'files';
         if (item.expertise_filename) {
@@ -737,19 +756,20 @@ document.addEventListener('DOMContentLoaded', () => {
           a.target = '_blank';
           files.appendChild(a);
         }
-        el.appendChild(meta);
-        el.appendChild(files);
-        // Admin/founder-only delete
+        content.appendChild(files);
+        el.appendChild(content);
+
+        // Admin/founder-only delete button inside summary
         if (canActorAdminDelete()) {
           const del = document.createElement('button');
           del.className = 'item-delete';
           del.type = 'button';
-          del.title = 'წაშლა (ადმინ)';
+          del.title = 'წაშლა';
           del.setAttribute('aria-label', 'წაშლა');
           del.textContent = '×';
           del.addEventListener('click', async (e) => {
             e.preventDefault();
-            e.stopPropagation();
+            e.stopPropagation(); // don't toggle details
             if (!confirm('წავშალო ელემენტი?')) return;
             const res = await adminDeleteUpload(item.id);
             if (!res.ok) {
@@ -760,8 +780,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             await loadList();
           });
-          el.appendChild(del);
+          summary.appendChild(del);
         }
+
         frag.appendChild(el);
       });
       wrap.innerHTML = '';
@@ -973,12 +994,31 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!Array.isArray(items) || !items.length) { wrap.innerHTML = ''; return; }
             const frag = document.createDocumentFragment();
             items.forEach((item) => {
-              const el = document.createElement('div');
+              const el = document.createElement('details');
               el.className = 'expert-item';
+
+              // Summary row: code + created_at
+              const summary = document.createElement('summary');
+              summary.className = 'item-summary';
+              const sumCode = document.createElement('span');
+              sumCode.className = 'sum-code';
+              sumCode.textContent = item.unique_code;
+              const sumDate = document.createElement('span');
+              sumDate.className = 'sum-date';
+              sumDate.textContent = utils.formatDateTime(item.created_at);
+              summary.appendChild(sumCode);
+              summary.appendChild(sumDate);
+              el.appendChild(summary);
+
+              // Expanded content
+              const content = document.createElement('div');
+              content.className = 'content';
+
               const meta = document.createElement('div');
               meta.className = 'meta';
-              const created = utils.formatDateTime(item.created_at);
-              meta.textContent = `${item.unique_code} · ${created} · ${item.cadastral_code || '—'} · ${item.building_function || '—'}`;
+              meta.textContent = `${item.unique_code} · ${utils.formatDateTime(item.created_at)} · ${item.cadastral_code || '—'} · ${item.building_function || '—'}`;
+              content.appendChild(meta);
+
               const files = document.createElement('div');
               files.className = 'files';
               if (item.expertise_filename) {
@@ -995,21 +1035,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 a.target = '_blank';
                 files.appendChild(a);
               }
-              el.appendChild(meta);
-              el.appendChild(files);
-              // Admin/founder-only delete in public view
-            if (canActorAdminDelete()) {
+              content.appendChild(files);
+              el.appendChild(content);
+
+              // Admin/founder-only delete button inside summary (public view)
+              if (canActorAdminDelete()) {
                 const del = document.createElement('button');
                 del.className = 'item-delete';
                 del.type = 'button';
-                del.title = 'წაშლა (ადმინ)';
+                del.title = 'წაშლა';
                 del.setAttribute('aria-label', 'წაშლა');
                 del.textContent = '×';
                 del.addEventListener('click', async (e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   if (!confirm('წავშალო ელემენტი?')) return;
-                const res2 = await adminDeleteUpload(item.id);
+                  const res2 = await adminDeleteUpload(item.id);
                   if (!res2.ok) {
                     let detail = '';
                     try { const j = await res2.clone().json(); detail = j?.detail || ''; } catch { try { detail = (await res2.clone().text()).trim(); } catch {} }
@@ -1017,8 +1058,9 @@ document.addEventListener('DOMContentLoaded', () => {
                   }
                   el.remove();
                 });
-                el.appendChild(del);
+                summary.appendChild(del);
               }
+
               frag.appendChild(el);
             });
             wrap.innerHTML = '';

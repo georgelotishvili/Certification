@@ -380,3 +380,30 @@ main {
 .criteria-row input[type="range"] { width: 100%; }
 .criteria-value { text-align: right; font-variant-numeric: tabular-nums; min-width: 60px; }
 .criteria-actions { display: flex; justify-content: flex-end; }
+
+/* Collapsible expert items: narrow row + expandable content */
+.expert-item { padding: 0; position: relative; }
+.expert-item > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 34px 10px 12px; /* extra right pad for delete button */
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-strong);
+  position: relative; /* anchor for absolute delete button */
+}
+.expert-item > summary::-webkit-details-marker { display: none; }
+.expert-item > summary::before {
+  content: "▸";
+  color: var(--text-muted);
+  margin-right: 6px;
+  transition: transform var(--transition-base);
+}
+.expert-item[open] > summary::before { transform: rotate(90deg); }
+.expert-item .sum-code { font-weight: 600; }
+.expert-item .sum-date { color: var(--text-muted); font-size: 12px; }
+.expert-item .content { padding: 8px 12px 12px; border-top: 1px solid var(--border-soft); }
+.expert-item .item-delete { top: 8px; right: 8px; z-index: 3; pointer-events: auto; }
