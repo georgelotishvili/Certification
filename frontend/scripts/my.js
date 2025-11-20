@@ -281,10 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const url = new URL(`${API_BASE}/users/${encodeURIComponent(user.id)}/certificate/file`);
     if (savedEmail) url.searchParams.set('actor', savedEmail);
     url.searchParams.set('t', String(Date.now()));
-    const opened = window.open(url.toString(), '_blank');
-    if (!opened || opened.closed) {
-      window.location.href = url.toString();
-    }
+    window.location.href = url.toString();
   }
   if (DOM.certDownloadBtn) DOM.certDownloadBtn.addEventListener('click', handleCertDownload);
 
