@@ -729,68 +729,76 @@ document.addEventListener('DOMContentLoaded', () => {
         summary.appendChild(sumDate);
         el.appendChild(summary);
 
-        // Expanded content: meta grid + files grid
+        // Expanded content: two columns (meta + files)
         const content = document.createElement('div');
         content.className = 'content';
 
-        // meta (4 cells)
-        const metaGrid = document.createElement('div');
-        metaGrid.className = 'meta-grid';
-        const makeCell = (value) => {
-          const d = document.createElement('div');
-          d.className = 'meta-cell';
-          d.textContent = value || '—';
-          return d;
-        };
-        metaGrid.appendChild(makeCell(item.unique_code));
-        metaGrid.appendChild(makeCell(utils.formatDateTime(item.created_at)));
-        metaGrid.appendChild(makeCell(item.cadastral_code || '—'));
-        metaGrid.appendChild(makeCell(item.building_function || '—'));
-        content.appendChild(metaGrid);
+        const columns = document.createElement('div');
+        columns.className = 'detail-columns';
 
-        // files (2 columns)
-        const filesGrid = document.createElement('div');
-        filesGrid.className = 'files-grid';
-        const addFileCol = (labelText, filename, href) => {
-          const col = document.createElement('div');
-          col.className = 'file-col';
-          const label = document.createElement('div');
-          label.className = 'expert-label';
-          label.textContent = labelText;
-          col.appendChild(label);
-          const wrap = document.createElement('div');
-          wrap.className = 'file-linkwrap';
+        const metaCol = document.createElement('div');
+        metaCol.className = 'detail-col meta';
+        const metaItems = [
+          { label: 'საკადასტრო კოდი', value: item.cadastral_code || '—' },
+          { label: 'პროექტის სახელწოდება', value: item.building_function || '—' },
+          { label: 'პროექტის მისამართი', value: item.project_address || '—' },
+        ];
+        metaItems.forEach(({ label, value }) => {
+          const block = document.createElement('div');
+          block.className = 'detail-item';
+          const lbl = document.createElement('div');
+          lbl.className = 'detail-label';
+          lbl.textContent = label;
+          const val = document.createElement('div');
+          val.className = 'detail-value';
+          val.textContent = value || '—';
+          block.appendChild(lbl);
+          block.appendChild(val);
+          metaCol.appendChild(block);
+        });
+
+        const filesCol = document.createElement('div');
+        filesCol.className = 'detail-col files';
+        const addFileRow = (labelText, filename, href) => {
+          const block = document.createElement('div');
+          block.className = 'detail-item';
+          const lbl = document.createElement('div');
+          lbl.className = 'detail-label';
+          lbl.textContent = labelText;
+          block.appendChild(lbl);
+          const val = document.createElement('div');
+          val.className = 'detail-value';
           if (filename && href) {
             const a = document.createElement('a');
             a.className = 'file-link';
             a.textContent = filename;
             a.href = href;
             a.target = '_blank';
-            wrap.appendChild(a);
+            val.appendChild(a);
           } else {
-            const span = document.createElement('span');
-            span.className = 'file-missing';
-            span.textContent = '—';
-            wrap.appendChild(span);
+            val.textContent = '—';
           }
-          col.appendChild(wrap);
-          filesGrid.appendChild(col);
+          block.appendChild(val);
+          filesCol.appendChild(block);
         };
-        addFileCol(
+        addFileRow(
           'ექსპერტიზა',
           item.expertise_filename,
           item.expertise_filename
             ? `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/download?file_type=expertise${state.actorEmail ? `&actor=${encodeURIComponent(state.actorEmail)}` : ''}`
             : null
         );
-        addFileCol(
+        addFileRow(
           'პროექტი',
           item.project_filename,
           item.project_filename
             ? `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/download?file_type=project${state.actorEmail ? `&actor=${encodeURIComponent(state.actorEmail)}` : ''}`
             : null
         );
-        content.appendChild(filesGrid);
+
+        columns.appendChild(metaCol);
+        columns.appendChild(filesCol);
+        content.appendChild(columns);
         el.appendChild(content);
 
         // Admin/founder-only delete button inside summary
@@ -1044,69 +1052,77 @@ document.addEventListener('DOMContentLoaded', () => {
               summary.appendChild(sumDate);
               el.appendChild(summary);
 
-              // Expanded content: meta grid + files grid
+              // Expanded content: two columns (meta + files)
               const content = document.createElement('div');
               content.className = 'content';
 
-              // meta (4 cells)
-              const metaGrid = document.createElement('div');
-              metaGrid.className = 'meta-grid';
-              const makeCell = (value) => {
-                const d = document.createElement('div');
-                d.className = 'meta-cell';
-                d.textContent = value || '—';
-                return d;
-              };
-              metaGrid.appendChild(makeCell(item.unique_code));
-              metaGrid.appendChild(makeCell(utils.formatDateTime(item.created_at)));
-              metaGrid.appendChild(makeCell(item.cadastral_code || '—'));
-              metaGrid.appendChild(makeCell(item.building_function || '—'));
-              content.appendChild(metaGrid);
+              const columns = document.createElement('div');
+              columns.className = 'detail-columns';
 
-              // files (2 columns)
-              const filesGrid = document.createElement('div');
-              filesGrid.className = 'files-grid';
-              const addFileCol = (labelText, filename, href) => {
-                const col = document.createElement('div');
-                col.className = 'file-col';
-                const label = document.createElement('div');
-                label.className = 'expert-label';
-                label.textContent = labelText;
-                col.appendChild(label);
-                const wrap = document.createElement('div');
-                wrap.className = 'file-linkwrap';
+              const metaCol = document.createElement('div');
+              metaCol.className = 'detail-col meta';
+              const metaItems = [
+                { label: 'საკადასტრო კოდი', value: item.cadastral_code || '—' },
+                { label: 'პროექტის სახელწოდება', value: item.building_function || '—' },
+                { label: 'პროექტის მისამართი', value: item.project_address || '—' },
+              ];
+              metaItems.forEach(({ label, value }) => {
+                const block = document.createElement('div');
+                block.className = 'detail-item';
+                const lbl = document.createElement('div');
+                lbl.className = 'detail-label';
+                lbl.textContent = label;
+                const val = document.createElement('div');
+                val.className = 'detail-value';
+                val.textContent = value || '—';
+                block.appendChild(lbl);
+                block.appendChild(val);
+                metaCol.appendChild(block);
+              });
+
+              const filesCol = document.createElement('div');
+              filesCol.className = 'detail-col files';
+              const addFileRow = (labelText, filename, href) => {
+                const block = document.createElement('div');
+                block.className = 'detail-item';
+                const lbl = document.createElement('div');
+                lbl.className = 'detail-label';
+                lbl.textContent = labelText;
+                const val = document.createElement('div');
+                val.className = 'detail-value';
                 if (filename && href) {
                   const a = document.createElement('a');
                   a.className = 'file-link';
                   a.textContent = filename;
                   a.href = href;
                   a.target = '_blank';
-                  wrap.appendChild(a);
+                  val.appendChild(a);
                 } else {
-                  const span = document.createElement('span');
-                  span.className = 'file-missing';
-                  span.textContent = '—';
-                  wrap.appendChild(span);
+                  val.textContent = '—';
                 }
-                col.appendChild(wrap);
-                filesGrid.appendChild(col);
+                block.appendChild(lbl);
+                block.appendChild(val);
+                filesCol.appendChild(block);
               };
-              addFileCol(
+              addFileRow(
                 'ექსპერტიზა',
                 item.expertise_filename,
                 item.expertise_filename
                   ? `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=expertise`
                   : null
               );
-              addFileCol(
+              addFileRow(
                 'პროექტი',
                 item.project_filename,
                 item.project_filename
                   ? `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=project`
                   : null
               );
-              content.appendChild(filesGrid);
-              
+
+              columns.appendChild(metaCol);
+              columns.appendChild(filesCol);
+              content.appendChild(columns);
+
               el.appendChild(content);
 
               // Admin/founder-only delete button inside summary (public view)
