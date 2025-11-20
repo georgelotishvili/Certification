@@ -155,17 +155,13 @@ def get_certificate(
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    # AuthZ: only self or admin/founder
+    # AuthZ: allow any authenticated actor to view certificate metadata
     actor_email = (x_actor_email or "").strip().lower()
     if not actor_email:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor required")
     actor = db.scalar(select(User).where(User.email == actor_email))
     if not actor:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor not found")
-    settings = get_settings()
-    founder_email = (settings.founder_admin_email or "").lower()
-    if actor.id != user.id and not (actor.is_admin or actor.email.lower() == founder_email):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:

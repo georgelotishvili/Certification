@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Float,
+    Numeric,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -235,7 +236,13 @@ class Rating(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     target_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     author_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    score: Mapped[int] = mapped_column(Integer)  # 1..10
+    score: Mapped[int] = mapped_column(Integer, default=0)  # legacy 1..10 overall (kept for compatibility)
+    # Five-criteria scores: 0.00..5.00 (stored with 2 decimal precision)
+    integrity: Mapped[float] = mapped_column(Numeric(4, 2), default=0.00)
+    responsibility: Mapped[float] = mapped_column(Numeric(4, 2), default=0.00)
+    knowledge_experience: Mapped[float] = mapped_column(Numeric(4, 2), default=0.00)
+    professional_skills: Mapped[float] = mapped_column(Numeric(4, 2), default=0.00)
+    price_quality: Mapped[float] = mapped_column(Numeric(4, 2), default=0.00)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
 

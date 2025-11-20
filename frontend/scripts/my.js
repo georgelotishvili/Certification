@@ -8,6 +8,14 @@ document.addEventListener('DOMContentLoaded', () => {
     SAVED_EMAIL: 'savedEmail',
   };
   const FOUNDER_EMAIL = 'naormala@gmail.com';
+  const VIEW_USER_ID = (() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const raw = params.get('userId');
+      const n = Number(raw);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    } catch { return null; }
+  })();
 
   const DOM = {
     body: document.body,
@@ -195,11 +203,32 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initial title from local user, fallback to default
   updatePageTitleFrom(getCurrentUser());
 
-  // Load read-only profile info
+  // Load read-only profile info (self or viewing other)
   async function loadProfile() {
     const user = getCurrentUser();
     const savedEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
-    // Prefill from local user object if present
+
+    if (VIEW_USER_ID) {
+      // Populate minimal public info from registry for the viewed user
+      try {
+        const res = await fetch(`${API_BASE}/certified-persons/registry?limit=500`, { headers: { 'Cache-Control': 'no-cache' } });
+        if (res.ok) {
+          const list = await res.json();
+          const item = Array.isArray(list) ? list.find((x) => Number(x?.id) === Number(VIEW_USER_ID)) : null;
+          if (item) {
+            const parts = String(item.full_name || '').trim().split(/\s+/);
+            if (DOM.pfFirstName) DOM.pfFirstName.textContent = parts[0] || '—';
+            if (DOM.pfLastName) DOM.pfLastName.textContent = parts.slice(1).join(' ') || '—';
+            if (DOM.pfEmail) DOM.pfEmail.textContent = '—';
+            if (DOM.pfCode) DOM.pfCode.textContent = item.unique_code || '—';
+            updatePageTitleFrom({ firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '' });
+          }
+        }
+      } catch {}
+      return;
+    }
+
+    // Self: prefill from local user object
     if (user) {
       if (DOM.pfFirstName) DOM.pfFirstName.textContent = user.firstName || '—';
       if (DOM.pfLastName) DOM.pfLastName.textContent = user.lastName || '—';
@@ -229,10 +258,11 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadCertificate() {
     const user = getCurrentUser();
     const card = DOM.certCard;
-    if (!user || !user.id || !card) return;
+    const targetId = VIEW_USER_ID || (user && user.id);
+    if (!targetId || !card) return;
     try {
       const savedEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
-      const res = await fetch(`${API_BASE}/users/${encodeURIComponent(user.id)}/certificate`, { headers: { 'Cache-Control': 'no-cache', ...(savedEmail ? { 'x-actor-email': savedEmail } : {}) } });
+      const res = await fetch(`${API_BASE}/users/${encodeURIComponent(targetId)}/certificate`, { headers: { 'Cache-Control': 'no-cache', ...(savedEmail ? { 'x-actor-email': savedEmail } : {}) } });
       if (!res.ok) {
         if (res.status === 404) {
           card.classList.add('is-empty');
@@ -260,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch { return false; }
       })();
       const statusKey = String(data.status || '').trim().toLowerCase();
-      const inactive = statusKey === 'suspended' || statusKey === 'expired' || isExpired;
+      const inactive = statusKey === 'suspended' || statusKey === 'expired' || isExpired || !!VIEW_USER_ID;
       if (DOM.certDownloadBtn) {
         if (inactive) {
           DOM.certDownloadBtn.setAttribute('disabled', 'true');
@@ -328,14 +358,35 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reviews module
   function createReviewsModule() {
     const state = {
-      targetUserId: getCurrentUser()?.id || null,
+      targetUserId: VIEW_USER_ID || getCurrentUser()?.id || null,
       actor: getCurrentUser(),
       actorEmail: (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim(),
       average: 0,
       ratingsCount: 0,
-      actorScore: null,
+      actorCriteria: null,
       canRate: false,
       isCertified: false,
+    };
+
+    // overlay refs
+    const board = {
+      overlay: document.getElementById('ratingsOverlay'),
+      close: document.getElementById('ratingsClose'),
+      form: document.getElementById('criteriaForm'),
+      inputs: {
+        integrity: document.getElementById('critIntegrity'),
+        responsibility: document.getElementById('critResponsibility'),
+        knowledge_experience: document.getElementById('critKnowledge'),
+        professional_skills: document.getElementById('critSkills'),
+        price_quality: document.getElementById('critPrice'),
+      },
+      values: {
+        integrity: document.getElementById('valIntegrity'),
+        responsibility: document.getElementById('valResponsibility'),
+        knowledge_experience: document.getElementById('valKnowledge'),
+        professional_skills: document.getElementById('valSkills'),
+        price_quality: document.getElementById('valPrice'),
+      },
     };
 
     function setCertified(value) {
@@ -353,24 +404,25 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    function renderStars(active) {
+    function renderStars(avgValue) {
       if (!DOM.reviewStars) return;
-      const n = Number(active) || 0;
-      const stars = DOM.reviewStars.querySelectorAll('.star');
-      stars.forEach((btn) => {
+      const n = Math.round(Number(avgValue) || 0);
+      DOM.reviewStars.querySelectorAll('.star').forEach((btn) => {
         const val = Number(btn.dataset.value || '0');
         btn.classList.toggle('active', val <= n);
       });
     }
 
+    function scrollCommentsToBottom() {
+      if (!DOM.reviewsComments) return;
+      DOM.reviewsComments.scrollTop = DOM.reviewsComments.scrollHeight;
+    }
+
     function renderComments(items) {
       if (!DOM.reviewsComments) return;
-      if (!Array.isArray(items) || !items.length) {
-        DOM.reviewsComments.innerHTML = '';
-        return;
-      }
+      const list = Array.isArray(items) ? items : [];
       const frag = document.createDocumentFragment();
-      items.forEach((c) => {
+      list.forEach((c) => {
         const el = document.createElement('div');
         el.className = 'comment-item';
         const meta = document.createElement('div');
@@ -381,12 +433,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = document.createElement('div');
         text.className = 'comment-text';
         text.textContent = c.message || '';
-        el.appendChild(meta);
-        el.appendChild(text);
+        el.appendChild(meta); el.appendChild(text);
         frag.appendChild(el);
       });
       DOM.reviewsComments.innerHTML = '';
       DOM.reviewsComments.appendChild(frag);
+      scrollCommentsToBottom();
     }
 
     async function loadSummary() {
@@ -399,87 +451,70 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         state.average = Number(data.average || 0);
         state.ratingsCount = Number(data.ratings_count || 0);
-        state.actorScore = data.actor_score != null ? Number(data.actor_score) : null;
-        if (DOM.reviewsAverage) DOM.reviewsAverage.textContent = state.average.toFixed(1);
-        renderStars(state.actorScore);
+        state.actorCriteria = data.actor_criteria || null;
+        if (DOM.reviewsAverage) DOM.reviewsAverage.textContent = state.average.toFixed(2);
+        const myAvg = state.actorCriteria ? (Object.values(state.actorCriteria).reduce((a,b)=>a+Number(b||0),0)/5) : 0;
+        renderStars(myAvg);
         renderComments(Array.isArray(data.comments) ? data.comments : []);
       } catch {}
     }
 
-    async function submitRating(score) {
+    function openBoard() {
+      if (!board.overlay || !state.canRate) return;
+      board.overlay.classList.add('open');
+      board.overlay.setAttribute('aria-hidden', 'false');
+      const init = state.actorCriteria || { integrity: 0, responsibility: 0, knowledge_experience: 0, professional_skills: 0, price_quality: 0 };
+      Object.keys(board.inputs).forEach((k) => {
+        const input = board.inputs[k];
+        const val = Number(init[k] ?? 0);
+        input.value = String(val.toFixed(2));
+        const out = board.values[k]; if (out) out.textContent = val.toFixed(2);
+      });
+    }
+    function closeBoard() {
+      if (!board.overlay) return;
+      board.overlay.classList.remove('open');
+      board.overlay.setAttribute('aria-hidden', 'true');
+    }
+
+    async function submitRating(criteria) {
       if (!state.canRate || !state.targetUserId) return;
       try {
         const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(state.targetUserId)}/rating`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(state.actorEmail ? { 'x-actor-email': state.actorEmail } : {}),
-          },
-          body: JSON.stringify({ score: Number(score) }),
+          headers: { 'Content-Type': 'application/json', ...(state.actorEmail ? { 'x-actor-email': state.actorEmail } : {}) },
+          body: JSON.stringify({ criteria }),
         });
         if (!res.ok) {
-          let detail = '';
-          try { const j = await res.clone().json(); detail = j?.detail || ''; } catch {}
-          alert(detail || 'შეფასების შენახვა ვერ მოხერხდა');
-          return;
+          let detail = ''; try { const j = await res.clone().json(); detail = j?.detail || ''; } catch {}
+          alert(detail || 'შეფასების შენახვა ვერ მოხერხდა'); return;
         }
         const data = await res.json();
         state.average = Number(data.average || 0);
-        state.actorScore = data.actor_score != null ? Number(data.actor_score) : null;
-        if (DOM.reviewsAverage) DOM.reviewsAverage.textContent = state.average.toFixed(1);
-        renderStars(state.actorScore);
-      } catch {
-        alert('ქულა ვერ შეინახა');
-      }
-    }
-
-    async function submitComment(message) {
-      if (!state.isCertified || !state.targetUserId) return;
-      try {
-        const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(state.targetUserId)}/comments`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(state.actorEmail ? { 'x-actor-email': state.actorEmail } : {}),
-          },
-          body: JSON.stringify({ message }),
-        });
-        if (!res.ok) {
-          let detail = '';
-          try { const j = await res.clone().json(); detail = j?.detail || ''; } catch {}
-          alert(detail || 'კომენტარი ვერ დაემატა');
-          return;
-        }
-        const c = await res.json();
-        renderComments([...(DOM.reviewsComments?.children ? Array.from(DOM.reviewsComments.children).map((el) => ({
-          message: el.querySelector('.comment-text')?.textContent || '',
-          created_at: '',
-          author_first_name: '',
-          author_last_name: '',
-        })) : []), c]);
-        await loadSummary();
-      } catch {
-        alert('კომენტარი ვერ დაემატა');
-      }
+        state.actorCriteria = data.actor_criteria || null;
+        if (DOM.reviewsAverage) DOM.reviewsAverage.textContent = state.average.toFixed(2);
+        const myAvg = state.actorCriteria ? (Object.values(state.actorCriteria).reduce((a,b)=>a+Number(b||0),0)/5) : 0;
+        renderStars(myAvg);
+      } catch { alert('ქულა ვერ შეინახა'); }
     }
 
     function bindEvents() {
-      // rating stars
-      if (DOM.reviewStars) {
-        DOM.reviewStars.querySelectorAll('.star').forEach((btn) => {
-          btn.addEventListener('mouseenter', () => {
-            if (!state.canRate) return;
-            renderStars(btn.dataset.value);
+      // open board on click
+      if (DOM.reviewsAverage) DOM.reviewsAverage.addEventListener('click', () => { if (state.canRate) openBoard(); });
+      if (DOM.reviewStars) DOM.reviewStars.addEventListener('click', () => { if (state.canRate) openBoard(); });
+      if (board.close) board.close.addEventListener('click', closeBoard);
+      if (board.overlay) board.overlay.addEventListener('click', (e) => { if (e.target === board.overlay) closeBoard(); });
+
+      if (board.form) {
+        Object.entries(board.inputs).forEach(([k, input]) => {
+          input.addEventListener('input', () => {
+            const out = board.values[k]; if (out) out.textContent = Number(input.value || 0).toFixed(2);
           });
-          btn.addEventListener('mouseleave', () => {
-            renderStars(state.actorScore);
-          });
-          btn.addEventListener('click', () => {
-            if (!state.canRate) return;
-            const score = Number(btn.dataset.value || '0');
-            if (!Number.isFinite(score)) return;
-            submitRating(score);
-          });
+        });
+        board.form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const c = {}; Object.keys(board.inputs).forEach((k) => { c[k] = Number(board.inputs[k].value || 0).toFixed(2); });
+          submitRating(c).then(closeBoard);
         });
       }
 
@@ -496,6 +531,22 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    async function submitComment(message) {
+      if (!state.isCertified || !state.targetUserId) return;
+      try {
+        const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(state.targetUserId)}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(state.actorEmail ? { 'x-actor-email': state.actorEmail } : {}) },
+          body: JSON.stringify({ message }),
+        });
+        if (!res.ok) {
+          let detail = ''; try { const j = await res.clone().json(); detail = j?.detail || ''; } catch {}
+          alert(detail || 'კომენტარი ვერ დაემატა'); return;
+        }
+        await loadSummary(); scrollCommentsToBottom();
+      } catch { alert('კომენტარი ვერ დაემატა'); }
+    }
+
     function init() {
       // Determine certification (based on previously loaded certData)
       setCertified(!!certData);
@@ -507,6 +558,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     return { init, loadSummary };
+  }
+
+  // Hide statements triggers when viewing other user's page
+  if (VIEW_USER_ID) {
+    try { document.querySelector('.drawer-statements')?.setAttribute('hidden', ''); } catch {}
   }
 
   const reviewsModule = createReviewsModule();
@@ -687,10 +743,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function init() {
       bindEvents();
       // Enabled only if certificate level == expert
-      setEnabled(!!(certData && (String(certData.level || '').toLowerCase() === 'expert')));
+      setEnabled(!VIEW_USER_ID && !!(certData && (String(certData.level || '').toLowerCase() === 'expert')));
       document.addEventListener('certificate:loaded', (ev) => {
         const cd = ev?.detail?.certData || null;
-        setEnabled(!!(cd && (String(cd.level || '').toLowerCase() === 'expert')));
+        setEnabled(!VIEW_USER_ID && !!(cd && (String(cd.level || '').toLowerCase() === 'expert')));
       });
     }
 
@@ -1052,8 +1108,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return { init, isOpen, close: closeOverlay, refresh: fetchStatements, handleNewStatement, reset };
   }
 
-  const statementsModule = createStatementsModule();
-  statementsModule.init();
+  if (!VIEW_USER_ID) {
+    const statementsModule = createStatementsModule();
+    statementsModule.init();
+  }
 });
 
 

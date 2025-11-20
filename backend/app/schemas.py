@@ -372,8 +372,16 @@ class RegistryPersonOut(BaseModel):
 
 
 # Reviews (ratings and comments)
+class ReviewCriteria(BaseModel):
+    integrity: float = Field(ge=0, le=5)
+    responsibility: float = Field(ge=0, le=5)
+    knowledge_experience: float = Field(ge=0, le=5)
+    professional_skills: float = Field(ge=0, le=5)
+    price_quality: float = Field(ge=0, le=5)
+
+
 class ReviewRatingCreate(BaseModel):
-    score: int
+    criteria: ReviewCriteria
 
 
 class ReviewCommentCreate(BaseModel):
@@ -394,7 +402,8 @@ class ReviewsSummaryOut(BaseModel):
     target_user_id: int
     average: float
     ratings_count: int
-    actor_score: int | None = None
+    actor_score: float | None = None
+    actor_criteria: ReviewCriteria | None = None
     comments: List[ReviewCommentOut] = Field(default_factory=list)
 
 

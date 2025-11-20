@@ -821,7 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function createRegistryModule() {
     const DEFAULT_PHOTO = 'https://placehold.co/96x96?text=CP';
-    const PROFILE_PAGE_BASE = 'registrations.html?userId=';
+    const PROFILE_PAGE_BASE = 'my.html?userId=';
     const collator = new Intl.Collator('ka', { sensitivity: 'base', ignorePunctuation: true, usage: 'sort' });
 
     const state = {
@@ -1082,8 +1082,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function buildProfileUrl(person) {
       const id = person?.id;
-      if (!id) return 'registrations.html';
-      return `${PROFILE_PAGE_BASE}${encodeURIComponent(id)}`;
+      if (!id) return 'my.html';
+      // Open personal profile view for the selected certified person
+      return `my.html?userId=${encodeURIComponent(id)}`;
     }
 
     function escapeHtml(value) {

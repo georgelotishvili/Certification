@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import User, Certificate, Rating, Comment
-from ..schemas import ReviewRatingCreate, ReviewCommentCreate, ReviewCommentOut, ReviewsSummaryOut
+from ..schemas import ReviewRatingCreate, ReviewCommentCreate, ReviewCommentOut, ReviewsSummaryOut, ReviewCriteria
 
 
 router = APIRouter()
@@ -41,24 +41,43 @@ def reviews_summary(
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    # Require authorized session
-    _get_actor_user(db, x_actor_email)
-    # Average and count across current active ratings (one per author enforced by unique constraint)
-    avg_score = db.scalar(select(func.avg(Rating.score)).where(Rating.target_user_id == user_id)) or 0.0
+    # Require authorized session and resolve actor
+    actor = _get_actor_user(db, x_actor_email)
+
+    # Average across five criteria
+    avg_expr = (
+        (func.coalesce(Rating.integrity, 0)
+         + func.coalesce(Rating.responsibility, 0)
+         + func.coalesce(Rating.knowledge_experience, 0)
+         + func.coalesce(Rating.professional_skills, 0)
+         + func.coalesce(Rating.price_quality, 0)) / 5.0
+    )
+    avg_score = db.scalar(select(func.avg(avg_expr)).where(Rating.target_user_id == user_id)) or 0.0
     count = db.scalar(select(func.count(Rating.id)).where(Rating.target_user_id == user_id)) or 0
 
+    # Actor's own criteria/score
+    actor_row = db.execute(
+        select(
+            Rating.integrity,
+            Rating.responsibility,
+            Rating.knowledge_experience,
+            Rating.professional_skills,
+            Rating.price_quality,
+        )
+        .where(Rating.target_user_id == user_id, Rating.author_user_id == actor.id)
+    ).first()
+    actor_criteria = None
     actor_score = None
-    if x_actor_email:
-        try:
-            actor = _get_actor_user(db, x_actor_email)
-            actor_score = db.scalar(
-                select(Rating.score).where(
-                    Rating.target_user_id == user_id,
-                    Rating.author_user_id == actor.id,
-                )
-            )
-        except HTTPException:
-            actor_score = None
+    if actor_row:
+        a, b, c, d, e = [float(x or 0.0) for x in actor_row]
+        actor_criteria = ReviewCriteria(
+            integrity=round(a, 2),
+            responsibility=round(b, 2),
+            knowledge_experience=round(c, 2),
+            professional_skills=round(d, 2),
+            price_quality=round(e, 2),
+        )
+        actor_score = round((a + b + c + d + e) / 5.0, 2)
 
     # Comments (chronological)
     rows = db.execute(
@@ -92,7 +111,8 @@ def reviews_summary(
         target_user_id=user_id,
         average=float(round(avg_score or 0.0, 2)),
         ratings_count=int(count or 0),
-        actor_score=int(actor_score) if actor_score is not None else None,
+        actor_score=float(actor_score) if actor_score is not None else None,
+        actor_criteria=actor_criteria,
         comments=comments,
     )
 
@@ -104,14 +124,27 @@ def set_rating(
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    if payload.score is None or int(payload.score) < 1 or int(payload.score) > 10:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="score must be 1..10")
     actor = _get_actor_user(db, x_actor_email)
     target = _ensure_target_certified(db, user_id)
     if actor.id == target.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="self rating is not allowed")
 
-    # Upsert rating (one per actor-target)
+    # Validate/normalize criteria values
+    c = payload.criteria
+    try:
+        values = [
+            round(max(0.0, min(5.0, float(c.integrity))), 2),
+            round(max(0.0, min(5.0, float(c.responsibility))), 2),
+            round(max(0.0, min(5.0, float(c.knowledge_experience))), 2),
+            round(max(0.0, min(5.0, float(c.professional_skills))), 2),
+            round(max(0.0, min(5.0, float(c.price_quality))), 2),
+        ]
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid criteria values")
+
+    average = round(sum(values) / 5.0, 2)
+
+    # Upsert rating (one per actor-target). Keep legacy int score in sync (0..10).
     existing = db.scalar(
         select(Rating).where(
             Rating.target_user_id == user_id,
@@ -119,10 +152,22 @@ def set_rating(
         )
     )
     if existing:
-        existing.score = int(payload.score)
+        existing.integrity, existing.responsibility, existing.knowledge_experience, existing.professional_skills, existing.price_quality = values
+        existing.score = int(round(average * 2))
         existing.updated_at = datetime.utcnow()
     else:
-        db.add(Rating(target_user_id=user_id, author_user_id=actor.id, score=int(payload.score)))
+        db.add(
+            Rating(
+                target_user_id=user_id,
+                author_user_id=actor.id,
+                score=int(round(average * 2)),
+                integrity=values[0],
+                responsibility=values[1],
+                knowledge_experience=values[2],
+                professional_skills=values[3],
+                price_quality=values[4],
+            )
+        )
     db.commit()
 
     return reviews_summary(user_id=user_id, x_actor_email=x_actor_email, db=db)
