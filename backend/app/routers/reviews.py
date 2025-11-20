@@ -41,8 +41,13 @@ def reviews_summary(
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
-    # Require authorized session and resolve actor
-    actor = _get_actor_user(db, x_actor_email)
+    # Actor is optional; present only for actor-specific score
+    actor = None
+    if x_actor_email:
+        try:
+            actor = _get_actor_user(db, x_actor_email)
+        except HTTPException:
+            actor = None
 
     # Average across five criteria
     avg_expr = (
@@ -56,16 +61,18 @@ def reviews_summary(
     count = db.scalar(select(func.count(Rating.id)).where(Rating.target_user_id == user_id)) or 0
 
     # Actor's own criteria/score
-    actor_row = db.execute(
-        select(
-            Rating.integrity,
-            Rating.responsibility,
-            Rating.knowledge_experience,
-            Rating.professional_skills,
-            Rating.price_quality,
-        )
-        .where(Rating.target_user_id == user_id, Rating.author_user_id == actor.id)
-    ).first()
+    actor_row = None
+    if actor is not None:
+        actor_row = db.execute(
+            select(
+                Rating.integrity,
+                Rating.responsibility,
+                Rating.knowledge_experience,
+                Rating.professional_skills,
+                Rating.price_quality,
+            )
+            .where(Rating.target_user_id == user_id, Rating.author_user_id == actor.id)
+        ).first()
     actor_criteria = None
     actor_score = None
     if actor_row:
@@ -200,3 +207,26 @@ def add_comment(
         created_at=comment.created_at,
     )
 
+
+@router.delete("/{user_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_comment(
+    user_id: int,
+    comment_id: int,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    """Delete a comment. Allowed to the author or any admin."""
+    actor = _get_actor_user(db, x_actor_email)
+    # Ensure target exists and is certified (optional for safety)
+    _ensure_target_certified(db, user_id)
+
+    c = db.scalar(select(Comment).where(Comment.id == comment_id, Comment.target_user_id == user_id))
+    if not c:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="comment not found")
+
+    if actor.id != c.author_user_id and not bool(actor.is_admin):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+    db.delete(c)
+    db.commit()
+    return None

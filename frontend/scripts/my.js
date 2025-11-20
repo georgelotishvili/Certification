@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     return true;
   }
-  if (!guard()) return;
+  if (!VIEW_USER_ID && !guard()) return;
 
   function setBodyOffset() {
     if (!DOM.header) return;
@@ -209,7 +209,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
 
     if (VIEW_USER_ID) {
-      // Populate minimal public info from registry for the viewed user
+      // Populate full public info by user id (requires authenticated actor)
+      const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || (user?.email || '')).trim();
+      try {
+        const res = await fetch(`${API_BASE}/users/${encodeURIComponent(VIEW_USER_ID)}/public`, {
+          headers: { 'Cache-Control': 'no-cache', ...(actorEmail ? { 'x-actor-email': actorEmail } : {}) },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (DOM.pfFirstName) DOM.pfFirstName.textContent = data.first_name || '—';
+          if (DOM.pfLastName) DOM.pfLastName.textContent = data.last_name || '—';
+          if (DOM.pfPersonalId) DOM.pfPersonalId.textContent = data.personal_id || '—';
+          if (DOM.pfPhone) DOM.pfPhone.textContent = data.phone || '—';
+          if (DOM.pfEmail) DOM.pfEmail.textContent = data.email || '—';
+          if (DOM.pfCode) DOM.pfCode.textContent = data.code || '—';
+          if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = utils.formatDateTime(data.created_at);
+          updatePageTitleFrom({ firstName: data.first_name || '', lastName: data.last_name || '' });
+          return;
+        }
+      } catch {}
+      // Fallback to registry (limited info)
       try {
         const res = await fetch(`${API_BASE}/certified-persons/registry?limit=500`, { headers: { 'Cache-Control': 'no-cache' } });
         if (res.ok) {
@@ -291,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch { return false; }
       })();
       const statusKey = String(data.status || '').trim().toLowerCase();
-      const inactive = statusKey === 'suspended' || statusKey === 'expired' || isExpired || !!VIEW_USER_ID;
+      const inactive = statusKey === 'suspended' || statusKey === 'expired' || isExpired;
       if (DOM.certDownloadBtn) {
         if (inactive) {
           DOM.certDownloadBtn.setAttribute('disabled', 'true');
@@ -340,17 +359,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function handleCertDownload() {
     const user = getCurrentUser();
-    if (!user || !user.id) {
-      alert('გთხოვთ გაიაროთ ავტორიზაცია');
-      return;
-    }
+    const targetId = VIEW_USER_ID || (user && user.id);
+    if (!targetId) return;
     if (!certData) {
       alert('სერტიფიკატი არ არის შექმნილი');
       return;
     }
-    const savedEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
-    const url = new URL(`${API_BASE}/users/${encodeURIComponent(user.id)}/certificate/file`);
-    if (savedEmail) url.searchParams.set('actor', savedEmail);
+    const url = new URL(`${API_BASE}/users/${encodeURIComponent(targetId)}/certificate/file`);
     url.searchParams.set('t', String(Date.now()));
     window.location.href = url.toString();
   }
@@ -359,9 +374,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reviews module
   function createReviewsModule() {
     const state = {
-      targetUserId: VIEW_USER_ID || getCurrentUser()?.id || null,
-      actor: getCurrentUser(),
-      actorEmail: (localStorage.getItem(KEYS.SAVED_EMAIL) || (getCurrentUser()?.email || '')).trim(),
+      targetUserId: VIEW_USER_ID || (isLoggedIn() ? (getCurrentUser()?.id || null) : null),
+      actor: isLoggedIn() ? getCurrentUser() : null,
+      actorEmail: (isLoggedIn() && getCurrentUser()?.email) ? String(getCurrentUser().email).trim() : '',
       average: 0,
       ratingsCount: 0,
       actorCriteria: null,
@@ -399,7 +414,8 @@ document.addEventListener('DOMContentLoaded', () => {
       state.canRate = !!value;
       if (DOM.reviewStars) {
         DOM.reviewStars.querySelectorAll('.star').forEach((btn) => {
-          btn.disabled = !state.canRate;
+          // Never use the native disabled flag, so we can show login prompt on click
+          btn.removeAttribute('disabled');
           btn.setAttribute('aria-disabled', state.canRate ? 'false' : 'true');
         });
       }
@@ -441,6 +457,36 @@ document.addEventListener('DOMContentLoaded', () => {
         text.className = 'comment-text';
         text.textContent = c.message || '';
         el.appendChild(meta); el.appendChild(text);
+
+        const canDelete = !!(state.actor && (state.actor.isAdmin || Number(state.actor.id) === Number(c.author_user_id)));
+        if (canDelete) {
+          const del = document.createElement('button');
+          del.className = 'comment-delete';
+          del.type = 'button';
+          del.title = 'კომენტარის წაშლა';
+          del.setAttribute('aria-label', 'კომენტარის წაშლა');
+          del.textContent = '×';
+          del.addEventListener('click', async (e) => {
+            e.preventDefault();
+            if (!confirm('წავშალო კომენტარი?')) return;
+            try {
+              const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(state.targetUserId)}/comments/${encodeURIComponent(c.id)}`, {
+                method: 'DELETE',
+                headers: { ...(state.actorEmail ? { 'x-actor-email': state.actorEmail } : {}) },
+              });
+              if (!res.ok) {
+                alert('წაშლა ვერ შესრულდა');
+                return;
+              }
+              await loadSummary();
+              scrollCommentsToBottom();
+            } catch {
+              alert('წაშლა ვერ შესრულდა');
+            }
+          });
+          el.appendChild(del);
+        }
+
         frag.appendChild(el);
       });
       DOM.reviewsComments.innerHTML = '';
@@ -507,8 +553,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function bindEvents() {
       // open board on click
-      if (DOM.reviewsAverage) DOM.reviewsAverage.addEventListener('click', () => { if (state.canRate) openBoard(); });
-      if (DOM.reviewStars) DOM.reviewStars.addEventListener('click', () => { if (state.canRate) openBoard(); });
+      if (DOM.reviewsAverage) DOM.reviewsAverage.addEventListener('click', () => { if (!state.canRate) { alert('გთხოვთ შეხვიდეთ სისტემაში'); return; } openBoard(); });
+      if (DOM.reviewStars) DOM.reviewStars.addEventListener('click', () => { if (!state.canRate) { alert('გთხოვთ შეხვიდეთ სისტემაში'); return; } openBoard(); });
       if (board.close) board.close.addEventListener('click', closeBoard);
       if (board.overlay) board.overlay.addEventListener('click', (e) => { if (e.target === board.overlay) closeBoard(); });
 
@@ -528,6 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (DOM.reviewCommentForm) {
         DOM.reviewCommentForm.addEventListener('submit', (e) => {
           e.preventDefault();
+          if (!state.actorEmail) { alert('გთხოვთ შეხვიდეთ სისტემაში'); return; }
           if (!state.isCertified) return;
           const msg = (DOM.reviewCommentMessage?.value || '').trim();
           if (!msg) return;
@@ -754,6 +801,59 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function init() {
+      // Public view: show submitted uploads list for that user, hide editing UI
+      if (VIEW_USER_ID) {
+        const form = document.getElementById('expertForm');
+        const actions = document.querySelector('.expert-actions');
+        if (form) form.style.display = 'none';
+        if (actions) actions.style.display = 'none';
+        if (DOM.expertCard) DOM.expertCard.classList.remove('disabled');
+        (async () => {
+          try {
+            const res = await fetch(`${API_BASE}/expert-uploads/of/${encodeURIComponent(VIEW_USER_ID)}`, {
+              headers: { 'Cache-Control': 'no-cache' },
+            });
+            if (!res.ok) return;
+            const items = await res.json();
+            const wrap = DOM.expertList;
+            if (!wrap) return;
+            if (!Array.isArray(items) || !items.length) { wrap.innerHTML = ''; return; }
+            const frag = document.createDocumentFragment();
+            items.forEach((item) => {
+              const el = document.createElement('div');
+              el.className = 'expert-item';
+              const meta = document.createElement('div');
+              meta.className = 'meta';
+              const created = utils.formatDateTime(item.created_at);
+              meta.textContent = `${item.unique_code} · ${created} · ${item.cadastral_code || '—'} · ${item.building_function || '—'}`;
+              const files = document.createElement('div');
+              files.className = 'files';
+              if (item.expertise_filename) {
+                const a = document.createElement('a');
+                a.textContent = `ექსპერტიზა (${item.expertise_filename})`;
+                a.href = `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=expertise`;
+                a.target = '_blank';
+                files.appendChild(a);
+              }
+              if (item.project_filename) {
+                const a = document.createElement('a');
+                a.textContent = `პროექტი (${item.project_filename})`;
+                a.href = `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=project`;
+                a.target = '_blank';
+                files.appendChild(a);
+              }
+              el.appendChild(meta);
+              el.appendChild(files);
+              frag.appendChild(el);
+            });
+            wrap.innerHTML = '';
+            wrap.appendChild(frag);
+          } catch {}
+        })();
+        return;
+      }
+
+      // Owner view
       bindEvents();
       // Enabled only if certificate level == expert
       setEnabled(!VIEW_USER_ID && !!(certData && (String(certData.level || '').toLowerCase() === 'expert')));

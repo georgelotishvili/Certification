@@ -105,6 +105,38 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/{user_id}/public", response_model=UserOut)
+def public_profile(
+    user_id: int,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    """
+    Public profile lookup by user_id. Returns non-sensitive fields needed for profile view.
+    Access: any authenticated actor.
+    """
+    actor_email = (x_actor_email or "").strip().lower()
+    if not actor_email:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor required")
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    is_founder = (user.email or "").lower() == founder_email
+    return UserOut(
+        id=user.id,
+        personal_id=user.personal_id,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        phone=user.phone,
+        email=user.email,
+        code=user.code,
+        is_admin=True if is_founder else bool(user.is_admin),
+        is_founder=is_founder,
+        created_at=user.created_at,
+    )
+
 @router.get("/profile", response_model=UserOut)
 def profile(
     email: str = Query(..., description="User email to lookup"),
@@ -350,7 +382,9 @@ def download_certificate_file(
     actor: str | None = Query(None, alias="actor"),
     db: Session = Depends(get_db),
 ):
-    """Download certificate PDF. Owner allowed only if active; admin/founder always."""
+    """Download certificate PDF.
+    Public download is allowed for active (non-expired) certificates.
+    """
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -361,22 +395,12 @@ def download_certificate_file(
     if not cert.file_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    actor_email = ((actor or x_actor_email) or "").strip().lower()
-    actor = db.scalar(select(User).where(User.email == actor_email)) if actor_email else None
-    settings = get_settings()
-    founder_email = (settings.founder_admin_email or "").lower()
-    is_admin = bool(actor and (actor.is_admin or actor.email.lower() == founder_email))
-    is_owner = bool(actor and actor.id == user_id)
-
-    # Non-admin must be owner AND certificate must be active
-    if not is_admin:
-        if not is_owner:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-        status_norm = (cert.status or "").strip().lower()
-        if status_norm in ("suspended", "expired"):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="certificate inactive")
-        if cert.valid_until is not None and cert.valid_until < datetime.utcnow():
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="certificate inactive")
+    # Allow public download only if certificate is active and not expired
+    status_norm = (cert.status or "").strip().lower()
+    if status_norm in ("suspended", "expired"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="certificate inactive")
+    if cert.valid_until is not None and cert.valid_until < datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="certificate inactive")
 
     try:
         path = resolve_storage_path(cert.file_path)

@@ -113,6 +113,27 @@ def list_mine(x_actor_email: Optional[str] = Header(None, alias="x-actor-email")
     return [_to_out(row) for row in rows]
 
 
+@router.get("/of/{user_id}", response_model=List[ExpertUploadOut])
+def list_public_of(user_id: int, db: Session = Depends(get_db)):
+    """
+    Public list of submitted expert uploads for a given user.
+    No authentication required.
+    """
+    # Ensure user is expert-certified; otherwise allow but will likely be empty
+    try:
+        cert = _must_expert(db, user_id)
+        _ = cert  # silence linter
+    except HTTPException:
+        # Not expert or not certified -> return empty list
+        return []
+    rows = db.execute(
+        select(ExpertUpload).where(
+            ExpertUpload.user_id == user_id,
+            ExpertUpload.status == "submitted",
+        ).order_by(ExpertUpload.created_at.desc(), ExpertUpload.id.desc())
+    ).scalars().all()
+    return [_to_out(row) for row in rows]
+
 @router.post("", response_model=ExpertUploadOut, status_code=status.HTTP_201_CREATED)
 async def create_upload(
     building_function: str = Form(""),
@@ -255,4 +276,29 @@ def download_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="file not found")
     return FileResponse(abs_path, filename=filename)
 
+
+@router.get("/public/{upload_id}/download")
+def public_download_file(
+    upload_id: int,
+    file_type: str = Query(..., pattern="^(expertise|project)$"),
+    db: Session = Depends(get_db),
+):
+    """
+    Public download for submitted expert uploads only.
+    """
+    eu = db.scalar(select(ExpertUpload).where(ExpertUpload.id == upload_id))
+    if not eu:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+    if eu.status != "submitted":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="not public")
+    path_attr = f"{file_type}_path"
+    name_attr = f"{file_type}_filename"
+    path = getattr(eu, path_attr, None)
+    filename = getattr(eu, name_attr, None) or "file"
+    if not path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="file not found")
+    abs_path = resolve_storage_path(path)
+    if not abs_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="file not found")
+    return FileResponse(abs_path, filename=filename)
 
