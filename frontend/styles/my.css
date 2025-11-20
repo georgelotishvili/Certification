@@ -37,6 +37,11 @@ main {
   min-width: 150px;
 }
 
+/* Hide auth banner on My page (name, surname, code not needed here) */
+.nav-bar .auth-banner {
+  display: none !important;
+}
+
 /* Profile section */
 .profile-section {
   margin-top: 12px;
