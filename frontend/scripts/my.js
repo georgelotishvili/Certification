@@ -685,6 +685,23 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!wrap) return;
       if (!state.list.length) { wrap.innerHTML = ''; return; }
       const frag = document.createDocumentFragment();
+
+      async function adminDeleteUpload(uploadId) {
+        try {
+          const email = (localStorage.getItem(KEYS.SAVED_EMAIL) || state.actorEmail || (state.user && state.user.email) || '').trim();
+          let url = `${API_BASE}/expert-uploads/${encodeURIComponent(uploadId)}/delete`;
+          if (email) url += `?actor=${encodeURIComponent(email)}`;
+          let res = await fetch(url, { method: 'POST', headers: { ...buildHeaders() } });
+          if (res.status === 405) {
+            let fallback = `${API_BASE}/expert-uploads/${encodeURIComponent(uploadId)}`;
+            if (email) fallback += `?actor=${encodeURIComponent(email)}`;
+            res = await fetch(fallback, { method: 'DELETE', headers: { ...buildHeaders() } });
+          }
+          return res;
+        } catch (e) {
+          return { ok: false, status: 0 };
+        }
+      }
       state.list.forEach((item) => {
         const el = document.createElement('div');
         el.className = 'expert-item';
@@ -728,16 +745,14 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             e.stopPropagation();
             if (!confirm('წავშალო ელემენტი?')) return;
-            try {
-              const res = await fetch(`${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}`, { method: 'DELETE', headers: { ...buildHeaders() } });
-              if (!res.ok) {
-                let detail = '';
-                try { const j = await res.clone().json(); detail = j?.detail || ''; } catch { try { detail = (await res.clone().text()).trim(); } catch {} }
-                alert(detail || 'წაშლა ვერ შესრულდა');
-                return;
-              }
-              await loadList();
-            } catch { alert('წაშლა ვერ შესრულდა'); }
+            const res = await adminDeleteUpload(item.id);
+            if (!res.ok) {
+              let detail = '';
+              try { const j = await res.clone().json(); detail = j?.detail || ''; } catch { try { detail = (await res.clone().text()).trim(); } catch {} }
+              alert(detail || 'წაშლა ვერ შესრულდა');
+              return;
+            }
+            await loadList();
           });
           el.appendChild(del);
         }
@@ -992,15 +1007,26 @@ document.addEventListener('DOMContentLoaded', () => {
                   e.preventDefault();
                   e.stopPropagation();
                   if (!confirm('წავშალო ელემენტი?')) return;
-                  try {
-                    const res2 = await fetch(`${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}`, { method: 'DELETE', headers: { ...buildHeaders() } });
-                    if (!res2.ok) {
-                      let detail = '';
-                      try { const j = await res2.clone().json(); detail = j?.detail || ''; } catch { try { detail = (await res2.clone().text()).trim(); } catch {} }
-                      alert(detail || 'წაშლა ვერ შესრულდა'); return;
-                    }
-                    el.remove();
-                  } catch { alert('წაშლა ვერ შესრულდა'); }
+                  const res2 = await (async () => {
+                    try {
+                      const email = actorEmail;
+                      let url2 = `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/delete`;
+                      if (email) url2 += `?actor=${encodeURIComponent(email)}`;
+                      let r = await fetch(url2, { method: 'POST', headers: { ...buildHeaders() } });
+                      if (r.status === 405) {
+                        let fb = `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}`;
+                        if (email) fb += `?actor=${encodeURIComponent(email)}`;
+                        r = await fetch(fb, { method: 'DELETE', headers: { ...buildHeaders() } });
+                      }
+                      return r;
+                    } catch { return { ok: false, status: 0 }; }
+                  })();
+                  if (!res2.ok) {
+                    let detail = '';
+                    try { const j = await res2.clone().json(); detail = j?.detail || ''; } catch { try { detail = (await res2.clone().text()).trim(); } catch {} }
+                    alert(detail || 'წაშლა ვერ შესრულდა'); return;
+                  }
+                  el.remove();
                 });
                 el.appendChild(del);
               }

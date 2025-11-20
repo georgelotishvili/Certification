@@ -11,6 +11,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..config import get_settings
 from ..models import User, Certificate, ExpertUpload
 from ..schemas import ExpertUploadOut
 from ..services.media_storage import ensure_media_root, resolve_storage_path
@@ -228,6 +229,18 @@ def delete_file(
     db.commit()
     return {"ok": True}
 
+@router.post("/{upload_id}/delete")
+def admin_delete_upload_post(
+    upload_id: int,
+    x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
+    actor: Optional[str] = Query(None, description="actor email (fallback for links)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Admin delete via POST (fallback for environments blocking DELETE).
+    """
+    return admin_delete_upload(upload_id=upload_id, x_actor_email=x_actor_email, actor=actor, db=db)
+
 
 @router.post("/{upload_id}/submit", response_model=ExpertUploadOut)
 def submit_upload(
@@ -302,3 +315,35 @@ def public_download_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="file not found")
     return FileResponse(abs_path, filename=filename)
 
+
+@router.delete("/{upload_id}")
+def admin_delete_upload(
+    upload_id: int,
+    x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
+    actor: Optional[str] = Query(None, description="actor email (fallback for links)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Delete an expert upload (admin only). Removes DB row and stored files.
+    """
+    actor = _actor(db, x_actor_email or actor)
+    settings = get_settings()
+    founder = (settings.founder_admin_email or "").strip().lower()
+    if not (actor.is_admin or (actor.email or "").strip().lower() == founder):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
+    eu = db.scalar(select(ExpertUpload).where(ExpertUpload.id == upload_id))
+    if not eu:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+    # Remove files if present
+    for path_attr in ("expertise_path", "project_path"):
+        path = getattr(eu, path_attr, None)
+        if path:
+            try:
+                abs_path = resolve_storage_path(path)
+                if abs_path.exists():
+                    abs_path.unlink()
+            except Exception:
+                pass
+    db.delete(eu)
+    db.commit()
+    return {"ok": True}
