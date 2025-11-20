@@ -141,22 +141,36 @@
                   <input type="text" id="expertFunction" name="building_function" placeholder="მაგ: საცხოვრებელი" />
                 </label>
                 <label class="expert-field">
+                  <span class="expert-label">პროექტის მისამართი</span>
+                  <input type="text" id="expertAddress" name="project_address" placeholder="მაგ: მისამართი" />
+                </label>
+                <label class="expert-field">
                   <span class="expert-label">საკადასტრო კოდი</span>
                   <input type="text" id="expertCadastral" name="cadastral_code" placeholder="მაგ: 01.11.22.333" />
                 </label>
               </div>
               <div class="expert-files">
-                <div class="file-row">
-                  <label class="expert-label">საექსპერტო შეფასება</label>
-                  <input type="file" id="expertFileExpertise" name="expertise" accept=".pdf,.zip,.rar" />
+                <div class="expert-field file-field">
+                  <span class="expert-label">საექსპერტო შეფასება</span>
+                  <div class="file-input-row">
+                    <button type="button" id="expertExpertiseClear" class="file-clear" aria-label="გასუფთავება" disabled>×</button>
+                    <button type="button" id="expertExpertiseChoose" class="file-choose">Choose File</button>
+                    <input type="file" id="expertFileExpertise" class="hidden-file-input" name="expertise" accept=".pdf,.zip,.rar" />
+                    <span class="file-chosen" id="expertExpertiseChosen">No file chosen</span>
+                  </div>
                   <div class="file-actions">
                     <a href="#" id="expertExpertiseDownload" class="file-link" style="display:none" target="_blank">ჩამოტვირთვა</a>
                     <button type="button" id="expertExpertiseDelete" class="file-delete" style="display:none">წაშლა</button>
                   </div>
                 </div>
-                <div class="file-row">
-                  <label class="expert-label">პროექტი</label>
-                  <input type="file" id="expertFileProject" name="project" accept=".pdf,.zip,.rar" />
+                <div class="expert-field file-field">
+                  <span class="expert-label">პროექტი</span>
+                  <div class="file-input-row">
+                    <button type="button" id="expertProjectClear" class="file-clear" aria-label="გასუფთავება" disabled>×</button>
+                    <button type="button" id="expertProjectChoose" class="file-choose">Choose File</button>
+                    <input type="file" id="expertFileProject" class="hidden-file-input" name="project" accept=".pdf,.zip,.rar" />
+                    <span class="file-chosen" id="expertProjectChosen">No file chosen</span>
+                  </div>
                   <div class="file-actions">
                     <a href="#" id="expertProjectDownload" class="file-link" style="display:none" target="_blank">ჩამოტვირთვა</a>
                     <button type="button" id="expertProjectDelete" class="file-delete" style="display:none">წაშლა</button>
@@ -164,7 +178,6 @@
                 </div>
               </div>
               <div class="expert-actions">
-                <button type="button" id="expertSaveBtn" class="expert-btn primary">შენახვა</button>
                 <button type="button" id="expertSubmitBtn" class="expert-btn" disabled>გაგზავნა</button>
               </div>
             </form>

@@ -70,12 +70,19 @@ document.addEventListener('DOMContentLoaded', () => {
     expertCard: document.getElementById('expertCard'),
     expertFunction: document.getElementById('expertFunction'),
     expertCadastral: document.getElementById('expertCadastral'),
+    expertAddress: document.getElementById('expertAddress'),
     expertFileExpertise: document.getElementById('expertFileExpertise'),
+    expertFileProject: document.getElementById('expertFileProject'),
     expertExpertiseDownload: document.getElementById('expertExpertiseDownload'),
     expertExpertiseDelete: document.getElementById('expertExpertiseDelete'),
     expertProjectDownload: document.getElementById('expertProjectDownload'),
     expertProjectDelete: document.getElementById('expertProjectDelete'),
-    expertSaveBtn: document.getElementById('expertSaveBtn'),
+    expertExpertiseClear: document.getElementById('expertExpertiseClear'),
+    expertProjectClear: document.getElementById('expertProjectClear'),
+    expertExpertiseChoose: document.getElementById('expertExpertiseChoose'),
+    expertProjectChoose: document.getElementById('expertProjectChoose'),
+    expertExpertiseChosen: document.getElementById('expertExpertiseChosen'),
+    expertProjectChosen: document.getElementById('expertProjectChosen'),
     expertSubmitBtn: document.getElementById('expertSubmitBtn'),
     expertList: document.getElementById('expertList'),
     expertCurrentCode: document.getElementById('expertCurrentCode'),
@@ -635,6 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
       actorEmail: (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim(),
       user: getCurrentUser(),
       draftId: null,
+      currentDraft: null,
       list: [],
     };
 
@@ -650,7 +658,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function buildHeaders() {
-      return state.actorEmail ? { 'x-actor-email': state.actorEmail } : {};
+      const email = (localStorage.getItem(KEYS.SAVED_EMAIL) || state.actorEmail || (state.user && state.user.email) || '').trim();
+      return email ? { 'x-actor-email': email } : {};
     }
 
     async function loadList() {
@@ -663,8 +672,11 @@ document.addEventListener('DOMContentLoaded', () => {
         renderList();
         const draft = state.list.find((x) => x.status === 'draft');
         state.draftId = draft ? draft.id : null;
+        state.currentDraft = draft || null;
         setCurrent(draft?.unique_code || '—');
         updateDraftUI(draft || null);
+        // Ensure latest submitted project file is visible in the bottom field after submission
+        showLatestSubmittedProjectLink();
       } catch {}
     }
 
@@ -700,6 +712,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         el.appendChild(meta);
         el.appendChild(files);
+        // Admin/founder-only delete
+        const actor = state.user || getCurrentUser();
+        const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || state.actorEmail || (actor && actor.email) || '').trim().toLowerCase();
+        const founderEmail = (FOUNDER_EMAIL || '').toLowerCase();
+        const canAdminDelete = !!(actor && (actor.isAdmin || (actorEmail && founderEmail && actorEmail === founderEmail)));
+        if (canAdminDelete) {
+          const del = document.createElement('button');
+          del.className = 'item-delete';
+          del.type = 'button';
+          del.title = 'წაშლა (ადმინ)';
+          del.setAttribute('aria-label', 'წაშლა');
+          del.textContent = '×';
+          del.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!confirm('წავშალო ელემენტი?')) return;
+            try {
+              const res = await fetch(`${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}`, { method: 'DELETE', headers: { ...buildHeaders() } });
+              if (!res.ok) {
+                let detail = '';
+                try { const j = await res.clone().json(); detail = j?.detail || ''; } catch { try { detail = (await res.clone().text()).trim(); } catch {} }
+                alert(detail || 'წაშლა ვერ შესრულდა');
+                return;
+              }
+              await loadList();
+            } catch { alert('წაშლა ვერ შესრულდა'); }
+          });
+          el.appendChild(del);
+        }
         frag.appendChild(el);
       });
       wrap.innerHTML = '';
@@ -726,47 +767,97 @@ document.addEventListener('DOMContentLoaded', () => {
         if (prjDl) prjDl.style.display = 'none';
         if (prjDel) prjDel.style.display = 'none';
       }
+      updateClearStates();
+    }
+
+    // After submit, always show the latest submitted project file link in the bottom field
+    function showLatestSubmittedProjectLink() {
+      const prjDl = DOM.expertProjectDownload;
+      const prjDel = DOM.expertProjectDelete;
+      if (!prjDl) return;
+      try {
+        const latestSubmitted = state.list.find((x) => x.status === 'submitted' && x.project_filename);
+        if (latestSubmitted) {
+          prjDl.style.display = '';
+          prjDl.href = `${API_BASE}/expert-uploads/${latestSubmitted.id}/download?file_type=project`;
+          if (state.actorEmail) prjDl.href += `&actor=${encodeURIComponent(state.actorEmail)}`;
+          if (prjDel) prjDel.style.display = 'none';
+        }
+      } catch {}
+    }
+
+    // Clear button state: enabled only when local selection or uploaded file exists
+    function updateClearStates() {
+      try {
+        const d = state.currentDraft;
+        const hasLocalExp = !!(DOM.expertFileExpertise && DOM.expertFileExpertise.files && DOM.expertFileExpertise.files.length);
+        const hasLocalPrj = !!(DOM.expertFileProject && DOM.expertFileProject.files && DOM.expertFileProject.files.length);
+        const hasUploadedExp = !!(d && d.expertise_filename);
+        const hasUploadedPrj = !!(d && d.project_filename);
+        const expBtn = DOM.expertExpertiseClear || document.getElementById('expertExpertiseClear');
+        const prjBtn = DOM.expertProjectClear || document.getElementById('expertProjectClear');
+        if (expBtn) expBtn.disabled = !(hasLocalExp || hasUploadedExp);
+        if (prjBtn) prjBtn.disabled = !(hasLocalPrj || hasUploadedPrj);
+        if (DOM.expertExpertiseChosen) DOM.expertExpertiseChosen.textContent = hasLocalExp ? (DOM.expertFileExpertise.files[0]?.name || '—') : 'No file chosen';
+        if (DOM.expertProjectChosen) DOM.expertProjectChosen.textContent = hasLocalPrj ? (DOM.expertFileProject.files[0]?.name || '—') : 'No file chosen';
+      } catch {}
+    }
+
+    // Clear file field or delete uploaded file if already saved to draft
+    async function clearFile(kind) {
+      const d = state.currentDraft;
+      if (kind === 'expertise') {
+        if (DOM.expertFileExpertise && DOM.expertFileExpertise.files && DOM.expertFileExpertise.files.length) {
+          DOM.expertFileExpertise.value = '';
+          updateClearStates();
+          return;
+        }
+        if (state.draftId && d && d.expertise_filename) {
+          try {
+            const res = await fetch(`${API_BASE}/expert-uploads/${state.draftId}/file?file_type=expertise`, { method: 'DELETE', headers: { ...buildHeaders() } });
+            if (res.ok) await loadList();
+          } catch {}
+        }
+      } else if (kind === 'project') {
+        if (DOM.expertFileProject && DOM.expertFileProject.files && DOM.expertFileProject.files.length) {
+          DOM.expertFileProject.value = '';
+          if (DOM.expertProjectChosen) DOM.expertProjectChosen.textContent = 'No file chosen';
+          updateClearStates();
+          return;
+        }
+        if (state.draftId && d && d.project_filename) {
+          try {
+            const res = await fetch(`${API_BASE}/expert-uploads/${state.draftId}/file?file_type=project`, { method: 'DELETE', headers: { ...buildHeaders() } });
+            if (res.ok) await loadList();
+          } catch {}
+        }
+      }
+    }
+
+    function updateSubmitEnabled() {
+      const draft = state.currentDraft;
+      const submitted = !!(draft && draft.status === 'submitted');
+      const hasServer = !!(draft && draft.expertise_filename && draft.project_filename);
+      const hasLocal = !!(DOM.expertFileExpertise?.files?.length && DOM.expertFileProject?.files?.length);
+      if (DOM.expertSubmitBtn) DOM.expertSubmitBtn.disabled = submitted || !(hasServer || hasLocal);
     }
 
     function updateDraftUI(draft) {
       const submitted = !!(draft && draft.status === 'submitted');
       if (DOM.expertFunction) DOM.expertFunction.value = draft?.building_function || '';
       if (DOM.expertCadastral) DOM.expertCadastral.value = draft?.cadastral_code || '';
-      if (DOM.expertSaveBtn) DOM.expertSaveBtn.disabled = submitted;
-      if (DOM.expertSubmitBtn) DOM.expertSubmitBtn.disabled = submitted || !(draft && draft.expertise_filename && draft.project_filename);
       setFileControls(draft);
+      updateSubmitEnabled();
     }
 
     function bindEvents() {
-      if (DOM.expertSaveBtn) DOM.expertSaveBtn.addEventListener('click', async () => {
-        if (!state.enabled) return;
-        const fn = (DOM.expertFunction?.value || '').trim();
-        const cad = (DOM.expertCadastral?.value || '').trim();
-        const form = new FormData();
-        form.set('building_function', fn);
-        form.set('cadastral_code', cad);
-        const expFile = DOM.expertFileExpertise?.files?.[0] || null;
-        const prjFile = DOM.expertFileProject?.files?.[0] || null;
-        if (expFile) form.set('expertise', expFile);
-        if (prjFile) form.set('project', prjFile);
-        try {
-          const url = state.draftId ? `${API_BASE}/expert-uploads/${state.draftId}` : `${API_BASE}/expert-uploads`;
-          const method = state.draftId ? 'PUT' : 'POST';
-          const res = await fetch(url, { method, headers: { ...buildHeaders() }, body: form });
-          if (!res.ok) {
-            let detail = '';
-            try { const j = await res.clone().json(); detail = j?.detail || ''; } catch {}
-            alert(detail || 'შენახვა ვერ მოხერხდა');
-            return;
-          }
-          const data = await res.json();
-          state.draftId = data.id;
-          setCurrent(data.unique_code);
-          await loadList();
-        } catch {
-          alert('შენახვა ვერ მოხერხდა');
-        }
-      });
+      if (DOM.expertFileExpertise) DOM.expertFileExpertise.addEventListener('change', () => { updateClearStates(); updateSubmitEnabled(); });
+      if (DOM.expertFileProject) DOM.expertFileProject.addEventListener('change', () => { updateClearStates(); updateSubmitEnabled(); });
+      if (DOM.expertExpertiseClear) DOM.expertExpertiseClear.addEventListener('click', () => clearFile('expertise'));
+      if (DOM.expertProjectClear) DOM.expertProjectClear.addEventListener('click', () => clearFile('project'));
+      if (DOM.expertExpertiseChoose) DOM.expertExpertiseChoose.addEventListener('click', () => DOM.expertFileExpertise?.click());
+      if (DOM.expertProjectChoose) DOM.expertProjectChoose.addEventListener('click', () => DOM.expertFileProject?.click());
+
 
       if (DOM.expertExpertiseDelete) DOM.expertExpertiseDelete.addEventListener('click', async () => {
         if (!state.draftId) return;
@@ -786,8 +877,35 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (DOM.expertSubmitBtn) DOM.expertSubmitBtn.addEventListener('click', async () => {
-        if (!state.draftId) return;
+        if (!state.enabled) return;
+        // Always persist latest inputs/files before submit
+        const fn = (DOM.expertFunction?.value || '').trim();
+        const cad = (DOM.expertCadastral?.value || '').trim();
+        const addr = (DOM.expertAddress?.value || '').trim();
+        const form = new FormData();
+        form.set('building_function', fn);
+        form.set('cadastral_code', cad);
+        if (addr) form.set('project_address', addr);
+        const expFile = DOM.expertFileExpertise?.files?.[0] || null;
+        const prjFile = DOM.expertFileProject?.files?.[0] || null;
+        if (expFile) form.set('expertise', expFile);
+        if (prjFile) form.set('project', prjFile);
         try {
+          // Create or update draft
+          const url = state.draftId ? `${API_BASE}/expert-uploads/${state.draftId}` : `${API_BASE}/expert-uploads`;
+          const method = state.draftId ? 'PUT' : 'POST';
+          const resSave = await fetch(url, { method, headers: { ...buildHeaders() }, body: form });
+          if (!resSave.ok) {
+            let detail = '';
+            try { const j = await resSave.clone().json(); detail = j?.detail || ''; } catch {}
+            alert(detail || 'შენახვა ვერ მოხერხდა');
+            return;
+          }
+          const saved = await resSave.json();
+          state.draftId = saved.id;
+          state.currentDraft = saved;
+          setCurrent(saved.unique_code);
+          // Submit
           const res = await fetch(`${API_BASE}/expert-uploads/${state.draftId}/submit`, { method: 'POST', headers: { ...buildHeaders() } });
           if (!res.ok) {
             let detail = '';
@@ -796,6 +914,20 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
           }
           await loadList();
+          showLatestSubmittedProjectLink();
+          // Clear form inputs and files
+          if (DOM.expertFunction) DOM.expertFunction.value = '';
+          if (DOM.expertAddress) DOM.expertAddress.value = '';
+          if (DOM.expertCadastral) DOM.expertCadastral.value = '';
+          if (DOM.expertFileExpertise) DOM.expertFileExpertise.value = '';
+          if (DOM.expertFileProject) DOM.expertFileProject.value = '';
+          if (DOM.expertExpertiseChosen) DOM.expertExpertiseChosen.textContent = 'No file chosen';
+          if (DOM.expertProjectChosen) DOM.expertProjectChosen.textContent = 'No file chosen';
+          state.draftId = null;
+          state.currentDraft = null;
+          setCurrent('—');
+          updateClearStates();
+          updateSubmitEnabled();
         } catch { alert('გაგზავნა ვერ მოხერხდა'); }
       });
     }
@@ -844,6 +976,34 @@ document.addEventListener('DOMContentLoaded', () => {
               }
               el.appendChild(meta);
               el.appendChild(files);
+              // Admin/founder-only delete in public view
+              const actor = getCurrentUser();
+              const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || (actor && actor.email) || '').trim().toLowerCase();
+              const founderEmail = (FOUNDER_EMAIL || '').toLowerCase();
+              const canAdminDelete = !!(actor && (actor.isAdmin || (actorEmail && founderEmail && actorEmail === founderEmail)));
+              if (canAdminDelete) {
+                const del = document.createElement('button');
+                del.className = 'item-delete';
+                del.type = 'button';
+                del.title = 'წაშლა (ადმინ)';
+                del.setAttribute('aria-label', 'წაშლა');
+                del.textContent = '×';
+                del.addEventListener('click', async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!confirm('წავშალო ელემენტი?')) return;
+                  try {
+                    const res2 = await fetch(`${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}`, { method: 'DELETE', headers: { ...buildHeaders() } });
+                    if (!res2.ok) {
+                      let detail = '';
+                      try { const j = await res2.clone().json(); detail = j?.detail || ''; } catch { try { detail = (await res2.clone().text()).trim(); } catch {} }
+                      alert(detail || 'წაშლა ვერ შესრულდა'); return;
+                    }
+                    el.remove();
+                  } catch { alert('წაშლა ვერ შესრულდა'); }
+                });
+                el.appendChild(del);
+              }
               frag.appendChild(el);
             });
             wrap.innerHTML = '';
@@ -861,6 +1021,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const cd = ev?.detail?.certData || null;
         setEnabled(!VIEW_USER_ID && !!(cd && (String(cd.level || '').toLowerCase() === 'expert')));
       });
+      updateClearStates();
     }
 
     return { init, setEnabled };
