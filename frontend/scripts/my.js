@@ -729,34 +729,68 @@ document.addEventListener('DOMContentLoaded', () => {
         summary.appendChild(sumDate);
         el.appendChild(summary);
 
-        // Expanded content: meta + files
+        // Expanded content: meta grid + files grid
         const content = document.createElement('div');
         content.className = 'content';
 
-        const meta = document.createElement('div');
-        meta.className = 'meta';
-        meta.textContent = `${item.unique_code} · ${utils.formatDateTime(item.created_at)} · ${item.cadastral_code || '—'} · ${item.building_function || '—'}`;
-        content.appendChild(meta);
+        // meta (4 cells)
+        const metaGrid = document.createElement('div');
+        metaGrid.className = 'meta-grid';
+        const makeCell = (value) => {
+          const d = document.createElement('div');
+          d.className = 'meta-cell';
+          d.textContent = value || '—';
+          return d;
+        };
+        metaGrid.appendChild(makeCell(item.unique_code));
+        metaGrid.appendChild(makeCell(utils.formatDateTime(item.created_at)));
+        metaGrid.appendChild(makeCell(item.cadastral_code || '—'));
+        metaGrid.appendChild(makeCell(item.building_function || '—'));
+        content.appendChild(metaGrid);
 
-        const files = document.createElement('div');
-        files.className = 'files';
-        if (item.expertise_filename) {
-          const a = document.createElement('a');
-          a.textContent = `ექსპერტიზა (${item.expertise_filename})`;
-          a.href = `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/download?file_type=expertise`;
-          if (state.actorEmail) a.href += `&actor=${encodeURIComponent(state.actorEmail)}`;
-          a.target = '_blank';
-          files.appendChild(a);
-        }
-        if (item.project_filename) {
-          const a = document.createElement('a');
-          a.textContent = `პროექტი (${item.project_filename})`;
-          a.href = `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/download?file_type=project`;
-          if (state.actorEmail) a.href += `&actor=${encodeURIComponent(state.actorEmail)}`;
-          a.target = '_blank';
-          files.appendChild(a);
-        }
-        content.appendChild(files);
+        // files (2 columns)
+        const filesGrid = document.createElement('div');
+        filesGrid.className = 'files-grid';
+        const addFileCol = (labelText, filename, href) => {
+          const col = document.createElement('div');
+          col.className = 'file-col';
+          const label = document.createElement('div');
+          label.className = 'expert-label';
+          label.textContent = labelText;
+          col.appendChild(label);
+          const wrap = document.createElement('div');
+          wrap.className = 'file-linkwrap';
+          if (filename && href) {
+            const a = document.createElement('a');
+            a.className = 'file-link';
+            a.textContent = filename;
+            a.href = href;
+            a.target = '_blank';
+            wrap.appendChild(a);
+          } else {
+            const span = document.createElement('span');
+            span.className = 'file-missing';
+            span.textContent = '—';
+            wrap.appendChild(span);
+          }
+          col.appendChild(wrap);
+          filesGrid.appendChild(col);
+        };
+        addFileCol(
+          'ექსპერტიზა',
+          item.expertise_filename,
+          item.expertise_filename
+            ? `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/download?file_type=expertise${state.actorEmail ? `&actor=${encodeURIComponent(state.actorEmail)}` : ''}`
+            : null
+        );
+        addFileCol(
+          'პროექტი',
+          item.project_filename,
+          item.project_filename
+            ? `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/download?file_type=project${state.actorEmail ? `&actor=${encodeURIComponent(state.actorEmail)}` : ''}`
+            : null
+        );
+        content.appendChild(filesGrid);
         el.appendChild(content);
 
         // Admin/founder-only delete button inside summary
@@ -1010,32 +1044,69 @@ document.addEventListener('DOMContentLoaded', () => {
               summary.appendChild(sumDate);
               el.appendChild(summary);
 
-              // Expanded content
+              // Expanded content: meta grid + files grid
               const content = document.createElement('div');
               content.className = 'content';
 
-              const meta = document.createElement('div');
-              meta.className = 'meta';
-              meta.textContent = `${item.unique_code} · ${utils.formatDateTime(item.created_at)} · ${item.cadastral_code || '—'} · ${item.building_function || '—'}`;
-              content.appendChild(meta);
+              // meta (4 cells)
+              const metaGrid = document.createElement('div');
+              metaGrid.className = 'meta-grid';
+              const makeCell = (value) => {
+                const d = document.createElement('div');
+                d.className = 'meta-cell';
+                d.textContent = value || '—';
+                return d;
+              };
+              metaGrid.appendChild(makeCell(item.unique_code));
+              metaGrid.appendChild(makeCell(utils.formatDateTime(item.created_at)));
+              metaGrid.appendChild(makeCell(item.cadastral_code || '—'));
+              metaGrid.appendChild(makeCell(item.building_function || '—'));
+              content.appendChild(metaGrid);
 
-              const files = document.createElement('div');
-              files.className = 'files';
-              if (item.expertise_filename) {
-                const a = document.createElement('a');
-                a.textContent = `ექსპერტიზა (${item.expertise_filename})`;
-                a.href = `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=expertise`;
-                a.target = '_blank';
-                files.appendChild(a);
-              }
-              if (item.project_filename) {
-                const a = document.createElement('a');
-                a.textContent = `პროექტი (${item.project_filename})`;
-                a.href = `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=project`;
-                a.target = '_blank';
-                files.appendChild(a);
-              }
-              content.appendChild(files);
+              // files (2 columns)
+              const filesGrid = document.createElement('div');
+              filesGrid.className = 'files-grid';
+              const addFileCol = (labelText, filename, href) => {
+                const col = document.createElement('div');
+                col.className = 'file-col';
+                const label = document.createElement('div');
+                label.className = 'expert-label';
+                label.textContent = labelText;
+                col.appendChild(label);
+                const wrap = document.createElement('div');
+                wrap.className = 'file-linkwrap';
+                if (filename && href) {
+                  const a = document.createElement('a');
+                  a.className = 'file-link';
+                  a.textContent = filename;
+                  a.href = href;
+                  a.target = '_blank';
+                  wrap.appendChild(a);
+                } else {
+                  const span = document.createElement('span');
+                  span.className = 'file-missing';
+                  span.textContent = '—';
+                  wrap.appendChild(span);
+                }
+                col.appendChild(wrap);
+                filesGrid.appendChild(col);
+              };
+              addFileCol(
+                'ექსპერტიზა',
+                item.expertise_filename,
+                item.expertise_filename
+                  ? `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=expertise`
+                  : null
+              );
+              addFileCol(
+                'პროექტი',
+                item.project_filename,
+                item.project_filename
+                  ? `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=project`
+                  : null
+              );
+              content.appendChild(filesGrid);
+              
               el.appendChild(content);
 
               // Admin/founder-only delete button inside summary (public view)

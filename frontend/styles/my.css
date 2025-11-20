@@ -317,7 +317,21 @@ main {
 }
 
 /* Layout grid for my page */
-.my-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+.my-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  grid-auto-rows: minmax(0, auto);
+  grid-template-areas:
+    "profile expert"
+    "cert    expert"
+    "reviews expert";
+  gap: 16px;
+  align-items: stretch;
+}
+.my-grid > .profile-section { grid-area: profile; }
+.my-grid > .cert-section { grid-area: cert; }
+.my-grid > .reviews-section { grid-area: reviews; }
+.my-grid > .expert-section { grid-area: expert; }
 .col { display: flex; flex-direction: column; gap: 16px; } /* legacy, no longer used */
 /* Remove individual top margins when inside grid and stretch cards to equal heights */
 .my-grid > .profile-section,
@@ -328,7 +342,16 @@ main {
 .my-grid .cert-card,
 .my-grid .reviews-card,
 .my-grid .expert-card { height: 100%; }
-@media (max-width: 980px) { .my-grid { grid-template-columns: 1fr; } }
+@media (max-width: 980px) {
+  .my-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "profile"
+      "cert"
+      "expert"
+      "reviews";
+  }
+}
 
 /* Headings accent */
 .profile-card h2, .cert-head h2, .reviews-head h2, .expert-head h2 {
@@ -407,3 +430,37 @@ main {
 .expert-item .sum-date { color: var(--text-muted); font-size: 12px; }
 .expert-item .content { padding: 8px 12px 12px; border-top: 1px solid var(--border-soft); }
 .expert-item .item-delete { top: 8px; right: 8px; z-index: 3; pointer-events: auto; }
+
+/* Structured layout for expanded expert item */
+.expert-item .content { display: grid; gap: 10px; grid-auto-rows: minmax(0, auto); }
+.expert-item .meta-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr 1fr;
+  gap: 6px 12px;
+  align-items: center;
+  color: var(--text-strong);
+  font-size: 13px;
+}
+.expert-item .meta-cell {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.expert-item .files-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 18px;
+}
+.expert-item .file-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.expert-item .file-linkwrap { min-width: 0; }
+.expert-item .file-link {
+  color: var(--color-accent);
+  font-size: 12px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.expert-item .file-missing { color: var(--text-muted); font-size: 12px; }
+@media (max-width: 720px) {
+  .expert-item .meta-grid { grid-template-columns: 1fr 1fr; }
+  .expert-item .files-grid { grid-template-columns: 1fr; }
+}
