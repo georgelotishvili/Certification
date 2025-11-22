@@ -16,7 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
     root: document.documentElement,
     header: document.querySelector('header'),
     navLogo: document.querySelector('.nav-bar .logo'),
-    headerVideo: document.querySelector('.header-video'),
     burger: document.querySelector('.burger'),
     overlay: document.querySelector('.overlay'),
     drawer: document.querySelector('.drawer'),
@@ -145,7 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
   registryModule.init();
   footerFormModule.init();
   setupContactScroll();
-  setupHeaderVideoLoopCrossfade();
   setupProfileNavigation();
 
   // Global escape handling (modal first, then menu)
@@ -186,83 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
     utils.on(DOM.drawerContact, 'click', (event) => scrollToFooter(event, true));
   }
 
-  function setupHeaderVideoLoopCrossfade() {
-    const videos = Array.from(document.querySelectorAll('.header-video'));
-    if (!videos.length) return;
-
-    const rate = (() => {
-      const raw = parseFloat(videos[0].dataset.speed || '0.6');
-      return Number.isFinite(raw) ? Math.max(0.1, Math.min(raw, 4)) : 0.6;
-    })();
-
-    // Expect two layers; support one as fallback
-    let a = videos[0] || null;
-    let b = videos[1] || null;
-    const CROSSFADE = 1.2;  // seconds
-    const SAFETY = 0.15;
-
-    videos.forEach(v => {
-      v.muted = true;
-      v.loop = false;
-      try { v.playbackRate = rate; } catch {}
-      v.classList.remove('is-visible');
-    });
-
-    function show(v){ v.classList.add('is-visible'); }
-    function hide(v){ v.classList.remove('is-visible'); }
-
-    function watchActive() {
-      if (!a) return;
-      const onTimeUpdate = () => {
-        const d = a.duration;
-        if (!Number.isFinite(d) || d <= 0) return;
-        const remaining = d - a.currentTime;
-        if (remaining <= (CROSSFADE + SAFETY)) {
-          a.removeEventListener('timeupdate', onTimeUpdate);
-          if (b) {
-            try { b.currentTime = 0; } catch {}
-            b.play().catch(() => {});
-            show(b);
-            setTimeout(() => {
-              hide(a);
-              try { a.pause(); } catch {}
-              const tmp = a; a = b; b = tmp;
-              watchActive();
-            }, CROSSFADE * 1000);
-          } else {
-            a.loop = true;
-          }
-        }
-      };
-      a.addEventListener('timeupdate', onTimeUpdate);
-    }
-
-    function start() {
-      if (a) {
-        try { a.currentTime = 0; } catch {}
-        a.play().catch(() => {});
-        show(a);
-        if (b) {
-          try { b.pause(); b.currentTime = 0; } catch {}
-          hide(b);
-        }
-        watchActive();
-      }
-    }
-
-    let pending = videos.length;
-    videos.forEach(v => v.addEventListener('loadedmetadata', () => {
-      try { v.playbackRate = rate; } catch {}
-      if (--pending <= 0) start();
-    }));
-    setTimeout(() => { if (pending > 0) start(); }, 1500);
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) return;
-      // Re-apply playbackRate upon returning
-      videos.forEach(v => { try { v.playbackRate = rate; } catch {} });
-    });
-  }
+  // header-video support removed (no longer used)
 
   function setupProfileNavigation() {
     const navProfile = document.querySelector('.nav-profile');
@@ -280,8 +202,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function createLayoutModule() {
     function setBodyOffset() {
-      if (!DOM.header) return;
-      DOM.body.style.paddingTop = `${DOM.header.offsetHeight || 0}px`;
+      // No offset: main content should go under the fixed header
+      if (!DOM.body) return;
+      DOM.body.style.paddingTop = '0px';
     }
 
     function init() {
