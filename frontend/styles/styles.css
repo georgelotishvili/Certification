@@ -68,7 +68,6 @@ header {
   left: 0;
   right: 0;
   z-index: 120;
-  background: var(--color-surface);
 }
 
 .header-hero {
@@ -82,60 +81,6 @@ header {
   pointer-events: none;  /* clicks pass through if needed */
 }
 
-.header-background {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 140px; /* match .header-hero */
-  z-index: 1;
-  overflow: hidden;
-}
-.header-carousel {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  /* Customize via inline --clouds-image and --clouds-speed if needed */
-  background: var(--clouds-bg, #5aa4ff); /* sky-blue base to hide any seam */
-}
-.header-carousel::before,
-.header-carousel::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 100%;
-  background-image: var(--clouds-image, url('../assets/video/clouds.jpg'));
-  background-repeat: no-repeat;
-  /* Fill full width to avoid gaps between slides */
-  background-size: cover;
-  background-position: center;
-  will-change: transform;
-  backface-visibility: hidden;
-  transform: translateZ(0);
-  animation: headerCloudsSlide var(--clouds-speed, 90s) linear infinite;
-}
-.header-carousel::before {
-  left: 0;
-}
-.header-carousel::after {
-  /* slight overlap to hide potential subpixel hairline */
-  left: calc(100% - 1px);
-}
-@keyframes headerCloudsSlide {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-100%); }
-}
-@keyframes headerCloudsMove {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-100%); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .header-carousel::before,
-  .header-carousel::after {
-    animation: none;
-  }
-}
 .header-video {
   position: absolute;
   inset: 0;
@@ -152,11 +97,11 @@ header {
 
 .nav-bar {
   position: absolute;
-  bottom: -20px;
+  bottom: 40px;
   left: 50%;
   transform: translateX(-50%);
-  width: 98%;
-  height: 40px;
+  width: 80%;
+  height: 80px;
   padding: 0 4px 0 10px;
   display: flex;
   align-items: center;
@@ -165,9 +110,7 @@ header {
   z-index: 3; /* above header layers */
   border: 1px solid rgba(255, 255, 255, 0.3); /* match 'გაგზავნა' button border */
   gap: 16px;
-  background-color: #085400;
-  box-shadow: 0 16px 36px rgba(3, 6, 16, 0.6);
-  border-radius: 20px;
+  /* background: var(--color-surface); */
 }
 
 .logo {
@@ -176,13 +119,13 @@ header {
   cursor: pointer;
 }
 .logo img {
-  height: 26px;        /* match .login-btn height */
+  height: 50px;        /* match .login-btn height */
   width: auto;         /* keep aspect ratio */
   display: block;
   object-fit: contain; /* ensure full logo fits */
   transition: transform var(--transition-base), box-shadow var(--transition-base), opacity var(--transition-base);
   /* match default button shadow (brand) */
-  box-shadow: 0 4px 12px var(--brand-shadow-soft);
+  /* box-shadow: 0 4px 12px var(--brand-shadow-soft); */
 }
 .logo:hover img {
   /* match hover button shadow */
@@ -194,7 +137,7 @@ header {
   box-shadow: 0 4px 12px var(--brand-shadow-soft);
 }
 .auth-banner {
-  color: rgba(224, 233, 255, 0.82);
+  color: #000000;
   margin-left: 8px;
   white-space: nowrap;
   overflow: hidden;
@@ -214,7 +157,7 @@ header {
 }
 
 .nav a {
-  color: rgba(231, 236, 255, 0.82);
+  color: #000000;
   padding: 6px 10px;
   border-radius: var(--radius-sm);
   transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
@@ -222,7 +165,7 @@ header {
 
 .nav a:hover,
 .nav a:focus-visible {
-  color: var(--color-text);
+  color: #000000;
   /* brighter hover on green navbar */
   background: rgba(255, 255, 255, 0.14);
   transform: translateY(-1px);
@@ -280,22 +223,22 @@ header {
   padding: 6px 30px;
   width: 100px;
   height: 32px;
-  background: var(--brand-primary);
-  color: var(--color-text);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 16px;
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 0;
   cursor: pointer;
   transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
-  box-shadow: 0 4px 12px var(--brand-shadow-soft);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
 .login-btn:hover,
 .login-btn:focus-visible {
-  background: #0a6f00;
-  color: var(--color-text);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: #f2f2f2;
+  color: #000000;
+  border-color: rgba(0, 0, 0, 0.25);
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px var(--brand-shadow);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
 }
 
 .login-btn:focus-visible {
@@ -505,12 +448,12 @@ body.menu-open .burger {
 }
 
 main {
-  min-height: 600px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
-  background: var(--color-surface);
+background-image: url("../assets/photos/main backenground.jpg");
+background-size: cover;
+background-position: center;
+background-repeat: no-repeat;
+width: 100%;
+aspect-ratio: 1920 / 820;
 }
 
 footer {
