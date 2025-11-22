@@ -54,6 +54,13 @@ body {
   font-style: normal;
   font-display: swap;
 }
+@font-face {
+  font-family: 'BPG Nino Mtavruli Bold';
+  src: url('../assets/fonts/bpg_nino_mtavruli_bold.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
 
 body {
   background: radial-gradient(120% 120% at 0% 0%, rgba(90, 164, 255, 0.12), transparent 55%), radial-gradient(100% 110% at 100% 0%, rgba(51, 82, 125, 0.18), transparent 60%), linear-gradient(180deg, #050813 0%, #060b19 30%, #090f1f 100%);
@@ -89,7 +96,7 @@ header {
   transform: translateX(-50%);
   width: 80%;
   height: 80px;
-  padding: 0 4px 0 10px;
+  /* padding: 0 4px 0 10px; */
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -106,23 +113,17 @@ header {
   cursor: pointer;
 }
 .logo img {
-  height: 50px;        /* match .login-btn height */
+  height: 40px;        /* match .login-btn height */
   width: auto;         /* keep aspect ratio */
   display: block;
   object-fit: contain; /* ensure full logo fits */
-  transition: transform var(--transition-base), box-shadow var(--transition-base), opacity var(--transition-base);
+  transition: none;
+  box-shadow: none;
   /* match default button shadow (brand) */
   /* box-shadow: 0 4px 12px var(--brand-shadow-soft); */
 }
-.logo:hover img {
-  /* match hover button shadow */
-  transform: translateY(-1px);
-  box-shadow: 0 12px 28px var(--brand-shadow);
-}
-.logo:active img {
-  transform: translateY(0) scale(0.98);
-  box-shadow: 0 4px 12px var(--brand-shadow-soft);
-}
+.logo:hover img { transform: none; box-shadow: none; }
+.logo:active img { transform: none; box-shadow: none; }
 .auth-banner {
   color: #000000;
   margin-left: 8px;
@@ -155,9 +156,9 @@ header {
   color: #000000;
   /* brighter hover on green navbar */
   background: rgba(255, 255, 255, 0.14);
-  transform: translateY(-1px);
-  /* stronger shadow like earlier design + subtle inner outline */
-  box-shadow: 0 12px 28px rgba(5, 12, 30, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+  transform: none;
+  /* subtle hover shadow */
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
 }
 
 .nav a:focus-visible {
@@ -442,12 +443,47 @@ background-repeat: no-repeat;
 width: 100%;
 aspect-ratio: 1920 / 820;
 margin-top: 80px;
+padding-top: 180px;
+}
+
+/* Main hero text block */
+.main-hero {
+  width: 80%;
+  height: 400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
+  color: #4D4D4D;
+}
+
+.main-hero p {
+  margin: 0;
+  font-size: 14pt;
+  line-height: 1.3;
+  font-family: 'DejaVu Sans';
+}
+
+.main-hero .gi-line .initial { 
+  font-weight: 700; 
+  font-size: 18pt 
+}
+
+.main-hero h1 {
+  width: 500px;
+  margin-top: 10px;
+  font-size: 48pt;
+  line-height: 1;
+  font-family: 'BPG Nino Mtavruli Bold';
+  text-indent: 42px;
 }
 
 footer {
   background-color: white;
   /* border-top: 1px solid var(--color-border); */
-  padding: 48px 0px;
+  padding: 36px 0px;
   color: #111111;
   box-shadow: 0 -6px 18px rgba(29, 39, 68, 0.08);
 }
