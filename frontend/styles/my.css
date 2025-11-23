@@ -3,22 +3,27 @@
 
 body {
   background: #ffffff;
-  padding-top: 300px;
 }
 
 /* Override main layout from styles.css to standard flow for this page */
 main {
   display: block;
   max-width: 1100px;
-  margin: 0 auto;
+  margin: 120px auto 0;
   padding: 24px 16px 40px;
   aspect-ratio: auto;
+  /* Ensure no hero background image leaks from global styles */
+  background: transparent;
+  background-image: none;
+}
+@media (max-width: 910px) {
+  main { margin-top: 90px; }
 }
 
 .page-section h1 {
   font-size: 20px;
   margin-bottom: 12px;
-  color: var(--color-text);
+  color: #111111; /* dark for white background */
 }
 
 .page-section {
@@ -26,7 +31,7 @@ main {
 }
 
 .page-section .muted {
-  color: var(--color-muted);
+  color: #374151; /* darker subtitle on white */
   font-size: 13px;
   margin: 0;
 }
@@ -396,11 +401,101 @@ main {
   border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
+/* Light theme overrides for the four center cards on the personal page */
+.my-grid .profile-card,
+.my-grid .cert-card,
+.my-grid .reviews-card,
+.my-grid .expert-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #111111;
+}
+.my-grid .profile-card h2,
+.my-grid .cert-head h2,
+.my-grid .reviews-head h2,
+.my-grid .expert-head h2 {
+  color: #111111;
+}
+.my-grid .profile-label,
+.my-grid .cert-label,
+.my-grid .expert-label,
+.my-grid .detail-label {
+  color: #374151;
+}
+.my-grid .profile-value,
+.my-grid .cert-value,
+.my-grid .detail-value,
+.my-grid .reviews-average {
+  color: #111111;
+}
+/* Comments and expert items within cards on white */
+.my-grid .comment-item {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: #111111;
+}
+.my-grid .expert-item {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: #111111;
+}
+/* Inputs inside expert form and comment form to match white cards */
+.my-grid .expert-field input[type="text"],
+.my-grid .comment-form textarea {
+  background: #ffffff;
+  color: #111111;
+  border-color: #e5e7eb;
+}
+
+/* White card visibility improvements for expert form and list */
+.my-grid .expert-code { color: #374151; }
+.my-grid .file-choose {
+  background: #f3f4f6;
+  color: #111111;
+  border: 1px solid #e5e7eb;
+}
+.my-grid .file-choose:hover,
+.my-grid .file-choose:focus-visible {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+.my-grid .file-chosen { color: #6b7280; }
+.my-grid .file-link { color: #1d4ed8; }
+
+.my-grid .expert-item > summary { color: #111111; }
+.my-grid .expert-item .sum-date { color: #6b7280; }
+.my-grid .expert-item .item-delete { color: #9ca3af; }
+.my-grid .expert-item .item-delete:hover,
+.my-grid .expert-item .item-delete:focus-visible { color: #ef4444; }
+
 /* Certificate status chip */
 #myCertStatus { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border-soft); }
 .cert-card[data-status="active"] #myCertStatus { background: rgba(8, 84, 0, 0.15); color: #9ae6b4; border-color: rgba(8,84,0,0.35); }
 .cert-card[data-status="suspended"] #myCertStatus { background: rgba(251, 191, 36, 0.15); color: #fbd38d; border-color: rgba(251,191,36,0.35); }
 .cert-card[data-status="expired"] #myCertStatus { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border-color: rgba(148,163,184,0.35); }
+
+/* Improve status chip contrast on white cards */
+.my-grid .cert-card #myCertStatus {
+  border-color: #e5e7eb;
+}
+.my-grid .cert-card[data-status="active"] #myCertStatus {
+  background: rgba(8, 84, 0, 0.10);
+  color: #085400; /* brand dark green for readability */
+  border-color: rgba(8, 84, 0, 0.35);
+  font-weight: 600;
+}
+.my-grid .cert-card[data-status="suspended"] #myCertStatus {
+  background: rgba(251, 191, 36, 0.12);
+  color: #92400e; /* darker amber */
+  border-color: rgba(251, 191, 36, 0.45);
+  font-weight: 600;
+}
+.my-grid .cert-card[data-status="expired"] #myCertStatus {
+  background: rgba(148, 163, 184, 0.12);
+  color: #475569; /* slate */
+  border-color: rgba(148, 163, 184, 0.45);
+  font-weight: 600;
+}
 
 /* Comments as timeline */
 .comments-list { position: relative; padding-left: 14px; }
