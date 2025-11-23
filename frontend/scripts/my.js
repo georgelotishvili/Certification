@@ -174,9 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function setBodyOffset() {
     if (!DOM.header) return;
-    const headerH = DOM.header.offsetHeight || 0;
-    const navBarH = 40; // matches .nav-bar height
-    DOM.body.style.paddingTop = `${headerH + navBarH}px`;
+    DOM.body.style.paddingTop = '0px';
   }
   setBodyOffset();
   window.addEventListener('load', setBodyOffset);

@@ -1,10 +1,5 @@
 /* Keep header height identical to main page but without videos/hero */
-.header-placeholder {
-  width: 100%;
-  height: 40px;
-  background: transparent;
-  display: block;
-}
+
 
 /* Override main layout from styles.css to standard flow for this page */
 main {
@@ -37,10 +32,7 @@ main {
   min-width: 150px;
 }
 
-/* Hide auth banner on My page (name, surname, code not needed here) */
-.nav-bar .auth-banner {
-  display: none !important;
-}
+
 
 /* Profile section */
 .profile-section {
