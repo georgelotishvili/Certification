@@ -1,13 +1,18 @@
 /* Keep header height identical to main page but without videos/hero */
 
 
+body {
+  background: #ffffff;
+  padding-top: 300px;
+}
+
 /* Override main layout from styles.css to standard flow for this page */
 main {
   display: block;
   max-width: 1100px;
   margin: 0 auto;
   padding: 24px 16px 40px;
-  background: var(--color-surface);
+  aspect-ratio: auto;
 }
 
 .page-section h1 {
