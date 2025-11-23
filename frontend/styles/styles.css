@@ -79,7 +79,7 @@ header {
 
 .header-hero {
   width: 100%;
-  height: 140px;
+  height: auto;
   object-fit: cover;
   object-position: center;
   display: block;
@@ -91,20 +91,17 @@ header {
 
 .nav-bar {
   position: absolute;
-  bottom: 40px;
+  top: 10px;
   left: 50%;
   transform: translateX(-50%);
   width: 80%;
   height: 80px;
-  /* padding: 0 4px 0 10px; */
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: nowrap;
-  z-index: 3; /* above header layers */
-  border: 1px solid rgba(255, 255, 255, 0.3); /* match 'გაგზავნა' button border */
+  z-index: 3;
   gap: 16px;
-  /* background: var(--color-surface); */
 }
 
 .logo {
@@ -442,7 +439,7 @@ background-position: center;
 background-repeat: no-repeat;
 width: 100%;
 aspect-ratio: 1920 / 820;
-margin-top: 80px;
+margin-top: 70px;
 padding-top: 180px;
 }
 
