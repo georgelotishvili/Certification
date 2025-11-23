@@ -110,7 +110,7 @@ header {
   cursor: pointer;
 }
 .logo img {
-  height: 40px;        /* match .login-btn height */
+  height: 30px;        /* match .login-btn height */
   width: auto;         /* keep aspect ratio */
   display: block;
   object-fit: contain; /* ensure full logo fits */
