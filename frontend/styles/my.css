@@ -2,7 +2,12 @@
 
 
 body {
-  background: #ffffff;
+  background-color: #ffffff;
+  background-image: url("../assets/photos/main backenground 2.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 /* Override main layout from styles.css to standard flow for this page */
@@ -434,6 +439,15 @@ main {
   border-color: #e5e7eb;
   color: #111111;
 }
+.my-grid .comment-text { color: #111111; }
+.my-grid .comment-meta { color: #6b7280; }
+.my-grid .comments-list::before { background: #d1d5db; }
+.my-grid .comment-item::before { background: #3b82f6; box-shadow: 0 0 0 2px #dbeafe; }
+.my-grid .comment-delete { color: #9ca3af; }
+.my-grid .comment-delete:hover,
+.my-grid .comment-delete:focus-visible { color: #ef4444; }
+/* Keep card readable even when disabled (non-interactive only) */
+.my-grid .reviews-card.disabled { opacity: 1; }
 .my-grid .expert-item {
   background: #f9fafb;
   border-color: #e5e7eb;
@@ -446,6 +460,8 @@ main {
   color: #111111;
   border-color: #e5e7eb;
 }
+.my-grid .expert-field input[type="text"]::placeholder,
+.my-grid .comment-form textarea::placeholder { color: #9ca3af; }
 
 /* White card visibility improvements for expert form and list */
 .my-grid .expert-code { color: #374151; }
@@ -573,3 +589,9 @@ main {
   overflow-wrap: anywhere;
 }
 .expert-item .detail-col.files .detail-value:empty::after { content: '—'; color: var(--text-muted); font-size: 12px; }
+
+/* Ensure expert details text is dark on light cards (override late for specificity) */
+.my-grid .expert-item .detail-label { color: #374151; }
+.my-grid .expert-item .detail-value { color: #111111; }
+.my-grid .expert-item .detail-col.files .detail-value a { color: #1d4ed8; }
+.my-grid .expert-item .detail-col.files .detail-value:empty::after { color: #9ca3af; }
