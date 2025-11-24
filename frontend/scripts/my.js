@@ -85,7 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
     expertProjectChosen: document.getElementById('expertProjectChosen'),
     expertSubmitBtn: document.getElementById('expertSubmitBtn'),
     expertList: document.getElementById('expertList'),
-    expertCurrentCode: document.getElementById('expertCurrentCode'),
   };
 
   const GEORGIA_TIME_ZONE = 'Asia/Tbilisi';
@@ -658,8 +657,8 @@ document.addEventListener('DOMContentLoaded', () => {
       loadList();
     }
 
-    function setCurrent(code) {
-      if (DOM.expertCurrentCode) DOM.expertCurrentCode.textContent = code || '—';
+    function setCurrent() {
+      /* current code badge removed from UI */
     }
 
     function buildHeaders() {
@@ -697,7 +696,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const draft = state.list.find((x) => x.status === 'draft');
         state.draftId = draft ? draft.id : null;
         state.currentDraft = draft || null;
-        setCurrent(draft?.unique_code || '—');
+        setCurrent();
         updateDraftUI(draft || null);
         // Ensure latest submitted project file is visible in the bottom field after submission
         showLatestSubmittedProjectLink();
@@ -1007,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (DOM.expertProjectChosen) DOM.expertProjectChosen.textContent = 'No file chosen';
           state.draftId = null;
           state.currentDraft = null;
-          setCurrent('—');
+          setCurrent();
           updateClearStates();
           updateSubmitEnabled();
         } catch { alert('გაგზავნა ვერ მოხერხდა'); }

@@ -283,7 +283,7 @@ main {
 .expert-card.disabled { opacity: 0.6; pointer-events: none; }
 .expert-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .expert-head h2 { font-size: 16px; color: var(--color-text); }
-.expert-code { font-size: 13px; color: var(--text-muted); }
+.expert-code { display: none; }
 .expert-form { display: flex; flex-direction: column; gap: 12px; }
 .expert-grid { display: grid; grid-template-columns: 1fr; gap: 10px 18px; }
 .expert-field { display: flex; flex-direction: column; gap: 6px; }
