@@ -28,7 +28,8 @@ main {
 .page-section h1 {
   font-size: 20px;
   margin-bottom: 12px;
-  color: #111111; /* dark for white background */
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
 }
 
 .page-section {
@@ -36,9 +37,10 @@ main {
 }
 
 .page-section .muted {
-  color: #374151; /* darker subtitle on white */
+  color: rgba(255,255,255,0.9);
   font-size: 13px;
   margin: 0;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.25);
 }
 
 /* Make \"მთავარი გვერდი\" button comfortable for longer Georgian label */
@@ -411,8 +413,8 @@ main {
 .my-grid .cert-card,
 .my-grid .reviews-card,
 .my-grid .expert-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: #ffffffba;
+  border: 1px solid #646d7e;
   color: #111111;
 }
 .my-grid .profile-card h2,
@@ -436,7 +438,7 @@ main {
 /* Comments and expert items within cards on white */
 .my-grid .comment-item {
   background: #f9fafb;
-  border-color: #e5e7eb;
+  border-color: #94a3b8; /* darker for visibility */
   color: #111111;
 }
 .my-grid .comment-text { color: #111111; }
@@ -450,7 +452,7 @@ main {
 .my-grid .reviews-card.disabled { opacity: 1; }
 .my-grid .expert-item {
   background: #f9fafb;
-  border-color: #e5e7eb;
+  border-color: #94a3b8; /* darker */
   color: #111111;
 }
 /* Inputs inside expert form and comment form to match white cards */
@@ -458,7 +460,7 @@ main {
 .my-grid .comment-form textarea {
   background: #ffffff;
   color: #111111;
-  border-color: #e5e7eb;
+  border-color: #94a3b8; /* darker */
 }
 .my-grid .expert-field input[type="text"]::placeholder,
 .my-grid .comment-form textarea::placeholder { color: #9ca3af; }
@@ -468,12 +470,12 @@ main {
 .my-grid .file-choose {
   background: #f3f4f6;
   color: #111111;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #94a3b8; /* darker */
 }
 .my-grid .file-choose:hover,
 .my-grid .file-choose:focus-visible {
   background: #e5e7eb;
-  border-color: #d1d5db;
+  border-color: #64748b; /* even darker on hover */
 }
 .my-grid .file-chosen { color: #6b7280; }
 .my-grid .file-link { color: #1d4ed8; }
@@ -492,7 +494,7 @@ main {
 
 /* Improve status chip contrast on white cards */
 .my-grid .cert-card #myCertStatus {
-  border-color: #e5e7eb;
+  border-color: #94a3b8;
 }
 .my-grid .cert-card[data-status="active"] #myCertStatus {
   background: rgba(8, 84, 0, 0.10);
@@ -564,6 +566,7 @@ main {
 .expert-item .item-delete { top: 8px; right: 8px; z-index: 3; pointer-events: auto; }
 
 .expert-item .content { padding: 12px; border-top: 1px solid var(--border-soft); }
+.my-grid .expert-item .content { border-top-color: #94a3b8; }
 .expert-item .detail-columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
