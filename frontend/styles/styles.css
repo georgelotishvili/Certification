@@ -590,6 +590,19 @@ footer {
   flex-shrink: 0;
 }
 
+.footer-content.footer-only-contact .footer-icon {
+  width: 44px;
+  height: 44px;
+  padding: 11px;
+  border-radius: 50%;
+  background: #1e3a8a; /* solid blue circle */
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .footer-contact-item {
   display: inline-flex;
   align-items: center;
