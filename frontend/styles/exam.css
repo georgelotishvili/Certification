@@ -1,6 +1,19 @@
 * {
   box-sizing: border-box;
+  font-family: 'DejaVu Sans', sans-serif;
+  font-weight: 100;
+  font-size: 12px;
 }
+
+/* Load same fonts as login modal (styles.css) so families match exactly */
+@font-face {
+  font-family: 'DejaVu Sans';                /* სავალდებულო */
+  src: url('../assets/fonts/dejavu-sans.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100;                          /* სურვილისამებრ, მაგრამ სასურველია */
+  font-display: swap;
+}
+
 
 html, body { 
   height: 100%; 
@@ -26,9 +39,7 @@ html, body {
 
 body { 
   background: linear-gradient(180deg, #f3f6fd 0%, #eef2fb 100%);
-  font-family: 'DejaVu Sans', sans-serif;
   color: var(--text-strong);
-  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -137,7 +148,6 @@ body {
         .camera-note {
           width: 100%;
           flex: 0 0 auto;
-          font-size: 12px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -166,8 +176,6 @@ body {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          font-weight: 600;
-          font-size: 24px;
           text-align: center;
           gap: 14px;
           padding: 14px;
@@ -185,7 +193,6 @@ body {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
             line-height: 1;
             gap: 6px;
             padding: 8px;
@@ -203,8 +210,6 @@ body {
 
             .question-number-text,
             .block-number-text {
-              font-size: 13px;
-              font-weight: 500;
               color: var(--text-muted);
               text-transform: uppercase;
               letter-spacing: 0.5px;
@@ -212,8 +217,6 @@ body {
 
             .question-number-num,
             .block-number-num {
-              font-size: 18px;
-              font-weight: 700;
               color: var(--text-strong);
             }
 
@@ -248,17 +251,12 @@ body {
           .ct-title,
           .ct-subtitle {
             background: transparent;
-            font-size: 16px;
             color: var(--text-muted);
-            font-weight: 600;
             letter-spacing: 0.3px;
           }
 
           .ct-countdown { 
-            font-family: monospace; 
-            font-size: 28px; 
             color: var(--accent);
-            font-weight: 700;
             padding: 6px 16px;
             border-radius: 4px;
             background: #f8fbff;
@@ -286,9 +284,7 @@ body {
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
             color: var(--text-muted);
-            font-size: 14px;
           }
 
           .cm-content {
@@ -343,8 +339,6 @@ body {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-weight: 700;
-                font-size: 15px;
                 color: var(--accent);
               }
 
@@ -554,8 +548,6 @@ body {
         }
 
           .right-datetime {
-            font-weight: 600;
-            font-size: 16px;
             text-align: center;
             display: flex;
             flex-direction: column;
@@ -581,8 +573,6 @@ body {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          font-weight: 600;
-          font-size: 24px;
           text-align: center;
           gap: 14px;
           padding: 14px;
@@ -592,8 +582,8 @@ body {
   .gate-overlay { 
     position: absolute; 
     inset: 0; 
-    background: var(--overlay-scrim);
-    backdrop-filter: blur(6px);
+  background: rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(8px);
     display: flex; 
     align-items: center; 
     justify-content: center; 
@@ -603,8 +593,8 @@ body {
   .code-overlay { 
     position: absolute; 
     inset: 0; 
-    background: var(--overlay-scrim);
-    backdrop-filter: blur(6px);
+  background: rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(8px);
     display: flex; 
     align-items: center; 
     justify-content: center; 
@@ -615,8 +605,8 @@ body {
   .final-overlay {
     position: absolute;
     inset: 0;
-    background: var(--overlay-scrim);
-    backdrop-filter: blur(6px);
+  background: rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(8px);
     z-index: 8;
   }
 
@@ -634,8 +624,8 @@ body {
   .answer-all-overlay {
     position: absolute;
     inset: 0;
-    background: var(--overlay-scrim);
-    backdrop-filter: blur(6px);
+  background: rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(8px);
     z-index: 8;
   }
 
@@ -663,8 +653,8 @@ body {
     box-shadow: 0 6px 16px rgba(29, 39, 68, 0.08);
   }
 
-  .result-label { font-weight: 700; color: var(--text-strong); }
-  .result-value { font-weight: 800; text-align: right; color: var(--accent); }
+  .result-label { color: var(--text-strong); }
+  .result-value { text-align: right; color: var(--accent); }
   .result-row-total {
     border-color: var(--border-strong);
     background: #f3f7ff;
@@ -672,7 +662,6 @@ body {
   .result-empty {
     text-align: center;
     color: var(--text-muted);
-    font-weight: 500;
     padding: 12px;
     border: 2px dashed var(--border-soft);
     border-radius: 4px;
@@ -691,24 +680,23 @@ body {
     width: 100%; 
     height: 42px; 
     padding: 0 14px; 
-    border: 2px solid var(--border-soft);
+  border: 1px solid #cbd5f5;
     border-radius: 4px;
-    font-size: 15px;
-    transition: all 150ms ease;
-    background: var(--surface-elevated);
-    color: var(--text-strong);
+    transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+    background: #ffffff;
+    color: #0f172a;
   }
 
   .exam-dialog input:focus {
     outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(47, 91, 168, 0.2);
+    border-color: #2563eb;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
   }
 
   .gate-error { 
     margin-top: 8px; 
     color: var(--danger);
-    font-weight: 500;
     padding: 8px 12px;
     background: var(--danger-soft);
     border-radius: 4px;
@@ -721,7 +709,6 @@ body {
 }
 
   .dev-bypass { 
-    font-size: 12px; 
     padding: 6px 12px; 
     border: 1px dashed var(--border-soft);
     border-radius: 4px;
@@ -738,17 +725,17 @@ body {
   }
 
   .exam-dialog { 
-    width: min(90vw, 540px); 
-    background: var(--surface-elevated);
-    border: 2px solid var(--border-strong);
+  width: min(90%, 420px); 
+  background: #f8fafc;
+  border: 1px solid #94a3b8;
     border-radius: 4px;
-    padding: 28px 24px 24px;
+  padding: 32px;
     text-align: center; 
     position: absolute; 
     top: 50%; 
     left: 50%; 
     transform: translate(-50%, -50%);
-    box-shadow: 0 24px 48px rgba(29, 39, 68, 0.18);
+  box-shadow: 0 32px 70px rgba(15, 23, 42, 0.18);
     z-index: 9;
   }
 
@@ -758,26 +745,24 @@ body {
     right: 10px; 
     width: 36px; 
     height: 36px; 
-    border: 2px solid var(--border-strong);
-    border-radius: 4px;
-    background: var(--surface-elevated);
+    border: 1px solid #94a3b8;
+    border-radius: 8px;
+    background: #ffffff;
     cursor: pointer; 
-    font-size: 22px; 
     line-height: 1;
-    color: var(--text-muted);
-    transition: all 150ms ease;
+    color: #475569;
+    transition: all 200ms ease;
   }
 
-  .gate-close:hover { 
-    background: #f0f4ff;
-    border-color: var(--accent);
-    color: var(--accent);
+.gate-close:hover,
+.gate-close:focus-visible { 
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
   }
 
   .exam-text { 
     margin-bottom: 20px;
-    font-size: 17px;
-    font-weight: 500;
     color: var(--text-muted);
   }
 
@@ -787,74 +772,76 @@ body {
     justify-content: center; 
   }
 
-  .btn { 
+.exam-dialog .btn { 
     min-width: 140px; 
     height: 42px; 
-    border: 2px solid var(--border-strong);
+    border: 1px solid #94a3b8;
     border-radius: 4px;
-    background: var(--surface-elevated);
-    color: var(--text-strong);
+    background: #ffffff;
+    color: #0f172a;
     cursor: pointer; 
     padding: 0 16px;
-    font-weight: 600;
-    font-size: 15px;
-    transition: all 150ms ease;
-    box-shadow: 0 4px 12px rgba(29, 39, 68, 0.12);
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
   }
 
-    .btn:hover { 
-      background: #f0f4ff;
-      border-color: var(--accent);
-      color: var(--accent);
-      transform: translateY(-1px);
-      box-shadow: 0 10px 24px rgba(47, 91, 168, 0.18);
+  .exam-dialog .btn:hover,
+  .exam-dialog .btn:focus-visible { 
+    background: #e2e8f0;
+    border-color: #94a3b8;
+    color: #0f172a;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
     }
 
-    .btn:active {
+  .exam-dialog .btn:active {
       transform: translateY(0);
-      box-shadow: 0 4px 10px rgba(29, 39, 68, 0.2);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);
     }
 
-    .btn[disabled] { 
+  .exam-dialog .btn[disabled] { 
       opacity: .5; 
       cursor: not-allowed;
       transform: none !important;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
     }
 
-    .btn.primary { 
-      background: var(--accent);
-      border-color: var(--accent);
+  .exam-dialog .btn.primary { 
+    background: #2563eb;
+    border: 1px solid rgba(37, 99, 235, 0.45);
       color: #ffffff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
     }
 
-      .btn.primary:hover { 
-        background: #244a8b;
-        border-color: #244a8b;
+    .exam-dialog .btn.primary:hover,
+    .exam-dialog .btn.primary:focus-visible { 
+      background: #1d4ed8;
+      border-color: rgba(29, 78, 216, 0.6);
         color: #ffffff;
+      box-shadow: 0 12px 28px rgba(37, 99, 235, 0.45);
       }
 
-    .btn.danger { 
+  .exam-dialog .btn.danger { 
       background: var(--danger);
       border-color: var(--danger);
       color: #ffffff;
     }
 
-      .btn.danger:hover { 
+    .exam-dialog .btn.danger:hover { 
         background: #a12b27;
         border-color: #a12b27;
       }
 
-    .btn.finish {
-      background: var(--surface-elevated);
-      border-color: var(--border-strong);
-      color: var(--text-muted);
+  .exam-dialog .btn.finish {
+    background: #ffffff;
+    border-color: #94a3b8;
+    color: #475569;
     }
 
-      .btn.finish:hover {
-        background: #f0f4ff;
-        border-color: var(--accent);
-        color: var(--accent);
+    .exam-dialog .btn.finish:hover {
+      background: #e2e8f0;
+      border-color: #94a3b8;
+      color: #0f172a;
       }
 
 .exam-bottom-actions { 
@@ -883,10 +870,8 @@ body {
   .btn-wide { 
     width: 260px;
     height: 50px; 
-    font-size: 16px; 
     padding: 0 20px; 
     white-space: nowrap;
-    font-weight: 600;
   }
 
 @media (max-width: 560px) {

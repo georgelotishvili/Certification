@@ -885,6 +885,8 @@ document.addEventListener('DOMContentLoaded', () => {
         date_desc: (a, b) => getDateValue(b.registration_date) - getDateValue(a.registration_date),
         score_asc: (a, b) => (a.exam_score ?? -Infinity) - (b.exam_score ?? -Infinity),
         score_desc: (a, b) => (b.exam_score ?? -Infinity) - (a.exam_score ?? -Infinity),
+        rating_asc: (a, b) => (a.rating ?? -Infinity) - (b.rating ?? -Infinity),
+        rating_desc: (a, b) => (b.rating ?? -Infinity) - (a.rating ?? -Infinity),
       };
       return map[key] || map.date_desc;
     }
@@ -965,6 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
       card.className = 'registry-card';
       card.dataset.qualification = person.qualification || '';
       card.dataset.status = person.certificate_status || '';
+      card.dataset.userId = String(person.id || '');
       card.setAttribute('role', 'listitem');
       card.innerHTML = `
         <div class="registry-avatar">
@@ -978,6 +981,8 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
       `;
+      // Try to refresh rating from reviews summary (same average used on personal page)
+      void refreshCardRating(card, person.id);
       card.addEventListener('click', () => handleCardClick(person));
       return card;
     }
@@ -994,6 +999,34 @@ document.addEventListener('DOMContentLoaded', () => {
       const num = Number(value);
       if (!Number.isFinite(num)) return '0%';
       return `${Math.round(num)}%`;
+    }
+
+    async function refreshCardRating(card, userId) {
+      try {
+        if (!userId) return;
+        const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(userId)}/summary`, {
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const avg = Number(data?.average);
+        if (!Number.isFinite(avg)) return;
+        const ratingEl = card.querySelector('.registry-rating');
+        if (ratingEl) {
+          ratingEl.textContent = `⭐ ${formatRating(avg)}`;
+        }
+        // Update underlying state so sorting by rating works with live values
+        const idx = state.items.findIndex((p) => String(p.id) === String(userId));
+        if (idx >= 0) {
+          state.items[idx].rating = avg;
+          const sortKey = DOM.registrySort?.value;
+          if (sortKey === 'rating_desc' || sortKey === 'rating_asc') {
+            applyFilters();
+          }
+        }
+      } catch {
+        /* no-op */
+      }
     }
 
     function handleCardClick(person) {
