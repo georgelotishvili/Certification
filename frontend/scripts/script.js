@@ -1058,6 +1058,13 @@ document.addEventListener('DOMContentLoaded', () => {
       closeNavDropdown();
       menuModule.closeDrawerSubmenu();
       if (DOM.body.classList.contains('menu-open')) menuModule.close();
+      try {
+        if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
+          alert('გთხოვთ გაიაროთ ავტორიზაცია');
+          authModule.openModal?.();
+          return;
+        }
+      } catch {}
       window.location.href = 'exam.html';
     }
 

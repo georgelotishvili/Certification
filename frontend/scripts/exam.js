@@ -933,6 +933,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function isLoggedIn() {
+    try {
+      return localStorage.getItem('authLoggedIn') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
   function updateUserHeader() {
     if (!DOM.ctTitle) return;
     const user = getCurrentUser();
@@ -1653,8 +1661,15 @@ document.addEventListener('DOMContentLoaded', () => {
     enterFullscreen();
 
     try {
+      // 1) სესიის გაშვება და დროის ათვლის დაწყება დაკლიკვისთანავე
+      if (!state.sessionId || !state.sessionToken) {
+        await beginSession();
+      }
+      startCountdown();
+
+      // 2) ნებართვების მოთხოვნა
       const cameraStream = await startCamera().catch(() => null);
-      if (!cameraStream) return;
+      if (!cameraStream) { stopCountdown(); return; }
 
       const screenStream = await startScreenCapture().catch((error) => {
         dlog('screen capture failed', error);
@@ -1663,20 +1678,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!screenStream) {
         alert('ეკრანის გაზიარება აუცილებელია გამოცდის დასაწყებად. გთხოვთ აირჩიოთ სრულ ეკრანზე გაზიარება და სცადოთ ხელახლა.');
+        stopCountdown();
         return;
       }
 
       activateExamUi();
-
-      // სესია და დროის ათვლა იწყება მხოლოდ "დაწყება"-ზე
-      if (!state.sessionId || !state.sessionToken) {
-        await beginSession();
-      }
-      startCountdown();
       await initExamData();
     } finally {
       if (!state.examStarted) {
         exitFullscreen();
+        stopCountdown();
       }
       if (!state.examStarted && startButton) {
         startButton.disabled = false;
@@ -1824,13 +1835,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function initialize() {
+    // Block entire exam for unauthenticated users
+    if (!isLoggedIn()) {
+      alert('გთხოვთ გაიაროთ ავტორიზაცია');
+      window.location.href = 'index.html';
+      return;
+    }
     hideAll();
     focusTrap.enable();
     updateUserHeader();
     updateRightDateTime();
     setInterval(updateRightDateTime, 30 * 1000);
-    initializeCountdownDisplay();
-    void preloadExamMetadata();
     show(DOM.gateOverlay);
     if (DOM.gateInput) DOM.gateInput.focus();
     showCameraMessage('კამერა ჩაირთვება ადმინისტრატორის პაროლის შეყვანის და გამოცდის დაწყების შემდეგ.', {
