@@ -197,7 +197,6 @@ header {
   text-align: left;
   color: #0f172a;                               /* dark text */
   cursor: pointer;
-  font-size: 14px;
 }
 
 .dropdown-item:hover {
@@ -725,7 +724,7 @@ footer {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  border-radius: 8px;
+  border-radius: 4px;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
 }
 
@@ -1214,6 +1213,41 @@ body.registry-open {
   background: #e2e8f0;
   border-color: #94a3b8;
   color: #0f172a;
+  transform: scale(1.05);
+}
+
+/* Unified close buttons across main and personal pages (X buttons) */
+.modal-close,
+.registry-close,
+.drawer-close,
+#ratingsClose,
+#userStatementsClose,
+#resultsClose {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #94a3b8;
+  background: #ffffff;
+  color: #475569;
+  font-size: 20px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+  transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base), transform var(--transition-base);
+}
+
+.modal-close:hover, .modal-close:focus-visible,
+.registry-close:hover, .registry-close:focus-visible,
+.drawer-close:hover, .drawer-close:focus-visible,
+#ratingsClose:hover, #ratingsClose:focus-visible,
+#userStatementsClose:hover, #userStatementsClose:focus-visible,
+#resultsClose:hover, #resultsClose:focus-visible {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
   transform: scale(1.05);
 }
 
