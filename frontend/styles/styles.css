@@ -704,7 +704,7 @@ footer {
 
 .modal-content {
   background: #f8fafc;
-  border: 1px solid #d9e3f0;
+  border: 1px solid #94a3b8;
   color: #0f172a;
   padding: 32px;
   width: min(90%, 420px);
@@ -713,7 +713,7 @@ footer {
   gap: 20px;
   align-items: stretch;
   text-align: center;
-  border-radius: 18px;
+  border-radius: 4px;
   box-shadow: 0 32px 70px rgba(15, 23, 42, 0.18);
 }
 
@@ -721,7 +721,7 @@ footer {
   align-self: flex-end;
   width: 36px;
   height: 36px;
-  border: 1px solid #cbd5f5;
+  border: 1px solid #94a3b8;
   background: #ffffff;
   color: #475569;
   font-size: 20px;
@@ -998,23 +998,23 @@ body.modal-open {
 }
 
 .modal-btn {
-  background: var(--brand-primary);
+  background: #2563eb;
   color: #ffffff;
-  border: 1px solid rgba(8, 84, 0, 0.45);
+  border: 1px solid rgba(37, 99, 235, 0.45);
   padding: 12px;
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), border-color var(--transition-base);
-  box-shadow: 0 4px 12px var(--brand-shadow-soft);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
 }
 
 .modal-btn:hover,
 .modal-btn:focus-visible {
-  background: #0a6f00;
+  background: #1d4ed8;
   color: #ffffff;
-  border-color: rgba(8, 84, 0, 0.6);
+  border-color: rgba(29, 78, 216, 0.6);
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px var(--brand-shadow);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.45);
 }
 
 .modal-btn:focus-visible {
@@ -1022,18 +1022,18 @@ body.modal-open {
 }
 
 .login-option {
-  background: var(--brand-primary);
+  background: #2563eb;
   color: #ffffff;
-  border: 1px solid rgba(8, 84, 0, 0.45);
-  box-shadow: 0 4px 12px var(--brand-shadow-soft);
+  border: 1px solid rgba(37, 99, 235, 0.45);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
 }
 
 .login-option:hover,
 .login-option:focus-visible {
-  background: #0a6f00;
-  border-color: rgba(8, 84, 0, 0.6);
+  background: #1d4ed8;
+  border-color: rgba(29, 78, 216, 0.6);
   color: #ffffff;
-  box-shadow: 0 12px 28px var(--brand-shadow);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.45);
   transform: translateY(-1px);
 }
 
@@ -1053,7 +1053,7 @@ body.modal-open {
 .field textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #cbd5f5;
+  border: 1px solid #94a3b8;
   background: #ffffff;
   color: #0f172a;
   border-radius: var(--radius-sm);
@@ -1074,15 +1074,15 @@ body.modal-open {
 }
 
 .submit {
-  background: var(--brand-primary);
+  background: #2563eb;
   color: #ffffff;
-  border: 1px solid rgba(8, 84, 0, 0.45);
+  border: 1px solid rgba(37, 99, 235, 0.45);
   padding: 12px;
   cursor: pointer;
   width: 100%;
   border-radius: var(--radius-sm);
   transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), border-color var(--transition-base);
-  box-shadow: 0 4px 12px var(--brand-shadow-soft);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
 }
 
 .back-to-login {
@@ -1113,9 +1113,9 @@ body.modal-open {
 
 .submit:hover,
 .submit:focus-visible {
-  background: #0a6f00;
-  border-color: rgba(8, 84, 0, 0.6);
-  box-shadow: 0 12px 28px var(--brand-shadow);
+  background: #1d4ed8;
+  border-color: rgba(29, 78, 216, 0.6);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.45);
   transform: translateY(-1px);
   color: #ffffff;
 }

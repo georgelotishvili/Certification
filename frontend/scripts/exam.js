@@ -1575,9 +1575,6 @@ document.addEventListener('DOMContentLoaded', () => {
       state.mustStayFullscreen = false;
       hide(DOM.gateOverlay);
 
-      // სესია საჭიროა ჩანაწერების ატვირთვისთვის
-      void beginSession();
-
       // კამერა/მიკროფონი — ნებართვა Gate-ის შემდეგ
       const cameraStream = await startCamera().catch(() => null);
       if (!cameraStream) {
@@ -1670,14 +1667,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       activateExamUi();
-      startCountdown();
 
+      // სესია და დროის ათვლა იწყება მხოლოდ "დაწყება"-ზე
       if (!state.sessionId || !state.sessionToken) {
         await beginSession();
-        startCountdown();
       }
-      await initExamData();
       startCountdown();
+      await initExamData();
     } finally {
       if (!state.examStarted) {
         exitFullscreen();
