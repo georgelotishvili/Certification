@@ -10,6 +10,12 @@ body {
   background-attachment: fixed;
 }
 
+/* Fixed heights for the personal page (desktop) */
+:root {
+  --my-row-profile: 260px;
+  --my-row-cert: 260px;
+  --my-row-bottom: 560px; /* ~5 comments visible */
+}
 /* Override main layout from styles.css to standard flow for this page */
 main {
   display: block;
@@ -354,6 +360,7 @@ main {
   display: grid;
   grid-template-columns: 1.1fr 1fr;
   grid-auto-rows: minmax(0, auto);
+  grid-template-rows: var(--my-row-profile) var(--my-row-cert) var(--my-row-bottom);
   grid-template-areas:
     "profile expert"
     "cert    expert"
@@ -378,28 +385,31 @@ main {
 @media (max-width: 980px) {
   .my-grid {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
     grid-template-areas:
       "profile"
       "cert"
       "expert"
       "reviews";
   }
+  .my-grid .profile-card,
+  .my-grid .cert-card,
+  .my-grid .reviews-card,
+  .my-grid .expert-card {
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+  }
 }
 
 /* Headings accent */
+/* Remove left decorative line on headings for cleaner look */
 .profile-card h2, .cert-head h2, .reviews-head h2, .expert-head h2 {
-  position: relative;
-  padding-left: 10px;
+  position: static;
+  padding-left: 0;
 }
 .profile-card h2::before, .cert-head h2::before, .reviews-head h2::before, .expert-head h2::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.3em;
-  bottom: 0.3em;
-  width: 3px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, var(--color-accent), var(--brand-primary));
+  content: none;
 }
 
 /* Unify card visuals */
@@ -416,6 +426,19 @@ main {
   background: #ffffffba;
   border: 1px solid #646d7e;
   color: #111111;
+}
+.my-grid .expert-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;                 /* prevent outer growth */
+  height: 100%;
+  min-height: 0;
+}
+.my-grid .expert-form { flex: 0 0 auto; }
+.my-grid .expert-list {
+  flex: 1 1 auto;
+  min-height: 0;                    /* allow flex child to shrink */
+  overflow-y: auto;                 /* enable vertical scroll for list */
 }
 .my-grid .profile-card h2,
 .my-grid .cert-head h2,
@@ -435,6 +458,47 @@ main {
 .my-grid .reviews-average {
   color: #111111;
 }
+/* Reviews card fixed height with inner scroll for comments */
+.my-grid .reviews-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.my-grid .reviews-comments { flex: 1 1 auto; min-height: 0; }
+.my-grid .comments-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  max-height: none;              /* remove legacy cap so space is used */
+  padding-bottom: 10px;          /* bottom spacing equal to gap */
+}
+
+/* Visible scrollbars styling for lists on this page */
+.my-grid .expert-list,
+.my-grid .comments-list {
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;                /* Firefox */
+  scrollbar-color: #94a3b8 #e5e7eb;     /* thumb / track */
+  padding-right: 6px;
+  padding-bottom: 10px;                 /* keep bottom spacing consistent */
+}
+.my-grid .expert-list::-webkit-scrollbar,
+.my-grid .comments-list::-webkit-scrollbar { width: 10px; }
+.my-grid .expert-list::-webkit-scrollbar-track,
+.my-grid .comments-list::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 8px;
+}
+.my-grid .expert-list::-webkit-scrollbar-thumb,
+.my-grid .comments-list::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 8px;
+  border: 2px solid #e5e7eb;
+}
+.my-grid .expert-list::-webkit-scrollbar-thumb:hover,
+.my-grid .comments-list::-webkit-scrollbar-thumb:hover { background: #64748b; }
 /* Comments and expert items within cards on white */
 .my-grid .comment-item {
   background: #f9fafb;
