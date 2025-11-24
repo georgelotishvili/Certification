@@ -23,6 +23,15 @@
         <button class="drawer-close" aria-label="დახურვა" type="button"></button>
         <div class="drawer-auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
         <nav class="drawer-nav">
+          <a href="#" class="drawer-registry">რეესტრი</a>
+          <div class="drawer-item drawer-exam">
+            <a href="#" class="drawer-exam-trigger" aria-haspopup="true" aria-expanded="false">გამოცდა</a>
+            <div class="drawer-submenu" role="menu" hidden>
+              <button type="button" class="drawer-submenu-item theoretical">თეორიული გამოცდა</button>
+              <button type="button" class="drawer-submenu-item review">პროექტის განხილვა</button>
+            </div>
+          </div>
+          <a href="#" class="drawer-about">ჩვენს შესახებ</a>
           <a href="#" class="drawer-statements">განცხადებები</a>
         </nav>
         <button class="drawer-login">მთავარი გვერდი</button>
@@ -34,6 +43,15 @@
         </div>
         <div class="auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
         <nav class="nav">
+          <a href="#" class="nav-registry">რეესტრი</a>
+          <div class="nav-item nav-exam">
+            <a href="#" class="exam-trigger" aria-haspopup="true" aria-expanded="false">გამოცდა</a>
+            <div class="dropdown" role="menu" aria-hidden="true">
+              <button type="button" class="dropdown-item theoretical">თეორიული გამოცდა</button>
+              <button type="button" class="dropdown-item review">პროექტის განხილვა</button>
+            </div>
+          </div>
+          <a href="#" class="nav-about">ჩვენს შესახებ</a>
           <a href="#" class="nav-statements">განცხადებები</a>
         </nav>
         <button class="login-btn home-btn">მთავარი გვერდი</button>
@@ -183,6 +201,42 @@
         </section>
       </div>
     </main>
+
+    <div class="registry-overlay" id="registryOverlay" aria-hidden="true">
+      <div class="registry-modal" role="dialog" aria-modal="true" aria-labelledby="registryTitle">
+        <div class="registry-head">
+          <h2 id="registryTitle">სერტიფიცირებული პირების რეესტრი</h2>
+          <button type="button" class="registry-close" id="registryClose" aria-label="დახურვა">×</button>
+        </div>
+        <div class="registry-controls">
+          <input type="text" id="registrySearch" class="registry-search" placeholder="ძებნა (სახელი, გვარი ან კოდი)" aria-label="ძიება" />
+          <div class="registry-checkboxes" role="group" aria-label="კვალიფიკაციის ფილტრები">
+            <label class="registry-check">
+              <input type="checkbox" id="registryFilterArchitect" />
+              <span>არქიტექტორი</span>
+            </label>
+            <label class="registry-check">
+              <input type="checkbox" id="registryFilterExpert" />
+              <span>არქიტექტორი ექსპერტი</span>
+            </label>
+          </div>
+          <label class="registry-sort">
+            <span>დალაგება</span>
+            <select id="registrySort">
+              <option value="date_desc">უახლესი რეგისტრაციები</option>
+              <option value="date_asc">ძველი რეგისტრაციები</option>
+              <option value="name_asc">სახელი (ა-ჰ)</option>
+              <option value="name_desc">სახელი (ჰ-ა)</option>
+              <option value="score_desc">ქულა მაღალი → დაბალი</option>
+              <option value="score_asc">ქულა დაბალი → მაღალი</option>
+            </select>
+          </label>
+        </div>
+        <div class="registry-body">
+          <div class="registry-list" id="registryList" role="list"></div>
+        </div>
+      </div>
+    </div>
 
     <!-- Ratings criteria overlay -->
     <div class="ratings-overlay" id="ratingsOverlay" aria-hidden="true">

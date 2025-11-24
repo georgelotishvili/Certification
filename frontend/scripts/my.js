@@ -34,6 +34,15 @@ document.addEventListener('DOMContentLoaded', () => {
     drawerHomeBtn: document.querySelector('.drawer-login'),
     navRegistry: document.querySelector('.nav-registry'),
     drawerRegistry: document.querySelector('.drawer-registry'),
+    navAbout: document.querySelector('.nav-about'),
+    drawerAbout: document.querySelector('.drawer-about'),
+    registryOverlay: document.getElementById('registryOverlay'),
+    registryClose: document.getElementById('registryClose'),
+    registryList: document.getElementById('registryList'),
+    registrySearch: document.getElementById('registrySearch'),
+    registryFilterArchitect: document.getElementById('registryFilterArchitect'),
+    registryFilterExpert: document.getElementById('registryFilterExpert'),
+    registrySort: document.getElementById('registrySort'),
     navStatements: document.querySelector('.nav-statements'),
     drawerStatements: document.querySelector('.drawer-statements'),
     examTrigger: document.querySelector('.nav .exam-trigger'),
@@ -1189,9 +1198,185 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     window.location.href = 'index.html';
   };
-  if (DOM.navRegistry) DOM.navRegistry.addEventListener('click', goIndex);
-  if (DOM.drawerRegistry) DOM.drawerRegistry.addEventListener('click', goIndex);
+  // Personal page behavior:
+  // - Registry: open local modal (no navigation)
+  // - About: show info message (no navigation)
+  const showAbout = (e) => { if (e) e.preventDefault(); alert('ჩვენს შესახებ — მალე დაემატება'); };
+  if (DOM.navAbout) DOM.navAbout.addEventListener('click', showAbout);
+  if (DOM.drawerAbout) DOM.drawerAbout.addEventListener('click', (e) => { e.preventDefault(); closeMenu(); showAbout(); });
   // statements click handled by statementsModule (no redirect)
+
+  // Registry modal (personal page)
+  function createRegistryModule() {
+    const DEFAULT_PHOTO = 'https://placehold.co/96x96?text=CP';
+    const collator = new Intl.Collator('ka', { sensitivity: 'base', ignorePunctuation: true, usage: 'sort' });
+    const state = { open: false, loading: false, loaded: false, items: [], filtered: [], error: null };
+
+    function init() {
+      const triggers = [DOM.navRegistry, DOM.drawerRegistry].filter(Boolean);
+      triggers.forEach((trigger) => {
+        trigger.addEventListener('click', (event) => {
+          event.preventDefault();
+          open();
+          if (trigger === DOM.drawerRegistry) closeMenu();
+        });
+      });
+      if (DOM.registryClose) DOM.registryClose.addEventListener('click', (e) => { e.preventDefault(); close(); });
+      if (DOM.registryOverlay) DOM.registryOverlay.addEventListener('click', (e) => { if (e.target === DOM.registryOverlay) close(); });
+      if (DOM.registrySearch) DOM.registrySearch.addEventListener('input', applyFilters);
+      if (DOM.registryFilterArchitect) DOM.registryFilterArchitect.addEventListener('change', applyFilters);
+      if (DOM.registryFilterExpert) DOM.registryFilterExpert.addEventListener('change', applyFilters);
+      if (DOM.registrySort) DOM.registrySort.addEventListener('change', applyFilters);
+    }
+
+    function setOpen(value) {
+      state.open = !!value;
+      if (!DOM.registryOverlay) return;
+      DOM.registryOverlay.classList.toggle('is-open', state.open);
+      DOM.registryOverlay.setAttribute('aria-hidden', state.open ? 'false' : 'true');
+      DOM.body?.classList.toggle('registry-open', state.open);
+    }
+
+    function open() {
+      if (state.open) return;
+      setOpen(true);
+      ensureData();
+    }
+    function close() {
+      if (!state.open) return;
+      setOpen(false);
+    }
+
+    async function ensureData(force = false) {
+      if (!DOM.registryList) return;
+      if (state.loading) return;
+      if (state.loaded && !force) { applyFilters(); return; }
+      state.loading = true;
+      state.error = null;
+      renderLoading();
+      try {
+        const params = new URLSearchParams({ limit: '500' });
+        const res = await fetch(`${API_BASE}/certified-persons/registry?${params.toString()}`, { headers: { 'Cache-Control': 'no-cache' } });
+        if (!res.ok) throw new Error('registry failed');
+        const data = await res.json();
+        state.items = Array.isArray(data) ? data.map(normalizePerson) : [];
+        state.loaded = true;
+        applyFilters();
+      } catch {
+        renderError('რეესტრი ვერ ჩაიტვირთა');
+      } finally {
+        state.loading = false;
+      }
+    }
+
+    function normalizePerson(person) {
+      return {
+        id: person?.id,
+        full_name: (person?.full_name || '').trim(),
+        photo_url: (person?.photo_url || '').trim() || DEFAULT_PHOTO,
+        unique_code: (person?.unique_code || '').trim(),
+        qualification: (person?.qualification || '').trim().toLowerCase(),
+        certificate_status: (person?.certificate_status || '').trim().toLowerCase(),
+        rating: toNumber(person?.rating),
+        exam_score: toNumber(person?.exam_score),
+        registration_date: person?.registration_date || person?.created_at || null,
+      };
+    }
+    function toNumber(value) { const n = Number(value); return Number.isFinite(n) ? n : null; }
+
+    function applyFilters() {
+      if (!DOM.registryList) return;
+      if (!state.loaded) { if (!state.loading && !state.items.length) renderEmpty(); return; }
+      let next = state.items.slice();
+      const query = normalizeText(DOM.registrySearch?.value);
+      if (query) next = next.filter((p) => matchesQuery(p, query));
+      const architectChecked = !!DOM.registryFilterArchitect?.checked;
+      const expertChecked = !!DOM.registryFilterExpert?.checked;
+      if ((architectChecked && !expertChecked) || (!architectChecked && expertChecked)) {
+        const target = architectChecked ? 'architect' : 'expert';
+        next = next.filter((p) => p.qualification === target);
+      }
+      const sortKey = DOM.registrySort?.value || 'date_desc';
+      next.sort(getSorter(sortKey));
+      state.filtered = next;
+      renderList(next);
+    }
+
+    function getSorter(key) {
+      const map = {
+        name_asc: (a, b) => collator.compare(a.full_name || '', b.full_name || ''),
+        name_desc: (a, b) => collator.compare(b.full_name || '', a.full_name || ''),
+        date_asc: (a, b) => getDateValue(a.registration_date) - getDateValue(b.registration_date),
+        date_desc: (a, b) => getDateValue(b.registration_date) - getDateValue(a.registration_date),
+        score_asc: (a, b) => (a.exam_score ?? -Infinity) - (b.exam_score ?? -Infinity),
+        score_desc: (a, b) => (b.exam_score ?? -Infinity) - (a.exam_score ?? -Infinity),
+      };
+      return map[key] || map.date_desc;
+    }
+    function getDateValue(value) { const d = parseUtcDate(value); return d ? d.getTime() : 0; }
+    function normalizeText(v) { return String(v ?? '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+    function matchesQuery(person, q) {
+      const full = normalizeText(person.full_name);
+      const code = normalizeText(person.unique_code);
+      const [first, ...rest] = (person.full_name || '').split(/\s+/).filter(Boolean);
+      const last = rest.join(' ');
+      const tokens = [full, code, normalizeText(first), normalizeText(last)];
+      return tokens.some((t) => t && t.includes(q));
+    }
+
+    function renderLoading() { if (DOM.registryList) DOM.registryList.innerHTML = '<div class="registry-empty">იტვირთება...</div>'; }
+    function renderEmpty() { if (DOM.registryList) DOM.registryList.innerHTML = '<div class="registry-empty">ჩანაწერები ვერ მოიძებნა</div>'; }
+    function renderError(message) {
+      if (!DOM.registryList) return;
+      DOM.registryList.innerHTML = `
+        <div class="registry-empty">
+          <div>${escapeHtml(message)}</div>
+          <button type="button" class="registry-retry">კიდევ სცადე</button>
+        </div>`;
+      const retry = DOM.registryList.querySelector('.registry-retry');
+      if (retry) retry.addEventListener('click', (e) => { e.preventDefault(); ensureData(true); });
+    }
+    function renderList(items) {
+      if (!DOM.registryList) return;
+      if (!items.length) { renderEmpty(); return; }
+      const frag = document.createDocumentFragment();
+      items.forEach((person) => frag.appendChild(createCard(person)));
+      DOM.registryList.innerHTML = '';
+      DOM.registryList.appendChild(frag);
+    }
+    function createCard(person) {
+      const card = document.createElement('article');
+      card.className = 'registry-card';
+      card.dataset.qualification = person.qualification || '';
+      card.dataset.status = person.certificate_status || '';
+      card.setAttribute('role', 'listitem');
+      card.innerHTML = `
+        <div class="registry-avatar">
+          <img src="${escapeHtml(person.photo_url)}" alt="${escapeHtml(person.full_name || 'სერტიფიცირებული პირი')}" />
+        </div>
+        <div class="registry-info">
+          <div class="registry-name">${escapeHtml(person.full_name || '—')}</div>
+          <div class="registry-meta">
+            <span class="registry-rating" aria-label="რეიტინგი">⭐ ${formatRating(person.rating)}</span>
+            <span class="registry-score" aria-label="გამოცდის ქულა">${formatExamScore(person.exam_score)}</span>
+          </div>
+        </div>`;
+      card.addEventListener('click', () => handleCardClick(person));
+      return card;
+    }
+    function formatRating(v) { const n = Number(v); return Number.isFinite(n) ? n.toFixed(1) : '0.0'; }
+    function formatExamScore(v) { const n = Number(v); return Number.isFinite(n) ? `${Math.round(n)}%` : '0%'; }
+    function escapeHtml(value) { return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+    function handleCardClick(person) {
+      const id = person?.id;
+      if (!id) { window.location.href = 'my.html'; return; }
+      window.location.href = `my.html?userId=${encodeURIComponent(id)}`;
+    }
+
+    return { init, open, close, refresh: ensureData };
+  }
+  const registryModule = createRegistryModule();
+  registryModule.init();
 
   function closeDropdown() {
     if (!DOM.dropdown) return;
@@ -1419,6 +1604,7 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
         event.stopPropagation();
       }
+      try { registryModule?.close?.(); } catch {}
       if (!authModule.isLoggedIn()) {
         alert('გთხოვთ გაიაროთ ავტორიზაცია');
         return;
@@ -1523,10 +1709,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return { init, isOpen, close: closeOverlay, refresh: fetchStatements, handleNewStatement, reset };
   }
 
-  if (!VIEW_USER_ID) {
-    const statementsModule = createStatementsModule();
-    statementsModule.init();
-  }
+  const statementsModule = createStatementsModule();
+  statementsModule.init();
 });
 
 
