@@ -497,10 +497,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!state.examStarted && !state.gatePassed) return;
     stopScreenCapture();
     alert('ეკრანის გაზიარება შეწყდა. გამოცდის გაგრძელებისთვის აუცილებელია ეკრანის გაზიარების ხელახლა ჩართვა.');
+    // Disable starting when screen share is off, but allow exiting
+    try { if (DOM.examStart) DOM.examStart.disabled = true; } catch {}
+    try { if (DOM.examFinish) DOM.examFinish.disabled = false; } catch {}
     startScreenCapture({ force: true })
       .then((stream) => {
-        if (stream && state.examStarted) {
-          void startMediaRecording(MEDIA_TYPES.SCREEN, stream);
+        if (stream) {
+          if (state.examStarted) {
+            void startMediaRecording(MEDIA_TYPES.SCREEN, stream);
+          } else {
+            // Re-enable start once screen sharing is restored before exam start
+            try { if (DOM.examStart) DOM.examStart.disabled = false; } catch {}
+          }
         }
       })
       .catch((error) => {
@@ -1578,6 +1586,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Gate წარმატებულია — ჯერ დავბლოკოთ "გამოცდის დაწყება" სანამ ნებართვები არ დადასტურდება
       if (DOM.examStart) DOM.examStart.disabled = true;
+      // Always allow leaving the exam after gate
+      if (DOM.examFinish) DOM.examFinish.disabled = false;
 
       state.gatePassed = true;
       state.mustStayFullscreen = false;
@@ -1588,6 +1598,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!cameraStream) {
         alert('კამერის/მიკროფონის ნებართვა აუცილებელია გამოცდის დასაწყებად. გთხოვთ დაუშვათ წვდომა.');
         if (DOM.examStart) DOM.examStart.disabled = true;
+        if (DOM.examFinish) DOM.examFinish.disabled = false;
         return;
       }
 
@@ -1596,6 +1607,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!screenStream) {
         alert('ეკრანის გაზიარება აუცილებელია გამოცდის დასაწყებად. გთხოვთ აირჩიოთ სრულ ეკრანზე გაზიარება და სცადოთ ხელახლა.');
         if (DOM.examStart) DOM.examStart.disabled = true;
+        if (DOM.examFinish) DOM.examFinish.disabled = false;
         return;
       }
 
@@ -1777,7 +1789,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     DOM.examStart?.addEventListener('click', handleExamStart);
     DOM.examFinish?.addEventListener('click', () => {
-      if (!state.examStarted) return;
+      // Allow exiting even if the exam hasn't started
+      if (!state.examStarted) {
+        exitFullscreen();
+        void safeNavigateHome();
+        return;
+      }
       showStep1();
     });
 

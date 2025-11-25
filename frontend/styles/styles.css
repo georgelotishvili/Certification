@@ -771,14 +771,13 @@ body.modal-open {
 }
 
 .results-modal {
-  width: 100%;
-  max-width: 720px;
+  width: 720px;
   background: #ffffff;
   border: 1px solid #94a3b8; /* match auth modal border */
   box-shadow: 0 32px 80px rgba(15, 23, 42, 0.18);
   display: flex;
   flex-direction: column;
-  max-height: 90vh;
+  height: 90vh;
   overflow: hidden;
   border-radius: 4px;
   color: #0f172a;
@@ -859,7 +858,7 @@ body.modal-open {
 .statement-item {
   border: 1px solid #94a3b8; /* match auth modal border */
   background: #f8fafc;
-  border-radius: 10px;
+  border-radius: 4px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
 }
@@ -911,7 +910,7 @@ body.modal-open {
 .statements-placeholder {
   text-align: center;
   padding: 24px;
-  border-radius: 10px;
+  border-radius: 4px;
   border: 1px dashed #d9e3f0;
   color: #64748b;
   background: #f8fafc;
@@ -934,7 +933,7 @@ body.modal-open {
   margin-bottom: 16px;
   padding: 12px;
   border: 1px solid #94a3b8; /* match auth modal border */
-  border-radius: 12px;
+  border-radius: 4px;
   background: #f1f5f9;
   box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
   color: #0f172a;
@@ -1163,13 +1162,14 @@ body.registry-open {
 }
 
 .registry-modal {
-  width: 640px;
+  width: 720px;
   min-height: auto;
-  height: 80vh;
-  max-height: 80vh;
+  height: 90vh;
+  max-height: 90vh;
+  overflow: hidden;
   background: linear-gradient(180deg, #ffffff, #f5f7fb);
   border-radius: 4px;
-  border: 1px solid #d9e3f0;
+  border: 1px solid #94a3b8; /* match results modal border */
   box-shadow: 0 40px 90px rgba(15, 23, 42, 0.18);
   display: flex;
   flex-direction: column;
@@ -1178,17 +1178,7 @@ body.registry-open {
   position: relative;
 }
 .registry-modal::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 4px;
-  padding: 1px;
-  background: linear-gradient(135deg, rgba(90, 164, 255, 0.35), rgba(8, 84, 0, 0.3));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  pointer-events: none;
+  content: none; /* remove gradient border overlay to match statements modal */
 }
 
 .registry-head {
@@ -1197,7 +1187,7 @@ body.registry-open {
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #d9e3f0;
+  border-bottom: 1px solid #94a3b8; /* match results modal border */
 }
 .registry-head h2 {
   font-size: 16px;
@@ -1210,7 +1200,7 @@ body.registry-open {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid #cbd5f5;
+  border: 1px solid #94a3b8; /* unify with results modal */
   background: #f8fafc;
   color: #475569;
   font-size: 20px;
@@ -1276,7 +1266,7 @@ body.registry-open {
 .registry-sort select {
   width: 100%;
   border-radius: var(--radius-sm);
-  border: 1px solid #d0d7e3;
+  border: 1px solid #94a3b8; /* match statements modal fields */
   padding: 8px;
   background: #ffffff;
   color: #0f172a;
@@ -1304,8 +1294,8 @@ body.registry-open {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid #cbd5f5;
+  border-radius: 4px; /* align with statements modal */
+  border: 1px solid #94a3b8; /* align with statements modal */
   background: #ffffff;
 }
 .registry-check input {
@@ -1324,9 +1314,11 @@ body.registry-open {
   flex: 1;
   min-height: 0;
   display: flex;
+  overflow: hidden;
 }
 .registry-list {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -1399,7 +1391,7 @@ body.registry-open {
   transition: transform var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
 }
 .registry-card:hover {
-  transform: translateY(-2px);
+  transform: none;
   box-shadow: 0 24px 48px rgba(15, 23, 42, 0.14);
 }
 .registry-card[data-qualification="architect"][data-status="active"] {
