@@ -537,8 +537,8 @@ footer {
   border-color: var(--border-strong);
 }
 .footer-section.footer-contact .footer-icon {
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   padding: 4px;
   border-radius: 50%;
   background: var(--accent-soft);
@@ -591,16 +591,15 @@ footer {
 }
 
 .footer-content.footer-only-contact .footer-icon {
-  width: 44px;
-  height: 44px;
-  padding: 11px;
-  border-radius: 50%;
-  background: #1e3a8a; /* solid blue circle */
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  display: inline-block;
+  object-fit: contain;
 }
 
 .footer-contact-item {
