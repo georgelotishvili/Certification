@@ -53,7 +53,7 @@
 
     const formatRating = (value) => {
       const n = Number(value);
-      return Number.isFinite(n) ? n.toFixed(1) : '0.0';
+      return Number.isFinite(n) ? n.toFixed(2) : '0.00';
     };
 
     const formatExamScore = (value) => {
