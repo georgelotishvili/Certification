@@ -21,7 +21,7 @@
     try { return window.Auth?.openModal?.(); } catch {}
   }
 
-  document.addEventListener('headerReady', () => {
+  function bindHeader() {
     const DOM = {
       body: document.body,
       burger: document.querySelector('.burger'),
@@ -200,7 +200,40 @@
         if (fromDrawer) closeMenu();
       }
     }, { capture: true });
-  });
+  }
+
+  async function loadHeader() {
+    try {
+      const response = await fetch('../partials/header.html');
+      if (!response.ok) return;
+      const html = await response.text();
+      document.body.insertAdjacentHTML('afterbegin', html);
+
+      // Adjust profile link text/target based on page
+      const profilePage = isMyPage();
+      const navProfile = document.querySelector('.nav-profile[data-page-link]');
+      const drawerProfile = document.querySelector('.drawer-profile[data-page-link]');
+      if (profilePage) {
+        if (navProfile) { navProfile.textContent = 'მთავარი გვერდი'; navProfile.href = 'index.html'; }
+        if (drawerProfile) { drawerProfile.textContent = 'მთავარი გვერდი'; drawerProfile.href = 'index.html'; }
+      } else {
+        if (navProfile) navProfile.href = 'my.html';
+        if (drawerProfile) drawerProfile.href = 'my.html';
+      }
+
+      // Back-compat: notify others header is ready
+      document.dispatchEvent(new CustomEvent('headerReady', { detail: { isProfilePage: profilePage } }));
+
+      // Bind behaviors
+      bindHeader();
+    } catch {}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadHeader);
+  } else {
+    loadHeader();
+  }
 })();
 
 
