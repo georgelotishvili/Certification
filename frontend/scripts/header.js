@@ -86,15 +86,27 @@
   }
 
   function getSiteInfoPath(type) {
-    const name = type === 'terms' ? 'terms' : 'about';
-    return `../partials/site-info/${name}.html`;
+    switch (type) {
+      case 'about':
+      case 'terms':
+      case 'process':
+      case 'contract':
+        return `../partials/site-info/${type}.html`;
+      default:
+        return `../partials/site-info/about.html`;
+    }
   }
 
   async function openSiteInfo(type) {
     try {
       const els = getSiteInfoElements();
       if (!els) return;
-      const titles = { about: 'ჩვენს შესახებ', terms: 'წესები და პირობები' };
+      const titles = {
+        about: 'ჩვენს შესახებ',
+        terms: 'წესები და პირობები',
+        process: 'საგამოცდო პროცესი',
+        contract: 'ხელშეკრულების შაბლონი'
+      };
       if (els.title) els.title.textContent = titles[type] || 'ინფორმაცია';
 
       if (els.body) els.body.innerHTML = '<p style="opacity:.7">იტვირთება...</p>';
@@ -323,6 +335,22 @@
         closeDrawerAboutSubmenu();
         if (DOM.body.classList.contains('menu-open')) closeMenu();
         openSiteInfo('terms');
+        return;
+      }
+      if (closest(el, '.dropdown-item.process, .drawer-submenu-item.process')) {
+        event.preventDefault();
+        closeAboutDropdown();
+        closeDrawerAboutSubmenu();
+        if (DOM.body.classList.contains('menu-open')) closeMenu();
+        openSiteInfo('process');
+        return;
+      }
+      if (closest(el, '.dropdown-item.contract, .drawer-submenu-item.contract')) {
+        event.preventDefault();
+        closeAboutDropdown();
+        closeDrawerAboutSubmenu();
+        if (DOM.body.classList.contains('menu-open')) closeMenu();
+        openSiteInfo('contract');
         return;
       }
       // About panel items (desktop + mobile)
