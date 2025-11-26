@@ -74,14 +74,15 @@
     function bindEvents() {
       if (!DOM.overlay) return;
 
-      triggers.forEach((selector) => {
-        document.querySelectorAll(selector).forEach((trigger) => {
-          trigger.addEventListener('click', (event) => {
-            event.preventDefault();
-            beforeOpen?.(trigger);
-            open();
-          });
-        });
+      // Event delegation: works for dynamically inserted header
+      document.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!target) return;
+        const matched = triggers.map((sel) => target.closest(sel)).find(Boolean);
+        if (!matched) return;
+        event.preventDefault();
+        beforeOpen?.(matched);
+        open();
       });
 
       DOM.closeBtn?.addEventListener('click', (event) => {

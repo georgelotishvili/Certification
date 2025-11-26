@@ -39,22 +39,9 @@ document.addEventListener('DOMContentLoaded', () => {
     blankClose: document.getElementById('blankClose'),
     authBanner: document.querySelector('.auth-banner'),
     adminLink: document.querySelector('.admin-link'),
-    navExam: document.querySelector('.nav-exam'),
     navExamTrigger: document.querySelector('.nav .exam-trigger'),
     navDropdown: document.querySelector('.nav .dropdown'),
     footerForm: document.querySelector('.footer-form'),
-    navContact: document.querySelector('.nav-contact'),
-    drawerContact: document.querySelector('.drawer-contact'),
-    navRegistry: document.querySelector('.nav-registry'),
-    drawerRegistry: document.querySelector('.drawer-registry'),
-    registryTriggers: Array.from(document.querySelectorAll('.nav-registry, .drawer-registry')),
-    registryOverlay: document.getElementById('registryOverlay'),
-    registryClose: document.getElementById('registryClose'),
-    registryList: document.getElementById('registryList'),
-    registrySearch: document.getElementById('registrySearch'),
-    registryFilterArchitect: document.getElementById('registryFilterArchitect'),
-    registryFilterExpert: document.getElementById('registryFilterExpert'),
-    registrySort: document.getElementById('registrySort'),
   };
 
   const regionsForIsolation = Array.from(document.querySelectorAll('header, .nav-bar, main, footer, .overlay, .drawer, #loginModal'));
@@ -153,9 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
   authModule.init();
   examNavigationModule.init();
   footerFormModule.init();
-  setupContactScroll();
-  setupProfileNavigation();
-  setupAboutLabel();
+  // profile navigation uses native anchors + delegated gating
 
   // Bind header-dependent handlers after header is dynamically loaded
   document.addEventListener('headerReady', () => {
@@ -182,54 +167,63 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.registerOption = document.querySelector('.register-option');
       DOM.forgotPasswordLink = document.getElementById('forgotPasswordLink');
       DOM.authBanner = document.querySelector('.auth-banner');
-      DOM.navExam = document.querySelector('.nav-exam');
       DOM.navExamTrigger = document.querySelector('.nav .exam-trigger');
       DOM.navDropdown = document.querySelector('.nav .dropdown');
-      DOM.navRegistry = document.querySelector('.nav-registry');
-      DOM.drawerRegistry = document.querySelector('.drawer-registry');
 
       // Initialize modules that rely on header elements
       menuModule.init();
       // Always init auth so login modal works on personal page too
       authModule.init();
-      examNavigationModule.init();
 
-      // Gate navigation only on main page (on personal page native handlers apply)
-      if (!isProfilePage) {
-        // Gate profile and statements for unauthenticated users
-        const navProfileLink = document.querySelector('.nav-profile[data-page-link]');
-        const drawerProfileLink = document.querySelector('.drawer-profile[data-page-link]');
-        const navStatements = document.querySelector('.nav-statements');
-        const drawerStatements = document.querySelector('.drawer-statements');
+      // Gating moved to delegated handler below
 
-        const gate = (handler, fromDrawer = false) => (event) => {
-          try {
-            if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
-              event.preventDefault();
-              if (fromDrawer) menuModule.close();
-              alert('გთხოვთ გაიაროთ ავტორიზაცია');
-              authModule.openModal?.();
-              return;
-            }
-          } catch {}
-          handler?.(event);
-        };
+      // Registry triggers now handled via event delegation in registry.mini.js
+    } catch {}
+  });
 
-        if (navProfileLink) navProfileLink.addEventListener('click', gate(() => { window.location.href = 'my.html'; }, false));
-        if (drawerProfileLink) drawerProfileLink.addEventListener('click', gate(() => { window.location.href = 'my.html'; }, true));
-        if (navStatements) navStatements.addEventListener('click', gate(() => { window.location.href = 'my.html'; }, false));
-        if (drawerStatements) drawerStatements.addEventListener('click', gate(() => { window.location.href = 'my.html'; }, true));
+  // Delegated gating for statements (both pages) and profile (main page only)
+  document.addEventListener('click', (event) => {
+    const el = event.target;
+    if (!el) return;
+
+    // Statements: identical UX on both pages
+    const statements = el.closest('.nav-statements, .drawer-statements');
+    if (statements) {
+      event.preventDefault();
+      const fromDrawer = !!(el.closest('.drawer'));
+      try {
+        if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
+          if (fromDrawer) menuModule.close();
+          alert('გთხოვთ გაიაროთ ავტორიზაცია');
+          authModule.openModal?.();
+          return;
+        }
+      } catch {}
+      if (fromDrawer) menuModule.close();
+      if (window.location.pathname.includes('my.html')) {
+        if (window.location.hash !== '#statements') window.location.hash = 'statements';
+      } else {
+        window.location.href = 'my.html#statements';
       }
+      return;
+    }
 
-      // Wire up registry triggers to existing module
-      const openRegistry = (event, fromDrawer) => {
+    // Profile gating only on main page
+    const profile = el.closest('.nav-profile[data-page-link], .drawer-profile[data-page-link]');
+    if (!profile) return;
+    if (window.location.pathname.includes('my.html')) return;
+    const fromDrawer = !!(el.closest('.drawer'));
+    try {
+      if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
         event.preventDefault();
         if (fromDrawer) menuModule.close();
-        try { registryModule.open(); } catch {}
-      };
-      if (DOM.navRegistry) DOM.navRegistry.addEventListener('click', (e) => openRegistry(e, false));
-      if (DOM.drawerRegistry) DOM.drawerRegistry.addEventListener('click', (e) => openRegistry(e, true));
+        alert('გთხოვთ გაიაროთ ავტორიზაცია');
+        authModule.openModal?.();
+        return;
+      }
     } catch {}
+    if (fromDrawer) menuModule.close();
+    // allow natural navigation via href to my.html
   });
 
   // Global escape handling (modal first, then menu)
@@ -254,58 +248,34 @@ document.addEventListener('DOMContentLoaded', () => {
     close: fullscreenModule.close,
   };
 
-  function setupContactScroll() {
-    const footer = document.querySelector('footer');
-    if (!footer) return;
+  // Expose shared utils
+  window.Utils = window.Utils || {};
+  window.Utils.formatDateTime = utils.formatDateTime;
+  window.Utils.parseUtcDate = parseUtcDate;
 
-    const scrollToFooter = (event, shouldCloseMenu = false) => {
-      event.preventDefault();
-      footer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      if (shouldCloseMenu) {
-        menuModule.close();
-      }
-    };
+  // Expose minimal auth helpers
+  window.Auth = window.Auth || {};
+  window.Auth.isLoggedIn = () => authModule.isLoggedIn?.() ?? false;
+  window.Auth.getCurrentUser = () => authModule.getCurrentUser?.() ?? null;
+  window.Auth.getSavedEmail = () => (localStorage.getItem(KEYS.SAVED_EMAIL) || '');
+  window.Auth.isFounder = () => {
+    try {
+      return (localStorage.getItem(KEYS.SAVED_EMAIL) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
+    } catch {
+      return false;
+    }
+  };
 
-    utils.on(DOM.navContact, 'click', (event) => scrollToFooter(event));
-    utils.on(DOM.drawerContact, 'click', (event) => scrollToFooter(event, true));
-  }
+  // contact scroll removed (no contact links in header)
 
   // header-video support removed (no longer used)
 
-  function setupProfileNavigation() {
-    const navProfile = document.querySelector('.nav-profile');
-    const drawerProfile = document.querySelector('.drawer-profile');
+  // setupProfileNavigation removed
 
-    const goMy = (event, shouldCloseMenu = false) => {
-      event.preventDefault();
-      if (shouldCloseMenu) menuModule.close();
-      window.location.href = 'my.html';
-    };
-
-    utils.on(navProfile, 'click', (event) => goMy(event, false));
-    utils.on(drawerProfile, 'click', (event) => goMy(event, true));
-  }
-
-  function setupAboutLabel() {
-    try {
-      const label = (window.APP_CONFIG && window.APP_CONFIG.ABOUT_LABEL) || 'წესები და პირობები';
-      document.querySelectorAll('.nav-about, .drawer-about').forEach((el) => {
-        try { el.textContent = label; } catch {}
-      });
-    } catch {}
-  }
+  // setupAboutLabel removed: label is static in header partial
 
   function createLayoutModule() {
-    function setBodyOffset() {
-      // No offset: main content should go under the fixed header
-      if (!DOM.body) return;
-      DOM.body.style.paddingTop = '0px';
-    }
-
     function init() {
-      setBodyOffset();
-      utils.on(window, 'load', setBodyOffset);
-      utils.on(window, 'resize', setBodyOffset);
       // Click logo to scroll to top
       utils.on(DOM.navLogo, 'click', (event) => {
         if (event && typeof event.preventDefault === 'function') event.preventDefault();
@@ -500,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function createAuthModule() {
     const DEFAULT_BANNER_TEXT = 'გთხოვთ შეხვიდეთ სისტემაში';
-    const NEED_REGISTER_TEXT = 'გთხოვთ შეხვიდეთ სისტემაში';
+    // NEED_REGISTER_TEXT removed: banner shows either default or user's name/code
 
     let activeView = 'options';
 
@@ -560,18 +530,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateAdminLinkVisibility() {
       if (!DOM.adminLink) return;
       const user = getCurrentUser();
-      const visible = isLoggedIn() && ((user && !!user.isAdmin) || isFounder());
+      const visible = isLoggedIn() && ((user && !!user.isAdmin) || (window.Auth?.isFounder?.() === true));
       DOM.adminLink.style.display = visible ? '' : 'none';
-    }
-
-    function isFounder() {
-      return (localStorage.getItem(KEYS.SAVED_EMAIL) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
     }
 
     function updateBanner() {
       const user = getCurrentUser();
       let text = DEFAULT_BANNER_TEXT;
-      if (isLoggedIn()) text = user ? `${user.firstName} ${user.lastName} — ${user.code}` : NEED_REGISTER_TEXT;
+      if (isLoggedIn() && user) text = `${user.firstName} ${user.lastName} — ${user.code}`;
       if (DOM.authBanner) DOM.authBanner.textContent = text;
       if (DOM.drawerAuthBanner) DOM.drawerAuthBanner.textContent = text;
     }
@@ -847,6 +813,8 @@ document.addEventListener('DOMContentLoaded', () => {
   /* Registry module moved to window.Registry (registry.mini.js) */
 
   function createExamNavigationModule() {
+    let isBound = false;
+
     function closeNavDropdown() {
       if (!DOM.navDropdown) return;
       DOM.navDropdown.classList.remove('show');
@@ -863,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleDocClickCloseNav(event) {
-      if (DOM.navExam && DOM.navExam.contains(event.target)) return;
+      if (event.target && event.target.closest('.nav-exam')) return;
       closeNavDropdown();
       document.removeEventListener('click', handleDocClickCloseNav);
     }
@@ -915,14 +883,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function init() {
-      utils.on(DOM.navExamTrigger, 'click', handleNavTrigger);
+      if (isBound) return;
+      isBound = true;
       document.addEventListener('keydown', handleKeydown);
-      document
-        .querySelectorAll('.dropdown-item.theoretical, .drawer-submenu-item.theoretical')
-        .forEach((element) => utils.on(element, 'click', goToExam));
-      document
-        .querySelectorAll('.dropdown-item.review, .drawer-submenu-item.review')
-        .forEach((element) => utils.on(element, 'click', goToReview));
+      document.addEventListener('click', (event) => {
+        const el = event.target;
+        if (!el) return;
+        const trigger = el.closest('.nav .exam-trigger');
+        if (trigger) {
+          handleNavTrigger(event);
+          return;
+        }
+        if (el.closest('.dropdown-item.theoretical, .drawer-submenu-item.theoretical')) {
+          event.preventDefault();
+          goToExam();
+          return;
+        }
+        if (el.closest('.dropdown-item.review, .drawer-submenu-item.review')) {
+          event.preventDefault();
+          goToReview();
+        }
+      });
     }
 
     return { init };
@@ -949,7 +930,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const formData = new FormData(DOM.footerForm);
       const message = utils.getTrimmed(formData, 'message');
       if (!message) return alert('გთხოვთ შეიყვანოთ შეტყობინება');
-      const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
+      const actorEmail = (window.Auth?.getSavedEmail?.() || '').trim();
       if (!actorEmail) {
         alert('ავტორიზაცია ვერ დადასტურდა');
         return;

@@ -179,18 +179,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function getSavedEmail() {
+    try { return (window.Auth?.getSavedEmail?.() || localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim(); } catch { return ''; }
+  }
+
+  function isLoggedIn() {
+    try { return !!(window.Auth?.isLoggedIn?.() || (localStorage.getItem(KEYS.AUTH) === 'true')); } catch { return false; }
+  }
+
   function isFounderActor() {
-    return (localStorage.getItem(KEYS.SAVED_EMAIL) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
+    try {
+      if (window.Auth?.isFounder?.()) return true;
+      return getSavedEmail().toLowerCase() === FOUNDER_EMAIL.toLowerCase();
+    } catch {
+      return false;
+    }
   }
 
   function getAdminHeaders() {
     return {};
   }
 
-  function getActorEmail() {
-    const actor = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
-    return actor;
-  }
+  function getActorEmail() { return getSavedEmail(); }
 
   function getActorHeaders() {
     const actor = getActorEmail();
@@ -204,10 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return false;
     };
 
-    const loggedIn = localStorage.getItem(KEYS.AUTH) === 'true';
-    const savedEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim().toLowerCase();
+    const loggedIn = isLoggedIn();
+    const savedEmail = getSavedEmail().toLowerCase();
     const isLocalAdmin = !!getCurrentUser()?.isAdmin;
-    const isFounder = savedEmail === FOUNDER_EMAIL.toLowerCase();
+    const isFounder = isFounderActor();
 
     if (!loggedIn || !savedEmail || (!isFounder && !isLocalAdmin)) {
       return redirectToHome();

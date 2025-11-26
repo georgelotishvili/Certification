@@ -2,12 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const API_BASE = (window.APP_CONFIG && typeof window.APP_CONFIG.API_BASE === 'string')
     ? window.APP_CONFIG.API_BASE
     : 'http://127.0.0.1:8000';
-  const KEYS = {
-    AUTH: 'authLoggedIn',
-    CURRENT_USER: 'currentUser',
-    SAVED_EMAIL: 'savedEmail',
-  };
-  const FOUNDER_EMAIL = 'naormala@gmail.com';
   const VIEW_USER_ID = (() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -96,77 +90,14 @@ document.addEventListener('DOMContentLoaded', () => {
     expertList: document.getElementById('expertList'),
   };
 
-  const GEORGIA_TIME_ZONE = 'Asia/Tbilisi';
-  const ISO_NO_TZ_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/;
-  const ISO_WITH_SPACE_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/;
-  let tbilisiFormatter = null;
-  function getTbilisiFormatter() {
-    if (!tbilisiFormatter) {
-      tbilisiFormatter = new Intl.DateTimeFormat('en-GB', {
-        timeZone: GEORGIA_TIME_ZONE,
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', hour12: false,
-      });
-    }
-    return tbilisiFormatter;
-  }
-  function normalizeIsoString(value) {
-    if (typeof value !== 'string') return value;
-    const trimmed = value.trim();
-    if (!trimmed) return trimmed;
-    if (trimmed.endsWith('Z')) return trimmed;
-    if (/[+-]\d{2}:?\d{2}$/.test(trimmed)) return trimmed;
-    if (ISO_NO_TZ_REGEX.test(trimmed)) return `${trimmed}Z`;
-    if (ISO_WITH_SPACE_REGEX.test(trimmed)) return `${trimmed.replace(' ', 'T')}Z`;
-    return trimmed;
-  }
-  function parseUtcDate(value) {
-    if (!value) return null;
-    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-    try {
-      const normalized = normalizeIsoString(String(value));
-      const parsed = new Date(normalized);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    } catch {
-      return null;
-    }
-  }
   const utils = {
     on: (element, event, handler) => element && element.addEventListener(event, handler),
     isValidEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
     getTrimmed: (formData, name) => (formData.get(name) || '').toString().trim(),
-    formatDateTime: (value) => {
-      const date = parseUtcDate(value);
-      if (!date) return String(value || '');
-      try {
-        const formatter = getTbilisiFormatter();
-        const parts = formatter.formatToParts(date);
-        const mapped = parts.reduce((acc, part) => {
-          if (part.type !== 'literal') acc[part.type] = part.value;
-          return acc;
-        }, {});
-        const day = mapped.day || '00';
-        const month = mapped.month || '00';
-        const year = mapped.year || '0000';
-        const hour = mapped.hour || '00';
-        const minute = mapped.minute || '00';
-        return `${day}-${month}-${year} ${hour}:${minute}`;
-      } catch {
-        return String(value || '');
-      }
-    },
   };
 
-  function isLoggedIn() {
-    return localStorage.getItem(KEYS.AUTH) === 'true';
-  }
-  function getCurrentUser() {
-    try {
-      return JSON.parse(localStorage.getItem(KEYS.CURRENT_USER) || 'null');
-    } catch {
-      return null;
-    }
-  }
+  function isLoggedIn() { try { return window.Auth?.isLoggedIn?.() === true; } catch { return false; } }
+  function getCurrentUser() { try { return window.Auth?.getCurrentUser?.() || null; } catch { return null; } }
   const authModule = { isLoggedIn, getCurrentUser };
 
   function guard() {
@@ -180,38 +111,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   if (!VIEW_USER_ID && !guard()) return;
 
-  function setBodyOffset() {
-    if (!DOM.header) return;
-    DOM.body.style.paddingTop = '0px';
-  }
-  setBodyOffset();
-  window.addEventListener('load', setBodyOffset);
-  window.addEventListener('resize', setBodyOffset);
+  // Body offset not needed (handled via CSS)
 
-  function setAboutLabel() {
-    try {
-      const label = (window.APP_CONFIG && window.APP_CONFIG.ABOUT_LABEL) || 'წესები და პირობები';
-      const nav = document.querySelector('.nav-about');
-      const drawer = document.querySelector('.drawer-about');
-      if (nav) nav.textContent = label;
-      if (drawer) drawer.textContent = label;
-    } catch {}
-  }
-  setAboutLabel();
+  // setAboutLabel removed: label is static in header partial
 
-  function updateBanners() {
-    const user = getCurrentUser();
-    const text = user ? `${user.firstName || ''} ${user.lastName || ''} — ${user.code || ''}`.trim() : 'გთხოვთ შეხვიდეთ სისტემაში';
-    if (DOM.authBanner) DOM.authBanner.textContent = text;
-    if (DOM.drawerAuthBanner) DOM.drawerAuthBanner.textContent = text;
-
-    if (DOM.adminLink) {
-      const savedEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').toLowerCase();
-      const visible = (!!user && !!user.isAdmin) || savedEmail === FOUNDER_EMAIL.toLowerCase();
-      DOM.adminLink.style.display = visible ? '' : 'none';
-    }
-  }
-  updateBanners();
+  // Banner/UI now updated by global auth module in script.js
 
   function updatePageTitleFrom(source) {
     if (!DOM.pageTitle) return;
@@ -228,16 +132,20 @@ document.addEventListener('DOMContentLoaded', () => {
   updatePageTitleFrom(getCurrentUser());
 
   // Load read-only profile info (self or viewing other)
+  function getActorHeaders() {
+    const email = (window.Auth?.getSavedEmail?.() || '').trim();
+    return email ? { 'x-actor-email': email } : {};
+  }
+
   async function loadProfile() {
     const user = getCurrentUser();
-    const savedEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
+    const savedEmail = (window.Auth?.getSavedEmail?.() || '').trim();
 
     if (VIEW_USER_ID) {
       // Populate full public info by user id (requires authenticated actor)
-      const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || (user?.email || '')).trim();
       try {
         const res = await fetch(`${API_BASE}/users/${encodeURIComponent(VIEW_USER_ID)}/public`, {
-          headers: { 'Cache-Control': 'no-cache', ...(actorEmail ? { 'x-actor-email': actorEmail } : {}) },
+          headers: { 'Cache-Control': 'no-cache', ...getActorHeaders() },
         });
         if (res.ok) {
           const data = await res.json();
@@ -247,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (DOM.pfPhone) DOM.pfPhone.textContent = data.phone || '—';
           if (DOM.pfEmail) DOM.pfEmail.textContent = data.email || '—';
           if (DOM.pfCode) DOM.pfCode.textContent = data.code || '—';
-          if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = utils.formatDateTime(data.created_at);
+          if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = window.Utils?.formatDateTime?.(data.created_at);
           updatePageTitleFrom({ firstName: data.first_name || '', lastName: data.last_name || '' });
           return;
         }
@@ -264,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (DOM.pfLastName) DOM.pfLastName.textContent = parts.slice(1).join(' ') || '—';
             if (DOM.pfEmail) DOM.pfEmail.textContent = '—';
             if (DOM.pfCode) DOM.pfCode.textContent = item.unique_code || '—';
-            if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = utils.formatDateTime(item.registration_date);
+            if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = window.Utils?.formatDateTime?.(item.registration_date);
             updatePageTitleFrom({ firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '' });
           }
         }
@@ -282,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!savedEmail) return;
     try {
-      const res = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(savedEmail)}`, { headers: { 'Cache-Control': 'no-cache', ...(savedEmail ? { 'x-actor-email': savedEmail } : {}) } });
+      const res = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(savedEmail)}`, { headers: { 'Cache-Control': 'no-cache', ...getActorHeaders() } });
       if (!res.ok) return;
       const data = await res.json();
       if (DOM.pfFirstName) DOM.pfFirstName.textContent = data.first_name || '—';
@@ -291,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (DOM.pfPhone) DOM.pfPhone.textContent = data.phone || '—';
       if (DOM.pfEmail) DOM.pfEmail.textContent = data.email || '—';
       if (DOM.pfCode) DOM.pfCode.textContent = data.code || '—';
-      if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = utils.formatDateTime(data.created_at);
+      if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = window.Utils?.formatDateTime?.(data.created_at);
       updatePageTitleFrom(data);
     } catch {}
   }
@@ -305,8 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const targetId = VIEW_USER_ID || (user && user.id);
     if (!targetId || !card) return;
     try {
-      const savedEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
-      const res = await fetch(`${API_BASE}/users/${encodeURIComponent(targetId)}/certificate`, { headers: { 'Cache-Control': 'no-cache', ...(savedEmail ? { 'x-actor-email': savedEmail } : {}) } });
+      const res = await fetch(`${API_BASE}/users/${encodeURIComponent(targetId)}/certificate`, { headers: { 'Cache-Control': 'no-cache', ...getActorHeaders() } });
       if (!res.ok) {
         if (res.status === 404) {
           card.classList.add('is-empty');
@@ -326,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Disable download if inactive (suspended/expired) or expired by date
       const isExpired = (() => {
         try {
-          const dt = parseUtcDate(data.valid_until);
+          const dt = window.Utils?.parseUtcDate?.(data.valid_until);
           if (!dt) return false;
           const end = new Date(dt);
           end.setHours(23, 59, 59, 999);
@@ -345,9 +252,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (DOM.certCode) DOM.certCode.textContent = data.unique_code || '—';
       if (DOM.certLevel) DOM.certLevel.textContent = formatCertificateLevel(data.level);
       if (DOM.certStatus) DOM.certStatus.textContent = formatCertificateStatus(statusKey, isExpired);
-      if (DOM.certIssueDate) DOM.certIssueDate.textContent = utils.formatDateTime(data.issue_date);
+      if (DOM.certIssueDate) DOM.certIssueDate.textContent = window.Utils?.formatDateTime?.(data.issue_date);
       if (DOM.certValidityTerm) DOM.certValidityTerm.textContent = (data.validity_term != null ? String(data.validity_term) : '—');
-      if (DOM.certValidUntil) DOM.certValidUntil.textContent = utils.formatDateTime(data.valid_until);
+      if (DOM.certValidUntil) DOM.certValidUntil.textContent = window.Utils?.formatDateTime?.(data.valid_until);
       if (DOM.certExamScore) DOM.certExamScore.textContent = (data.exam_score != null ? `${Math.round(Number(data.exam_score))}%` : '—');
       document.dispatchEvent(new CustomEvent('certificate:loaded', { detail: { certData: data } }));
     } catch {}
@@ -474,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
         el.className = 'comment-item';
         const meta = document.createElement('div');
         meta.className = 'comment-meta';
-        const date = utils.formatDateTime(c.created_at);
+        const date = window.Utils?.formatDateTime?.(c.created_at);
         const author = `${c.author_first_name || ''} ${c.author_last_name || ''}`.trim() || '—';
         meta.textContent = `${date} · ${author}`;
         const text = document.createElement('div');
@@ -522,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!state.targetUserId || !DOM.reviewsCard) return;
       try {
         const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(state.targetUserId)}/summary`, {
-          headers: { 'Cache-Control': 'no-cache', ...(state.actorEmail ? { 'x-actor-email': state.actorEmail } : {}) },
+          headers: { 'Cache-Control': 'no-cache', ...getActorHeaders() },
         });
         if (!res.ok) return;
         const data = await res.json();
@@ -559,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(state.targetUserId)}/rating`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(state.actorEmail ? { 'x-actor-email': state.actorEmail } : {}) },
+          headers: { 'Content-Type': 'application/json', ...getActorHeaders() },
           body: JSON.stringify({ criteria }),
         });
         if (!res.ok) {
@@ -614,7 +521,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(state.targetUserId)}/comments`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(state.actorEmail ? { 'x-actor-email': state.actorEmail } : {}) },
+          headers: { 'Content-Type': 'application/json', ...getActorHeaders() },
           body: JSON.stringify({ message }),
         });
         if (!res.ok) {
@@ -656,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function createExpertModule() {
     const state = {
       enabled: false,
-      actorEmail: (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim(),
+      actorEmail: (window.Auth?.getSavedEmail?.() || '').trim(),
       user: getCurrentUser(),
       draftId: null,
       currentDraft: null,
@@ -665,9 +572,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function canActorAdminDelete() {
       const actor = state.user || getCurrentUser();
-      const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || state.actorEmail || (actor && actor.email) || '').trim().toLowerCase();
-      const founderEmail = (FOUNDER_EMAIL || '').toLowerCase();
-      return !!(actor && (actor.isAdmin || (actorEmail && founderEmail && actorEmail === founderEmail)));
+      const isFounder = window.Auth?.isFounder?.() === true;
+      return !!(actor && (actor.isAdmin || isFounder));
     }
 
     function setEnabled(value) {
@@ -682,7 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function buildHeaders() {
-      const email = (localStorage.getItem(KEYS.SAVED_EMAIL) || state.actorEmail || (state.user && state.user.email) || '').trim();
+      const email = (window.Auth?.getSavedEmail?.() || state.actorEmail || (state.user && state.user.email) || '').trim();
       return email ? { 'x-actor-email': email } : {};
     }
 
@@ -741,7 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sumCode.textContent = item.unique_code;
         const sumDate = document.createElement('span');
         sumDate.className = 'sum-date';
-        sumDate.textContent = utils.formatDateTime(item.created_at);
+        sumDate.textContent = window.Utils?.formatDateTime?.(item.created_at);
         summary.appendChild(sumCode);
         summary.appendChild(sumDate);
         el.appendChild(summary);
@@ -1064,7 +970,7 @@ document.addEventListener('DOMContentLoaded', () => {
               sumCode.textContent = item.unique_code;
               const sumDate = document.createElement('span');
               sumDate.className = 'sum-date';
-              sumDate.textContent = utils.formatDateTime(item.created_at);
+              sumDate.textContent = window.Utils?.formatDateTime?.(item.created_at);
               summary.appendChild(sumCode);
               summary.appendChild(sumDate);
               el.appendChild(summary);
@@ -1191,12 +1097,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const expertModule = createExpertModule();
   expertModule.init();
 
-  if (DOM.navLogo) {
-    DOM.navLogo.addEventListener('click', (e) => {
-      e.preventDefault();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-  }
+  // Logo scroll handled by script.js
 
   const goHome = (e) => {
     if (e) e.preventDefault();
@@ -1205,88 +1106,17 @@ document.addEventListener('DOMContentLoaded', () => {
   if (DOM.homeBtn) DOM.homeBtn.addEventListener('click', goHome);
   if (DOM.drawerHomeBtn) DOM.drawerHomeBtn.addEventListener('click', goHome);
 
-  const goIndex = (e) => {
-    e.preventDefault();
-    window.location.href = 'index.html';
-  };
+  // goIndex not needed; anchors use native navigation
   // Personal page behavior:
   // - Registry: open local modal (no navigation)
   // statements click handled by statementsModule (no redirect)
 
-  // Registry modal — use shared module
-  const registryModule = window.Registry.init({
-    api: API_BASE,
-    triggers: ['.nav-registry', '.drawer-registry'],
-    beforeOpen: () => { document.body.classList.remove('menu-open'); },
-    refreshRating: true,
-  });
+  // Registry modal is initialized globally in script.js; use DOM to close if needed
 
-  function closeDropdown() {
-    if (!DOM.dropdown) return;
-    DOM.dropdown.classList.remove('show');
-    DOM.dropdown.setAttribute('aria-hidden', 'true');
-    DOM.examTrigger?.setAttribute('aria-expanded', 'false');
-  }
-  function toggleDropdown(e) {
-    e.preventDefault();
-    if (!DOM.dropdown) return;
-    const open = !DOM.dropdown.classList.contains('show');
-    if (open) {
-      DOM.dropdown.classList.add('show');
-      DOM.dropdown.setAttribute('aria-hidden', 'false');
-      DOM.examTrigger?.setAttribute('aria-expanded', 'true');
-      setTimeout(() => document.addEventListener('click', handleDocClickClose), 0);
-    } else {
-      closeDropdown();
-    }
-  }
-  function handleDocClickClose(event) {
-    if (event.target.closest('.nav-exam')) return;
-    closeDropdown();
-    document.removeEventListener('click', handleDocClickClose);
-  }
-  if (DOM.examTrigger) DOM.examTrigger.addEventListener('click', toggleDropdown);
-  document.querySelectorAll('.dropdown-item.theoretical').forEach((el) => {
-    el.addEventListener('click', (e) => {
-      e.preventDefault();
-      closeDropdown();
-      window.location.href = 'exam.html';
-    });
-  });
-  document.querySelectorAll('.dropdown-item.review').forEach((el) => {
-    el.addEventListener('click', (e) => {
-      e.preventDefault();
-      closeDropdown();
-      alert('პროექტის განხილვა — მალე დაემატება');
-    });
-  });
+  // Exam dropdown handled by script.js
 
-  function toggleDrawerSubmenu(e) {
-    e.preventDefault();
-    if (!DOM.drawerSubmenu) return;
-    const hidden = DOM.drawerSubmenu.hasAttribute('hidden');
-    if (hidden) {
-      DOM.drawerSubmenu.removeAttribute('hidden');
-      DOM.drawerExamTrigger?.setAttribute('aria-expanded', 'true');
-    } else {
-      DOM.drawerSubmenu.setAttribute('hidden', '');
-      DOM.drawerExamTrigger?.setAttribute('aria-expanded', 'false');
-    }
-  }
-  if (DOM.drawerExamTrigger) DOM.drawerExamTrigger.addEventListener('click', toggleDrawerSubmenu);
-  document.querySelectorAll('.drawer-submenu-item.theoretical').forEach((el) => {
-    el.addEventListener('click', (e) => {
-      e.preventDefault();
-      DOM.body.classList.remove('menu-open');
-      window.location.href = 'exam.html';
-    });
-  });
-  document.querySelectorAll('.drawer-submenu-item.review').forEach((el) => {
-    el.addEventListener('click', (e) => {
-      e.preventDefault();
-      alert('პროექტის განხილვა — მალე დაემატება');
-    });
-  });
+  // Drawer submenu toggle handled by script.js
+  // Drawer submenu handled by script.js
 
   const openMenu = () => {
     DOM.body.classList.add('menu-open');
@@ -1300,15 +1130,7 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.drawerExamTrigger?.setAttribute('aria-expanded', 'false');
     }
   };
-  if (DOM.burger) DOM.burger.addEventListener('click', () => (DOM.body.classList.contains('menu-open') ? closeMenu() : openMenu()));
-  if (DOM.overlay) DOM.overlay.addEventListener('click', closeMenu);
-  if (DOM.drawerClose) DOM.drawerClose.addEventListener('click', closeMenu);
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeDropdown();
-      closeMenu();
-    }
-  });
+  // Burger/menu events handled by script.js; keep closeMenu for local use
 
   const menuModule = { close: closeMenu };
 
@@ -1325,7 +1147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getActorEmail() {
-      return (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
+      return (window.Auth?.getSavedEmail?.() || '').trim();
     }
 
     function setMetaFromUser() {
@@ -1386,7 +1208,7 @@ document.addEventListener('DOMContentLoaded', () => {
         summary.className = 'statement-summary';
         const dateSpan = document.createElement('span');
         dateSpan.className = 'statement-date';
-        dateSpan.textContent = utils.formatDateTime(item.created_at);
+        dateSpan.textContent = window.Utils?.formatDateTime?.(item.created_at);
         summary.appendChild(dateSpan);
         details.appendChild(summary);
         const message = document.createElement('div');
@@ -1410,7 +1232,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const response = await fetch(`${API_BASE}/statements/me`, {
           headers: {
-            'x-actor-email': actorEmail,
+            ...getActorHeaders(),
             'Cache-Control': 'no-cache',
           },
           credentials: 'include',
@@ -1447,7 +1269,15 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
         event.stopPropagation();
       }
-      try { registryModule?.close?.(); } catch {}
+      // Ensure registry modal is closed before opening statements
+      try {
+        const overlay = document.getElementById('registryOverlay');
+        if (overlay) {
+          overlay.classList.remove('is-open');
+          overlay.setAttribute('aria-hidden', 'true');
+          document.body.classList.remove('registry-open');
+        }
+      } catch {}
       if (!authModule.isLoggedIn()) {
         alert('გთხოვთ გაიაროთ ავტორიზაცია');
         return;
@@ -1480,7 +1310,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const formData = new FormData(DOM.statementsForm);
       const message = utils.getTrimmed(formData, 'message');
       if (!message) return alert('გთხოვთ შეიყვანოთ შეტყობინება');
-      const actorEmail = (localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim();
+      const actorEmail = (window.Auth?.getSavedEmail?.() || '').trim();
       if (!actorEmail) {
         alert('ავტორიზაცია ვერ დადასტურდა');
         return;
@@ -1488,11 +1318,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const submitBtn = DOM.statementsForm.querySelector('button[type="submit"]');
       submitBtn?.setAttribute('disabled', 'true');
       try {
-        const response = await fetch(`${API_BASE}/statements`, {
+      const response = await fetch(`${API_BASE}/statements`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-actor-email': actorEmail,
+          ...getActorHeaders(),
           },
           body: JSON.stringify({ message }),
           credentials: 'include',
@@ -1537,8 +1367,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function init() {
-      utils.on(DOM.navStatements, 'click', handleOpenRequest);
-      utils.on(DOM.drawerStatements, 'click', handleOpenRequest);
       utils.on(DOM.statementsClose, 'click', closeOverlay);
       utils.on(DOM.statementsOverlay, 'click', handleBackdropClick);
       utils.on(DOM.statementsForm, 'submit', handleComposeSubmit);
@@ -1549,74 +1377,19 @@ document.addEventListener('DOMContentLoaded', () => {
       setMetaFromUser();
     }
 
-    return { init, isOpen, close: closeOverlay, refresh: fetchStatements, handleNewStatement, reset };
+    return { init, isOpen, open: () => handleOpenRequest(), close: closeOverlay, refresh: fetchStatements, handleNewStatement, reset };
   }
 
   const statementsModule = createStatementsModule();
   statementsModule.init();
-
-  // When header is dynamically loaded, rebind header-dependent handlers
-  document.addEventListener('headerReady', () => {
-    try {
-      // Refresh DOM references
-      DOM.burger = document.querySelector('.burger');
-      DOM.overlay = document.querySelector('.overlay');
-      DOM.drawer = document.querySelector('.drawer');
-      DOM.drawerClose = document.querySelector('.drawer-close');
-      DOM.drawerExamTrigger = document.querySelector('.drawer-exam-trigger');
-      DOM.drawerSubmenu = document.querySelector('.drawer-submenu');
-      DOM.homeBtn = document.querySelector('.home-btn') || document.querySelector('.login-btn');
-      DOM.drawerHomeBtn = document.querySelector('.drawer-home') || document.querySelector('.drawer-login');
-      DOM.navRegistry = document.querySelector('.nav-registry');
-      DOM.drawerRegistry = document.querySelector('.drawer-registry');
-      DOM.navAbout = document.querySelector('.nav-about');
-      DOM.drawerAbout = document.querySelector('.drawer-about');
-      DOM.navStatements = document.querySelector('.nav-statements');
-      DOM.drawerStatements = document.querySelector('.drawer-statements');
-      DOM.examTrigger = document.querySelector('.nav .exam-trigger');
-      DOM.dropdown = document.querySelector('.nav .dropdown');
-
-      // Ensure banner reflects current user after header insertion
-      try {
-        const user = authModule.getCurrentUser?.();
-        const text = (authModule.isLoggedIn?.() && user)
-          ? `${user.firstName || ''} ${user.lastName || ''} — ${user.code || ''}`.trim()
-          : 'გთხოვთ შეხვიდეთ სისტემაში';
-        const banner = document.querySelector('.auth-banner');
-        const drawerBanner = document.querySelector('.drawer-auth-banner');
-        if (banner) banner.textContent = text;
-        if (drawerBanner) drawerBanner.textContent = text;
-      } catch {}
-
-      // Rebind burger / drawer
-      if (DOM.burger) DOM.burger.addEventListener('click', () => (DOM.body.classList.contains('menu-open') ? closeMenu() : openMenu()));
-      if (DOM.overlay) DOM.overlay.addEventListener('click', closeMenu);
-      if (DOM.drawerClose) DOM.drawerClose.addEventListener('click', closeMenu);
-
-      // Rebind exam dropdown and drawer submenu
-      if (DOM.examTrigger) DOM.examTrigger.addEventListener('click', toggleDropdown);
-      if (DOM.drawerExamTrigger) DOM.drawerExamTrigger.addEventListener('click', toggleDrawerSubmenu);
-
-      // Rebind home buttons
-      if (DOM.homeBtn) DOM.homeBtn.addEventListener('click', goHome);
-      if (DOM.drawerHomeBtn) DOM.drawerHomeBtn.addEventListener('click', goHome);
-
-      // Rebind statements open handlers
-      statementsModule.init();
-
-      // Wire up registry triggers to existing module
-      const openRegistry = (event, fromDrawer) => {
-        event.preventDefault();
-        if (fromDrawer) closeMenu();
-        try { registryModule.open(); } catch {}
-      };
-      document.querySelectorAll('.nav-registry').forEach((el) => {
-        el.addEventListener('click', (e) => openRegistry(e, false));
-      });
-      document.querySelectorAll('.drawer-registry').forEach((el) => {
-        el.addEventListener('click', (e) => openRegistry(e, true));
-      });
-    } catch {}
+  // Auto-open statements by hash (authorized only)
+  if (window.location.hash === '#statements') {
+    try { statementsModule.open(); } catch {}
+  }
+  window.addEventListener('hashchange', () => {
+    if (window.location.hash === '#statements') {
+      try { statementsModule.open(); } catch {}
+    }
   });
 });
 
