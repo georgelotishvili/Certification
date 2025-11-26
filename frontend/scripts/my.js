@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     drawerExamTrigger: document.querySelector('.drawer-exam-trigger'),
     drawerSubmenu: document.querySelector('.drawer-submenu'),
     homeBtn: document.querySelector('.home-btn') || document.querySelector('.login-btn'),
-    drawerHomeBtn: document.querySelector('.drawer-login'),
+    drawerHomeBtn: document.querySelector('.drawer-home') || document.querySelector('.drawer-login'),
     navRegistry: document.querySelector('.nav-registry'),
     drawerRegistry: document.querySelector('.drawer-registry'),
     navAbout: document.querySelector('.nav-about'),
@@ -1554,6 +1554,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const statementsModule = createStatementsModule();
   statementsModule.init();
+
+  // When header is dynamically loaded, rebind header-dependent handlers
+  document.addEventListener('headerReady', () => {
+    try {
+      // Refresh DOM references
+      DOM.burger = document.querySelector('.burger');
+      DOM.overlay = document.querySelector('.overlay');
+      DOM.drawer = document.querySelector('.drawer');
+      DOM.drawerClose = document.querySelector('.drawer-close');
+      DOM.drawerExamTrigger = document.querySelector('.drawer-exam-trigger');
+      DOM.drawerSubmenu = document.querySelector('.drawer-submenu');
+      DOM.homeBtn = document.querySelector('.home-btn') || document.querySelector('.login-btn');
+      DOM.drawerHomeBtn = document.querySelector('.drawer-home') || document.querySelector('.drawer-login');
+      DOM.navRegistry = document.querySelector('.nav-registry');
+      DOM.drawerRegistry = document.querySelector('.drawer-registry');
+      DOM.navAbout = document.querySelector('.nav-about');
+      DOM.drawerAbout = document.querySelector('.drawer-about');
+      DOM.navStatements = document.querySelector('.nav-statements');
+      DOM.drawerStatements = document.querySelector('.drawer-statements');
+      DOM.examTrigger = document.querySelector('.nav .exam-trigger');
+      DOM.dropdown = document.querySelector('.nav .dropdown');
+
+      // Ensure banner reflects current user after header insertion
+      try {
+        const user = authModule.getCurrentUser?.();
+        const text = (authModule.isLoggedIn?.() && user)
+          ? `${user.firstName || ''} ${user.lastName || ''} — ${user.code || ''}`.trim()
+          : 'გთხოვთ შეხვიდეთ სისტემაში';
+        const banner = document.querySelector('.auth-banner');
+        const drawerBanner = document.querySelector('.drawer-auth-banner');
+        if (banner) banner.textContent = text;
+        if (drawerBanner) drawerBanner.textContent = text;
+      } catch {}
+
+      // Rebind burger / drawer
+      if (DOM.burger) DOM.burger.addEventListener('click', () => (DOM.body.classList.contains('menu-open') ? closeMenu() : openMenu()));
+      if (DOM.overlay) DOM.overlay.addEventListener('click', closeMenu);
+      if (DOM.drawerClose) DOM.drawerClose.addEventListener('click', closeMenu);
+
+      // Rebind exam dropdown and drawer submenu
+      if (DOM.examTrigger) DOM.examTrigger.addEventListener('click', toggleDropdown);
+      if (DOM.drawerExamTrigger) DOM.drawerExamTrigger.addEventListener('click', toggleDrawerSubmenu);
+
+      // Rebind home buttons
+      if (DOM.homeBtn) DOM.homeBtn.addEventListener('click', goHome);
+      if (DOM.drawerHomeBtn) DOM.drawerHomeBtn.addEventListener('click', goHome);
+
+      // Rebind statements open handlers
+      statementsModule.init();
+
+      // Wire up registry triggers to existing module
+      const openRegistry = (event, fromDrawer) => {
+        event.preventDefault();
+        if (fromDrawer) closeMenu();
+        try { registryModule.open(); } catch {}
+      };
+      document.querySelectorAll('.nav-registry').forEach((el) => {
+        el.addEventListener('click', (e) => openRegistry(e, false));
+      });
+      document.querySelectorAll('.drawer-registry').forEach((el) => {
+        el.addEventListener('click', (e) => openRegistry(e, true));
+      });
+    } catch {}
+  });
 });
 
 

@@ -157,6 +157,81 @@ document.addEventListener('DOMContentLoaded', () => {
   setupProfileNavigation();
   setupAboutLabel();
 
+  // Bind header-dependent handlers after header is dynamically loaded
+  document.addEventListener('headerReady', () => {
+    try {
+      const isProfilePage = window.location.pathname.includes('my.html');
+      // Refresh DOM references that live in the header
+      DOM.burger = document.querySelector('.burger');
+      DOM.overlay = document.querySelector('.overlay');
+      DOM.drawer = document.querySelector('.drawer');
+      DOM.drawerClose = document.querySelector('.drawer-close');
+      DOM.drawerLinks = Array.from(document.querySelectorAll('.drawer-nav a')).filter((a) => !a.classList.contains('drawer-exam-trigger'));
+      DOM.drawerExamTrigger = document.querySelector('.drawer-exam-trigger');
+      DOM.drawerSubmenu = document.querySelector('.drawer-submenu');
+      DOM.drawerAuthBanner = document.querySelector('.drawer-auth-banner');
+      DOM.loginBtn = document.querySelector('.login-btn');
+      DOM.drawerLoginBtn = document.querySelector('.drawer-login');
+      DOM.loginModal = document.getElementById('loginModal');
+      DOM.modalClose = document.getElementById('modalClose');
+      DOM.modalButtons = document.querySelector('.modal-buttons');
+      DOM.loginForm = document.getElementById('loginForm');
+      DOM.registerForm = document.getElementById('registerForm');
+      DOM.forgotPasswordForm = document.getElementById('forgotPasswordForm');
+      DOM.loginOption = document.querySelector('.login-option');
+      DOM.registerOption = document.querySelector('.register-option');
+      DOM.forgotPasswordLink = document.getElementById('forgotPasswordLink');
+      DOM.authBanner = document.querySelector('.auth-banner');
+      DOM.navExam = document.querySelector('.nav-exam');
+      DOM.navExamTrigger = document.querySelector('.nav .exam-trigger');
+      DOM.navDropdown = document.querySelector('.nav .dropdown');
+      DOM.navRegistry = document.querySelector('.nav-registry');
+      DOM.drawerRegistry = document.querySelector('.drawer-registry');
+
+      // Initialize modules that rely on header elements
+      menuModule.init();
+      // Always init auth so login modal works on personal page too
+      authModule.init();
+      examNavigationModule.init();
+
+      // Gate navigation only on main page (on personal page native handlers apply)
+      if (!isProfilePage) {
+        // Gate profile and statements for unauthenticated users
+        const navProfileLink = document.querySelector('.nav-profile[data-page-link]');
+        const drawerProfileLink = document.querySelector('.drawer-profile[data-page-link]');
+        const navStatements = document.querySelector('.nav-statements');
+        const drawerStatements = document.querySelector('.drawer-statements');
+
+        const gate = (handler, fromDrawer = false) => (event) => {
+          try {
+            if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
+              event.preventDefault();
+              if (fromDrawer) menuModule.close();
+              alert('გთხოვთ გაიაროთ ავტორიზაცია');
+              authModule.openModal?.();
+              return;
+            }
+          } catch {}
+          handler?.(event);
+        };
+
+        if (navProfileLink) navProfileLink.addEventListener('click', gate(() => { window.location.href = 'my.html'; }, false));
+        if (drawerProfileLink) drawerProfileLink.addEventListener('click', gate(() => { window.location.href = 'my.html'; }, true));
+        if (navStatements) navStatements.addEventListener('click', gate(() => { window.location.href = 'my.html'; }, false));
+        if (drawerStatements) drawerStatements.addEventListener('click', gate(() => { window.location.href = 'my.html'; }, true));
+      }
+
+      // Wire up registry triggers to existing module
+      const openRegistry = (event, fromDrawer) => {
+        event.preventDefault();
+        if (fromDrawer) menuModule.close();
+        try { registryModule.open(); } catch {}
+      };
+      if (DOM.navRegistry) DOM.navRegistry.addEventListener('click', (e) => openRegistry(e, false));
+      if (DOM.drawerRegistry) DOM.drawerRegistry.addEventListener('click', (e) => openRegistry(e, true));
+    } catch {}
+  });
+
   // Global escape handling (modal first, then menu)
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
@@ -271,6 +346,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function toggleDrawerSubmenu(event) {
       event.preventDefault();
       event.stopPropagation();
+      try {
+        if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
+          alert('გთხოვთ გაიაროთ ავტორიზაცია');
+          authModule.openModal?.();
+          return;
+        }
+      } catch {}
       if (!media.drawerSubmenu) return;
       const hidden = media.drawerSubmenu.hasAttribute('hidden');
       if (hidden) {
@@ -808,6 +890,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleNavTrigger(event) {
       event.preventDefault();
+      try {
+        if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
+          alert('გთხოვთ გაიაროთ ავტორიზაცია');
+          authModule.openModal?.();
+          return;
+        }
+      } catch {}
       if (!DOM.navDropdown) return;
       if (DOM.navDropdown.classList.contains('show')) {
         closeNavDropdown();
