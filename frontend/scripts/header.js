@@ -177,7 +177,13 @@
         }
         if (fromDrawer) closeMenu();
         if (isMyPage()) {
-          if (window.location.hash !== '#statements') window.location.hash = 'statements';
+          if (window.location.hash !== '#statements') {
+            window.location.hash = 'statements';
+          } else {
+            try {
+              window.dispatchEvent(new CustomEvent('openStatements'));
+            } catch {}
+          }
         } else {
           window.location.href = 'my.html#statements';
         }

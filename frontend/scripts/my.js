@@ -1382,6 +1382,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const statementsModule = createStatementsModule();
   statementsModule.init();
+  window.addEventListener('openStatements', () => {
+    try { statementsModule.open(); } catch {}
+  });
   // Auto-open statements by hash (authorized only)
   if (window.location.hash === '#statements') {
     try { statementsModule.open(); } catch {}
