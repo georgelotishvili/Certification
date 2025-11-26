@@ -69,6 +69,63 @@
   // Initialize cover fade on page load if requested
   setupPageCoverOnLoad();
 
+  // Site Info Modal helpers (About / Terms)
+  function getSiteInfoElements() {
+    try {
+      const modal = document.getElementById('siteInfoModal');
+      if (!modal) return null;
+      return {
+        modal,
+        title: modal.querySelector('#siteInfoTitle'),
+        body: modal.querySelector('#siteInfoBody'),
+        closeBtn: modal.querySelector('.modal-close'),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function getSiteInfoPath(type) {
+    const name = type === 'terms' ? 'terms' : 'about';
+    return `../partials/site-info/${name}.html`;
+  }
+
+  async function openSiteInfo(type) {
+    try {
+      const els = getSiteInfoElements();
+      if (!els) return;
+      const titles = { about: 'ჩვენს შესახებ', terms: 'წესები და პირობები' };
+      if (els.title) els.title.textContent = titles[type] || 'ინფორმაცია';
+
+      if (els.body) els.body.innerHTML = '<p style="opacity:.7">იტვირთება...</p>';
+      els.modal.classList.add('show');
+      els.modal.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('modal-open');
+      if (els.closeBtn && typeof els.closeBtn.focus === 'function') {
+        setTimeout(() => { try { els.closeBtn.focus(); } catch {} }, 0);
+      }
+
+      const res = await fetch(getSiteInfoPath(type), { cache: 'no-cache' });
+      if (!res.ok) throw new Error('load failed');
+      const html = await res.text();
+      if (els.body) els.body.innerHTML = html;
+    } catch {
+      const els = getSiteInfoElements();
+      if (els?.body) els.body.innerHTML = '<p style="color:#b91c1c">ვერ ჩაიტვირთა შიგთავსი. სცადეთ მოგვიანებით.</p>';
+    }
+  }
+
+  function closeSiteInfo() {
+    try {
+      const els = getSiteInfoElements();
+      if (!els) return;
+      els.modal.classList.remove('show');
+      els.modal.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('modal-open');
+      if (els.body) els.body.innerHTML = '';
+    } catch {}
+  }
+
   function bindHeader() {
     const DOM = {
       body: document.body,
@@ -79,17 +136,24 @@
       drawerLinks: Array.from(document.querySelectorAll('.drawer-nav a')).filter((a) => !a.classList.contains('drawer-exam-trigger')),
       drawerExamTrigger: document.querySelector('.drawer-exam-trigger'),
       drawerSubmenu: document.querySelector('.drawer-submenu'),
+      drawerAboutTrigger: document.querySelector('.drawer-about-trigger'),
+      drawerAboutSubmenu: document.querySelector('.drawer-about-submenu'),
       loginBtn: document.querySelector('.login-btn'),
       drawerLoginBtn: document.querySelector('.drawer-login'),
       navLogo: document.querySelector('.nav-bar .logo'),
       navExamTrigger: document.querySelector('.nav .exam-trigger'),
-      navDropdown: document.querySelector('.nav .dropdown'),
+      navDropdown: document.querySelector('.nav .nav-exam .dropdown'),
+      aboutTrigger: document.querySelector('.nav .about-trigger'),
+      aboutDropdown: document.querySelector('.nav .about-dropdown'),
     };
 
     function setMenu(open) {
       DOM.body?.classList.toggle('menu-open', !!open);
       if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (!open) closeDrawerSubmenu();
+      if (!open) {
+        closeDrawerSubmenu();
+        closeDrawerAboutSubmenu();
+      }
     }
     function openMenu() { setMenu(true); }
     function closeMenu() { setMenu(false); }
@@ -99,6 +163,11 @@
       if (!DOM.drawerSubmenu) return;
       DOM.drawerSubmenu.setAttribute('hidden', '');
       DOM.drawerExamTrigger?.setAttribute('aria-expanded', 'false');
+    }
+    function closeDrawerAboutSubmenu() {
+      if (!DOM.drawerAboutSubmenu) return;
+      DOM.drawerAboutSubmenu.setAttribute('hidden', '');
+      DOM.drawerAboutTrigger?.setAttribute('aria-expanded', 'false');
     }
 
     function toggleDrawerSubmenu(event) {
@@ -118,6 +187,18 @@
         closeDrawerSubmenu();
       }
     }
+    function toggleDrawerAboutSubmenu(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!DOM.drawerAboutSubmenu) return;
+      const hidden = DOM.drawerAboutSubmenu.hasAttribute('hidden');
+      if (hidden) {
+        DOM.drawerAboutSubmenu.removeAttribute('hidden');
+        DOM.drawerAboutTrigger?.setAttribute('aria-expanded', 'true');
+      } else {
+        closeDrawerAboutSubmenu();
+      }
+    }
 
     // Basic bindings for header UI
     on(DOM.burger, 'click', toggleMenu);
@@ -125,6 +206,7 @@
     on(DOM.drawerClose, 'click', closeMenu);
     DOM.drawerLinks.forEach((link) => on(link, 'click', closeMenu));
     on(DOM.drawerExamTrigger, 'click', toggleDrawerSubmenu);
+    on(DOM.drawerAboutTrigger, 'click', toggleDrawerAboutSubmenu);
 
     on(DOM.loginBtn, 'click', () => openAuthModal());
     on(DOM.drawerLoginBtn, 'click', () => { closeMenu(); openAuthModal(); });
@@ -140,6 +222,12 @@
       DOM.navDropdown.setAttribute('aria-hidden', 'true');
       DOM.navExamTrigger?.setAttribute('aria-expanded', 'false');
     }
+    function closeAboutDropdown() {
+      if (!DOM.aboutDropdown) return;
+      DOM.aboutDropdown.classList.remove('show');
+      DOM.aboutDropdown.setAttribute('aria-hidden', 'true');
+      DOM.aboutTrigger?.setAttribute('aria-expanded', 'false');
+    }
     function openNavDropdown() {
       if (!DOM.navDropdown) return;
       DOM.navDropdown.classList.add('show');
@@ -147,10 +235,22 @@
       DOM.navExamTrigger?.setAttribute('aria-expanded', 'true');
       setTimeout(() => document.addEventListener('click', handleDocClickCloseNav), 0);
     }
+    function openAboutDropdown() {
+      if (!DOM.aboutDropdown) return;
+      DOM.aboutDropdown.classList.add('show');
+      DOM.aboutDropdown.setAttribute('aria-hidden', 'false');
+      DOM.aboutTrigger?.setAttribute('aria-expanded', 'true');
+      setTimeout(() => document.addEventListener('click', handleDocClickCloseAbout), 0);
+    }
     function handleDocClickCloseNav(event) {
       if (event.target && closest(event.target, '.nav-exam')) return;
       closeNavDropdown();
       document.removeEventListener('click', handleDocClickCloseNav);
+    }
+    function handleDocClickCloseAbout(event) {
+      if (event.target && closest(event.target, '.nav-about')) return;
+      closeAboutDropdown();
+      document.removeEventListener('click', handleDocClickCloseAbout);
     }
     function goToExam() {
       closeNavDropdown();
@@ -184,6 +284,17 @@
     }
     on(DOM.navExamTrigger, 'click', handleNavTrigger);
 
+    function handleAboutTrigger(event) {
+      event.preventDefault();
+      if (!DOM.aboutDropdown) return;
+      if (DOM.aboutDropdown.classList.contains('show')) {
+        closeAboutDropdown();
+      } else {
+        openAboutDropdown();
+      }
+    }
+    on(DOM.aboutTrigger, 'click', handleAboutTrigger);
+
     // Delegated for dropdown items (desktop) and drawer submenu (mobile)
     document.addEventListener('click', (event) => {
       const el = event.target;
@@ -197,6 +308,30 @@
         event.preventDefault();
         goToReview();
       }
+      // About / Terms open in modal (desktop + mobile)
+      if (closest(el, '.dropdown-item.about-us, .drawer-submenu-item.about-us')) {
+        event.preventDefault();
+        closeAboutDropdown();
+        closeDrawerAboutSubmenu();
+        if (DOM.body.classList.contains('menu-open')) closeMenu();
+        openSiteInfo('about');
+        return;
+      }
+      if (closest(el, '.dropdown-item.terms, .drawer-submenu-item.terms')) {
+        event.preventDefault();
+        closeAboutDropdown();
+        closeDrawerAboutSubmenu();
+        if (DOM.body.classList.contains('menu-open')) closeMenu();
+        openSiteInfo('terms');
+        return;
+      }
+      // About panel items (desktop + mobile)
+      if (closest(el, '.about-dropdown .dropdown-item, .drawer-about-submenu .drawer-submenu-item')) {
+        event.preventDefault();
+        closeAboutDropdown();
+        closeDrawerAboutSubmenu();
+        return;
+      }
     }, { capture: true });
 
     // Close menu with Escape
@@ -204,7 +339,10 @@
       if (event.key !== 'Escape') return;
       if (DOM.body?.classList.contains('menu-open')) closeMenu();
       closeNavDropdown();
+      closeAboutDropdown();
       closeDrawerSubmenu();
+      closeDrawerAboutSubmenu();
+      closeSiteInfo();
     });
 
     // Delegated gating for statements and profile
@@ -262,6 +400,17 @@
         }
       }
     }, { capture: true });
+
+    // Site Info Modal close bindings
+    try {
+      const els = getSiteInfoElements();
+      if (els?.closeBtn) on(els.closeBtn, 'click', closeSiteInfo);
+      if (els?.modal) {
+        on(els.modal, 'click', (e) => {
+          if (e && e.target === els.modal) closeSiteInfo();
+        });
+      }
+    } catch {}
   }
 
   async function loadHeader() {

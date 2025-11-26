@@ -65,6 +65,15 @@
     </div>
   </div>
 
+  <!-- Site Info Modal -->
+  <div class="site-info-modal" id="siteInfoModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="site-info-content" role="document" aria-labelledby="siteInfoTitle">
+      <button class="modal-close site-info-close" aria-label="დახურვა" type="button">&times;</button>
+      <h3 id="siteInfoTitle">ინფორმაცია</h3>
+      <div class="site-info-body" id="siteInfoBody"></div>
+    </div>
+  </div>
+
   <!-- Burger toggle for <=1050px (JS-driven) -->
   <button class="burger" aria-controls="mobile-drawer" aria-label="მენიუს გახსნა" aria-expanded="false" type="button">
     <span></span>
@@ -85,7 +94,15 @@
         </div>
       </div>
       <a href="#" class="drawer-statements">განცხადებები</a>
-      <a href="#" class="drawer-about">წესები და პირობები</a>
+      <div class="drawer-item drawer-about">
+        <a href="#" class="drawer-about-trigger" aria-haspopup="true" aria-expanded="false">წესები და პირობები</a>
+        <div class="drawer-about-submenu drawer-submenu" role="menu" hidden>
+          <button type="button" class="drawer-submenu-item about-us">ჩვენს შესახებ</button>
+          <button type="button" class="drawer-submenu-item terms">წესები და პირობები</button>
+          <button type="button" class="drawer-submenu-item process">საგამოცდო პროცესი</button>
+          <button type="button" class="drawer-submenu-item contract">ხელშეკრულების შაბლონი</button>
+        </div>
+      </div>
       <a href="#" class="drawer-profile" data-page-link>ჩემი გვერდი</a>
     </nav>
     <button class="drawer-login" data-auth-btn>ავტორიზაცია</button>
@@ -106,7 +123,15 @@
         </div>
       </div>
       <a href="#" class="nav-statements">განცხადებები</a>
-      <a href="#" class="nav-about">წესები და პირობები</a>
+      <div class="nav-item nav-about">
+        <a href="#" class="about-trigger" aria-haspopup="true" aria-expanded="false">წესები და პირობები</a>
+        <div class="dropdown about-dropdown" role="menu" aria-hidden="true">
+          <button type="button" class="dropdown-item about-us">ჩვენს შესახებ</button>
+          <button type="button" class="dropdown-item terms">წესები და პირობები</button>
+          <button type="button" class="dropdown-item process">საგამოცდო პროცესი</button>
+          <button type="button" class="dropdown-item contract">ხელშეკრულების შაბლონი</button>
+        </div>
+      </div>
       <a href="#" class="nav-profile" data-page-link>ჩემი გვერდი</a>
     </nav>
     <button class="login-btn" data-auth-btn>შესვლა</button>

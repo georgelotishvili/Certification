@@ -587,4 +587,73 @@ body.modal-open {
   }
 }
 
+/* Site Info Modal (About / Terms) */
+.site-info-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
+  z-index: 150;
+  align-items: center;
+  justify-content: center;
+}
+
+.site-info-modal.show {
+  display: flex;
+}
+
+.site-info-content {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  width: 66vw;           /* ~60-70% of viewport width */
+  min-width: 60vw;
+  max-width: 1200px;
+  height: 90vh;          /* 90% of viewport height */
+  box-shadow: 0 32px 70px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.site-info-close {
+  margin: 12px 12px 0 auto;
+}
+
+.site-info-content h3 {
+  margin: 0;
+  padding: 0 24px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.site-info-body {
+  padding: 16px 24px 24px;
+  overflow: auto;
+  flex: 1 1 auto;
+}
+
+/* Word-like concise typography */
+.site-info-body { font-size: 16px !important; line-height: 1.8; color: #0f172a; }
+.site-info-body p,
+.site-info-body li,
+.site-info-body td,
+.site-info-body th { font-size: 16px !important; }
+.site-info-body h2 { margin: 16px 0 8px; font-size: 18px !important; font-weight: 600; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+.site-info-body h3 { margin: 14px 0 8px; font-size: 16px !important; font-weight: 600; color: #1f2937; }
+.site-info-body p { margin: 0 0 12px; }
+.site-info-body ul, .site-info-body ol { margin: 8px 0 12px 22px; }
+.site-info-body li { margin-bottom: 6px; }
+
+@media (max-width: 910px) {
+  .site-info-content {
+    width: 90vw;
+    min-width: 90vw;
+  }
+}
+
 
