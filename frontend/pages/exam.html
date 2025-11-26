@@ -57,8 +57,8 @@
             </div>
             <div class="center-bottom">
               <div class="exam-bottom-actions in-center">
-                <button class="btn primary btn-wide" id="examStart" type="button">გამოცდის დაწყება</button>
-                <button class="btn finish btn-wide" id="examFinish" type="button">გამოცდის დასრულება</button>
+                <button class="btn primary btn-wide" id="examStart" type="button">დაწყება</button>
+                <button class="btn finish btn-wide" id="examFinish" type="button">დასრულება</button>
               </div>
             </div>
           </main>
@@ -76,7 +76,12 @@
           </aside>
         </div>
         
-        <div class="prestart-overlay" id="prestartOverlay" style="display:none;"></div>
+        <div class="prestart-overlay" id="prestartOverlay" style="display:none;">
+          <div class="prestart-caption" id="prestartCaption">
+            <div>გამოცდის დასაწყებად დააჭირეთ ღილაკს „დაწყება“. ამ ქმედებით თქვენ ადასტურებთ, რომ ეთანხმებით საიტზე განთავსებულ წესებსა და პირობებს.</div>
+            <div>პროცესის შესაწყვეტად აირჩიეთ ღილაკი „დასრულება“</div>
+          </div>
+        </div>
         <div class="confirm-overlay" id="confirmOverlay" style="display:none;"></div>
         <div class="exam-dialog" id="examConfirm" hidden>
           <p class="exam-text">ნამდვილად გსურთ გამოცდის დასრულება?</p>

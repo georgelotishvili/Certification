@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (DOM.examFinish) {
-    try { DOM.examFinish.disabled = true; } catch {}
+    try { DOM.examFinish.disabled = false; } catch {}
   }
 
   if (DOM.examStart) {
@@ -1005,7 +1005,8 @@ document.addEventListener('DOMContentLoaded', () => {
     focusTrap.disable();
     unlockKeys();
     try {
-      await finalizeRecording({ waitForUploads: true });
+      const shouldWaitForUploads = !!(state.sessionId && state.sessionToken);
+      await finalizeRecording({ waitForUploads: shouldWaitForUploads });
     } catch (err) {
       dlog('finalize recording failed', err);
     }
