@@ -1,7 +1,8 @@
 (() => {
   const globalObject = typeof window !== 'undefined' ? window : {};
   const defaults = {
-    API_BASE: 'http://127.0.0.1:8000',
+  API_BASE: 'http://127.0.0.1:8000',
+  ABOUT_LABEL: 'წესები და პირობები',
   };
 
   const metaOverrides = {};

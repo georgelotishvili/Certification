@@ -155,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
   footerFormModule.init();
   setupContactScroll();
   setupProfileNavigation();
+  setupAboutLabel();
 
   // Global escape handling (modal first, then menu)
   document.addEventListener('keydown', (event) => {
@@ -208,6 +209,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     utils.on(navProfile, 'click', (event) => goMy(event, false));
     utils.on(drawerProfile, 'click', (event) => goMy(event, true));
+  }
+
+  function setupAboutLabel() {
+    try {
+      const label = (window.APP_CONFIG && window.APP_CONFIG.ABOUT_LABEL) || 'წესები და პირობები';
+      document.querySelectorAll('.nav-about, .drawer-about').forEach((el) => {
+        try { el.textContent = label; } catch {}
+      });
+    } catch {}
   }
 
   function createLayoutModule() {

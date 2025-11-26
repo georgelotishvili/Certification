@@ -188,6 +188,17 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('load', setBodyOffset);
   window.addEventListener('resize', setBodyOffset);
 
+  function setAboutLabel() {
+    try {
+      const label = (window.APP_CONFIG && window.APP_CONFIG.ABOUT_LABEL) || 'წესები და პირობები';
+      const nav = document.querySelector('.nav-about');
+      const drawer = document.querySelector('.drawer-about');
+      if (nav) nav.textContent = label;
+      if (drawer) drawer.textContent = label;
+    } catch {}
+  }
+  setAboutLabel();
+
   function updateBanners() {
     const user = getCurrentUser();
     const text = user ? `${user.firstName || ''} ${user.lastName || ''} — ${user.code || ''}`.trim() : 'გთხოვთ შეხვიდეთ სისტემაში';
@@ -1200,10 +1211,6 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   // Personal page behavior:
   // - Registry: open local modal (no navigation)
-  // - About: show info message (no navigation)
-  const showAbout = (e) => { if (e) e.preventDefault(); alert('ჩვენს შესახებ — მალე დაემატება'); };
-  if (DOM.navAbout) DOM.navAbout.addEventListener('click', showAbout);
-  if (DOM.drawerAbout) DOM.drawerAbout.addEventListener('click', (e) => { e.preventDefault(); closeMenu(); showAbout(); });
   // statements click handled by statementsModule (no redirect)
 
   // Registry modal — use shared module
