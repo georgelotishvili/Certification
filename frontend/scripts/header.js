@@ -21,6 +21,54 @@
     try { return window.Auth?.openModal?.(); } catch {}
   }
 
+  // Page cover crossfade (0.3s)
+  function mountPageCover(opaque) {
+    try {
+      let el = document.getElementById('pageCover');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'pageCover';
+        el.className = 'page-cover';
+        document.documentElement.appendChild(el);
+      } else {
+        el.classList.add('page-cover');
+      }
+      el.style.opacity = opaque ? '1' : '0';
+      return el;
+    } catch { return null; }
+  }
+
+  function setupPageCoverOnLoad() {
+    try {
+      if (sessionStorage.getItem('pageCover') === '1') {
+        const el = mountPageCover(true);
+        requestAnimationFrame(() => {
+          if (!el) return;
+          el.style.transition = 'opacity 0.3s ease';
+          el.style.opacity = '0';
+          setTimeout(() => { try { el.remove(); } catch {}; sessionStorage.removeItem('pageCover'); }, 300);
+        });
+      }
+    } catch {}
+  }
+
+  function transitionTo(url) {
+    try {
+      const el = mountPageCover(false);
+      if (!el) { window.location.href = url; return; }
+      void el.offsetWidth; // reflow to ensure transition applies
+      el.style.transition = 'opacity 0.3s ease';
+      el.style.opacity = '1';
+      sessionStorage.setItem('pageCover', '1');
+      setTimeout(() => { window.location.href = url; }, 300);
+    } catch {
+      window.location.href = url;
+    }
+  }
+
+  // Initialize cover fade on page load if requested
+  setupPageCoverOnLoad();
+
   function bindHeader() {
     const DOM = {
       body: document.body,
@@ -185,25 +233,33 @@
             } catch {}
           }
         } else {
-          window.location.href = 'my.html#statements';
+          transitionTo('my.html#statements');
         }
         return;
       }
 
-      // Profile gating only on main page
+      // Profile/main navigation with fade
       const profile = closest(el, '.nav-profile[data-page-link], .drawer-profile[data-page-link]');
       if (profile) {
-        if (isMyPage()) return; // allow native navigation on my.html
-        if (!isLoggedIn()) {
+        const href = (profile.getAttribute('href') || '').trim();
+        const fromDrawer = !!closest(el, '.drawer');
+        const targetIsMy = href.includes('my.html');
+        const targetIsIndex = href.includes('index.html');
+
+        if (targetIsMy && !isLoggedIn()) {
           event.preventDefault();
-          const fromDrawer = !!closest(el, '.drawer');
           if (fromDrawer) closeMenu();
           alert('გთხოვთ გაიაროთ ავტორიზაცია');
           openAuthModal();
           return;
         }
-        const fromDrawer = !!closest(el, '.drawer');
-        if (fromDrawer) closeMenu();
+
+        if (targetIsMy || targetIsIndex) {
+          event.preventDefault();
+          if (fromDrawer) closeMenu();
+          transitionTo(href || (isMyPage() ? 'index.html' : 'my.html'));
+          return;
+        }
       }
     }, { capture: true });
   }

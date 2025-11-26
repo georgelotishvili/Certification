@@ -4,6 +4,21 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>certification</title>
+    <!-- instant black cover between pages -->
+    <script>
+      (function(){
+        try {
+          if (sessionStorage.getItem('pageCover') === '1') {
+            var s = document.createElement('style');
+            s.textContent = '#pageCover{position:fixed;inset:0;background:#fff;z-index:2147483647;opacity:1;pointer-events:none;}';
+            document.head.appendChild(s);
+            var d = document.createElement('div');
+            d.id = 'pageCover';
+            document.documentElement.appendChild(d);
+          }
+        } catch(e) {}
+      })();
+    </script>
     <meta name="api-base" content="http://127.0.0.1:8000" />
     <script src="../scripts/config.js" defer></script>
     <script src="../scripts/header.js" defer></script>

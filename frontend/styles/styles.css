@@ -331,6 +331,23 @@ footer {
 
 /* Login modal styles moved to header.css */
 
+.page-fade-animate {
+  transition: opacity 0.5s ease;
+}
+.page-fade-hidden {
+  opacity: 0;
+}
+
+.page-cover {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 2147483647;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
 .results-overlay {
   position: fixed;
   inset: 0;
