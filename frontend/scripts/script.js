@@ -14,8 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const DOM = {
     body: document.body,
     root: document.documentElement,
-    header: document.querySelector('header'),
-    navLogo: document.querySelector('.nav-bar .logo'),
     burger: document.querySelector('.burger'),
     overlay: document.querySelector('.overlay'),
     drawer: document.querySelector('.drawer'),
@@ -39,8 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
     blankClose: document.getElementById('blankClose'),
     authBanner: document.querySelector('.auth-banner'),
     adminLink: document.querySelector('.admin-link'),
-    navExamTrigger: document.querySelector('.nav .exam-trigger'),
-    navDropdown: document.querySelector('.nav .dropdown'),
     footerForm: document.querySelector('.footer-form'),
   };
 
@@ -115,8 +111,6 @@ document.addEventListener('DOMContentLoaded', () => {
     },
   };
 
-  const layoutModule = createLayoutModule();
-  const menuModule = createMenuModule();
   const fullscreenModule = createFullscreenModule();
   const authModule = createAuthModule();
   const registryModule = window.Registry.init({
@@ -125,20 +119,17 @@ document.addEventListener('DOMContentLoaded', () => {
     beforeOpen: (el) => {
       try {
         if (el?.classList?.contains('drawer-registry')) {
-          menuModule.close();
+          document.body.classList.remove('menu-open');
         }
       } catch {}
     },
     refreshRating: true,
   });
-  const examNavigationModule = createExamNavigationModule();
   const footerFormModule = createFooterFormModule();
 
-  layoutModule.init();
-  menuModule.init();
+  // menu controls are handled by header.js
   fullscreenModule.init();
   authModule.init();
-  examNavigationModule.init();
   footerFormModule.init();
   // profile navigation uses native anchors + delegated gating
 
@@ -167,12 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.registerOption = document.querySelector('.register-option');
       DOM.forgotPasswordLink = document.getElementById('forgotPasswordLink');
       DOM.authBanner = document.querySelector('.auth-banner');
-      DOM.navExamTrigger = document.querySelector('.nav .exam-trigger');
-      DOM.navDropdown = document.querySelector('.nav .dropdown');
 
-      // Initialize modules that rely on header elements
-      menuModule.init();
-      // Always init auth so login modal works on personal page too
+      // Initialize auth so login modal works on personal page too
       authModule.init();
 
       // Gating moved to delegated handler below
@@ -181,50 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch {}
   });
 
-  // Delegated gating for statements (both pages) and profile (main page only)
-  document.addEventListener('click', (event) => {
-    const el = event.target;
-    if (!el) return;
-
-    // Statements: identical UX on both pages
-    const statements = el.closest('.nav-statements, .drawer-statements');
-    if (statements) {
-      event.preventDefault();
-      const fromDrawer = !!(el.closest('.drawer'));
-      try {
-        if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
-          if (fromDrawer) menuModule.close();
-          alert('გთხოვთ გაიაროთ ავტორიზაცია');
-          authModule.openModal?.();
-          return;
-        }
-      } catch {}
-      if (fromDrawer) menuModule.close();
-      if (window.location.pathname.includes('my.html')) {
-        if (window.location.hash !== '#statements') window.location.hash = 'statements';
-      } else {
-        window.location.href = 'my.html#statements';
-      }
-      return;
-    }
-
-    // Profile gating only on main page
-    const profile = el.closest('.nav-profile[data-page-link], .drawer-profile[data-page-link]');
-    if (!profile) return;
-    if (window.location.pathname.includes('my.html')) return;
-    const fromDrawer = !!(el.closest('.drawer'));
-    try {
-      if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
-        event.preventDefault();
-        if (fromDrawer) menuModule.close();
-        alert('გთხოვთ გაიაროთ ავტორიზაცია');
-        authModule.openModal?.();
-        return;
-      }
-    } catch {}
-    if (fromDrawer) menuModule.close();
-    // allow natural navigation via href to my.html
-  });
+  // Statements/profile gating handled by header.js
 
   // Global escape handling (modal first, then menu)
   document.addEventListener('keydown', (event) => {
@@ -237,8 +181,8 @@ document.addEventListener('DOMContentLoaded', () => {
       registryModule.close();
       return;
     }
-    if (menuModule.isOpen()) {
-      menuModule.close();
+    if (document.body.classList.contains('menu-open')) {
+      document.body.classList.remove('menu-open');
     }
   });
 
@@ -265,84 +209,15 @@ document.addEventListener('DOMContentLoaded', () => {
       return false;
     }
   };
+  // Optional modal controls for independent header module
+  window.Auth.openModal = () => authModule.openModal?.();
+  window.Auth.closeModal = () => authModule.closeModal?.();
 
-  // contact scroll removed (no contact links in header)
+  // contact scroll: no contact links in header
 
-  // header-video support removed (no longer used)
+  // layout module removed (nav logo handled in header.js)
 
-  // setupProfileNavigation removed
-
-  // setupAboutLabel removed: label is static in header partial
-
-  function createLayoutModule() {
-    function init() {
-      // Click logo to scroll to top
-      utils.on(DOM.navLogo, 'click', (event) => {
-        if (event && typeof event.preventDefault === 'function') event.preventDefault();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-    }
-
-    return { init };
-  }
-
-  function createMenuModule() {
-    let isOpen = false;
-
-    const media = {
-      drawerExamTrigger: DOM.drawerExamTrigger,
-      drawerSubmenu: DOM.drawerSubmenu,
-    };
-
-    function setMenu(open) {
-      isOpen = !!open;
-      DOM.body?.classList.toggle('menu-open', !!open);
-      if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (!open) closeDrawerSubmenu();
-    }
-
-    function open() { setMenu(true); }
-    function close() { setMenu(false); }
-    function toggle() { setMenu(!isOpen); }
-
-    function isMenuOpen() { return isOpen; }
-
-    function closeDrawerSubmenu() {
-      if (!media.drawerSubmenu) return;
-      media.drawerSubmenu.setAttribute('hidden', '');
-      media.drawerExamTrigger?.setAttribute('aria-expanded', 'false');
-    }
-
-    function toggleDrawerSubmenu(event) {
-      event.preventDefault();
-      event.stopPropagation();
-      try {
-        if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
-          alert('გთხოვთ გაიაროთ ავტორიზაცია');
-          authModule.openModal?.();
-          return;
-        }
-      } catch {}
-      if (!media.drawerSubmenu) return;
-      const hidden = media.drawerSubmenu.hasAttribute('hidden');
-      if (hidden) {
-        media.drawerSubmenu.removeAttribute('hidden');
-        media.drawerExamTrigger?.setAttribute('aria-expanded', 'true');
-      } else {
-        closeDrawerSubmenu();
-      }
-    }
-
-    function init() {
-      utils.on(DOM.burger, 'click', toggle);
-      utils.on(DOM.overlay, 'click', close);
-      utils.on(DOM.drawerClose, 'click', close);
-      DOM.drawerLinks.forEach((link) => utils.on(link, 'click', close));
-      utils.on(DOM.drawerExamTrigger, 'click', toggleDrawerSubmenu);
-    }
-
-    return { init, open, close, toggle, isOpen: isMenuOpen, closeDrawerSubmenu };
-  }
+  // menu module removed (handled by header.js)
 
   function createFullscreenModule() {
     let trapFocusHandler = null;
@@ -400,7 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.fullscreenBlank.classList.add('show');
       DOM.fullscreenBlank.setAttribute('aria-hidden', 'false');
       DOM.body.style.overflow = 'hidden';
-      menuModule.close();
+      DOM.body.classList.remove('menu-open');
       setIsolated(true);
       previouslyFocused = document.activeElement;
       if (typeof window.hideAllConfirm === 'function') window.hideAllConfirm();
@@ -595,13 +470,13 @@ document.addEventListener('DOMContentLoaded', () => {
       normalizeAuthState();
       const logged = isLoggedIn();
       if (!logged) {
-        if (fromDrawer) menuModule.close();
+        if (fromDrawer) document.body.classList.remove('menu-open');
         openModal();
         showOptions();
         return;
       }
       performLogout();
-      if (fromDrawer) menuModule.close();
+      if (fromDrawer) document.body.classList.remove('menu-open');
     }
 
     function performLogout() {
@@ -812,102 +687,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* Registry module moved to window.Registry (registry.mini.js) */
 
-  function createExamNavigationModule() {
-    let isBound = false;
-
-    function closeNavDropdown() {
-      if (!DOM.navDropdown) return;
-      DOM.navDropdown.classList.remove('show');
-      DOM.navDropdown.setAttribute('aria-hidden', 'true');
-      DOM.navExamTrigger?.setAttribute('aria-expanded', 'false');
-    }
-
-    function openNavDropdown() {
-      if (!DOM.navDropdown) return;
-      DOM.navDropdown.classList.add('show');
-      DOM.navDropdown.setAttribute('aria-hidden', 'false');
-      DOM.navExamTrigger?.setAttribute('aria-expanded', 'true');
-      setTimeout(() => document.addEventListener('click', handleDocClickCloseNav), 0);
-    }
-
-    function handleDocClickCloseNav(event) {
-      if (event.target && event.target.closest('.nav-exam')) return;
-      closeNavDropdown();
-      document.removeEventListener('click', handleDocClickCloseNav);
-    }
-
-    function goToExam() {
-      closeNavDropdown();
-      menuModule.closeDrawerSubmenu();
-      if (DOM.body.classList.contains('menu-open')) menuModule.close();
-      try {
-        if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
-          alert('გთხოვთ გაიაროთ ავტორიზაცია');
-          authModule.openModal?.();
-          return;
-        }
-      } catch {}
-      window.location.href = 'exam.html';
-    }
-
-    function goToReview() {
-      closeNavDropdown();
-      menuModule.closeDrawerSubmenu();
-      alert('პროექტის განხილვა — მალე დაემატება');
-    }
-
-    function handleNavTrigger(event) {
-      event.preventDefault();
-      try {
-        if (!authModule.isLoggedIn || !authModule.isLoggedIn()) {
-          alert('გთხოვთ გაიაროთ ავტორიზაცია');
-          authModule.openModal?.();
-          return;
-        }
-      } catch {}
-      if (!DOM.navDropdown) return;
-      if (DOM.navDropdown.classList.contains('show')) {
-        closeNavDropdown();
-      } else {
-        openNavDropdown();
-      }
-    }
-
-    function handleKeydown(event) {
-      if (event.key !== 'Escape') return;
-      closeNavDropdown();
-      if (DOM.drawerSubmenu && !DOM.drawerSubmenu.hasAttribute('hidden')) {
-        DOM.drawerSubmenu.setAttribute('hidden', '');
-        DOM.drawerExamTrigger?.setAttribute('aria-expanded', 'false');
-      }
-    }
-
-    function init() {
-      if (isBound) return;
-      isBound = true;
-      document.addEventListener('keydown', handleKeydown);
-      document.addEventListener('click', (event) => {
-        const el = event.target;
-        if (!el) return;
-        const trigger = el.closest('.nav .exam-trigger');
-        if (trigger) {
-          handleNavTrigger(event);
-          return;
-        }
-        if (el.closest('.dropdown-item.theoretical, .drawer-submenu-item.theoretical')) {
-          event.preventDefault();
-          goToExam();
-          return;
-        }
-        if (el.closest('.dropdown-item.review, .drawer-submenu-item.review')) {
-          event.preventDefault();
-          goToReview();
-        }
-      });
-    }
-
-    return { init };
-  }
+  // Exam dropdown/navigation now handled by header.js
 
   function createFooterFormModule(deps = {}) {
     const { statementsModule } = deps;
