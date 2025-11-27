@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List
+from typing import List, Optional
+import os
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status, UploadFile, File, Form
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Statement, User
-from ..schemas import StatementCreate, StatementOut
+from ..schemas import StatementOut
+from ..services.media_storage import ensure_statement_dir, relative_storage_path
 
 
 router = APIRouter()
+
+
+ALLOWED_EXTS = {".zip", ".rar", ".pdf", ".jpg", ".jpeg"}
+MAX_BYTES = 100 * 1024 * 1024  # 100MB
 
 
 def _get_actor_user(
@@ -28,22 +34,80 @@ def _get_actor_user(
     return user
 
 
+def _validate_attachment(upload: Optional[UploadFile]):
+    if not upload:
+        return
+    ext = os.path.splitext(upload.filename or "")[1].lower()
+    if ext not in ALLOWED_EXTS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file type not allowed (zip/rar/pdf/jpeg only)")
+    try:
+        upload.file.seek(0, os.SEEK_END)
+        size = upload.file.tell()
+        upload.file.seek(0)
+        if size and size > MAX_BYTES:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file too large (max 100MB)")
+    except Exception:
+        pass
+
+
+def _save_attachment(user_id: int, statement_id: int, upload: UploadFile) -> tuple[str, str, str | None, int | None]:
+    directory = ensure_statement_dir(user_id, statement_id)
+    safe_name = os.path.basename(upload.filename or "attachment")
+    path = directory / safe_name
+    total = 0
+    with open(path, "wb") as f:
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_BYTES:
+                f.close()
+                try:
+                    path.unlink(missing_ok=True)  # type: ignore[arg-type]
+                except Exception:
+                    pass
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file too large (max 100MB)")
+            f.write(chunk)
+    rel = relative_storage_path(path)
+    mime = (upload.content_type or "").strip() or None
+    return rel, safe_name, mime, total or None
+
+
 @router.post("", response_model=StatementOut, status_code=status.HTTP_201_CREATED)
 def create_statement(
-    payload: StatementCreate,
+    message: str = Form(...),
+    attachment: UploadFile | None = File(None),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ) -> StatementOut:
     user = _get_actor_user(db, x_actor_email)
-    message = (payload.message or "").strip()
-    if not message:
+    msg = (message or "").strip()
+    if not msg:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="message required")
 
-    statement = Statement(user_id=user.id, message=message)
-    db.add(statement)
+    st = Statement(user_id=user.id, message=msg)
+    db.add(st)
     db.commit()
-    db.refresh(statement)
-    return StatementOut(id=statement.id, message=statement.message, created_at=statement.created_at)
+    db.refresh(st)
+
+    if attachment:
+        _validate_attachment(attachment)
+        rel, name, mime, size = _save_attachment(user.id, st.id, attachment)
+        st.attachment_path = rel
+        st.attachment_filename = name
+        st.attachment_mime_type = mime
+        st.attachment_size_bytes = size
+        db.add(st)
+        db.commit()
+        db.refresh(st)
+
+    return StatementOut(
+        id=st.id,
+        message=st.message,
+        created_at=st.created_at,
+        attachment_filename=st.attachment_filename,
+    )
 
 
 @router.get("/me", response_model=List[StatementOut])
@@ -62,6 +126,7 @@ def list_my_statements(
             id=statement.id,
             message=statement.message,
             created_at=statement.created_at,
+            attachment_filename=statement.attachment_filename,
         )
         for statement in statements
     ]

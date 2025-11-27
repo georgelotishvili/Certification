@@ -150,6 +150,17 @@
         bindDownload(downloadBtn, item);
         actions.appendChild(downloadBtn);
 
+        // Attachment download link, if present
+        if (item.attachment_filename) {
+          const actorEmail = (getActorHeaders()['x-actor-email'] || '').trim();
+          const attachLink = document.createElement('a');
+          attachLink.className = 'statement-attachment';
+          attachLink.textContent = `File: ${item.attachment_filename}`;
+          attachLink.href = `${API_BASE}/admin/statements/${encodeURIComponent(item.id)}/file${actorEmail ? `?actor=${encodeURIComponent(actorEmail)}` : ''}`;
+          attachLink.target = '_blank';
+          actions.appendChild(attachLink);
+        }
+
         if (isFounderActor()) {
           const deleteBtn = document.createElement('button');
           deleteBtn.type = 'button';

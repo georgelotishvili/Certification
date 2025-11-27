@@ -283,6 +283,7 @@ class StatementOut(BaseModel):
     id: int
     message: str
     created_at: datetime
+    attachment_filename: str | None = None
 
 
 class AdminStatementOut(BaseModel):
@@ -295,6 +296,8 @@ class AdminStatementOut(BaseModel):
     created_at: datetime
     seen_at: datetime | None = None
     seen_by: str | None = None
+    attachment_filename: str | None = None
+    attachment_size_bytes: int | None = None
 
 
 class AdminStatementsResponse(BaseModel):

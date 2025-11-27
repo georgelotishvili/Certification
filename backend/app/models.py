@@ -177,6 +177,11 @@ class Statement(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     seen_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Attachment metadata (optional)
+    attachment_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment_mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    attachment_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="statements")
 

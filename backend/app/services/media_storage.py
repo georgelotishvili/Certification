@@ -78,3 +78,11 @@ def certificate_file_path(user_id: int, filename: str = "certificate.pdf") -> Pa
     return ensure_certificate_dir(user_id) / safe_name
 
 
+def ensure_statement_dir(user_id: int, statement_id: int) -> Path:
+    """Ensure and return the directory for a specific user's statement attachments."""
+    root = ensure_media_root()
+    d = root / "statements" / str(user_id) / str(statement_id)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+

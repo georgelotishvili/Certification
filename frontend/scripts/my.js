@@ -1307,24 +1307,42 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('გთხოვთ გაიაროთ ავტორიზაცია');
         return;
       }
-      const formData = new FormData(DOM.statementsForm);
-      const message = utils.getTrimmed(formData, 'message');
-      if (!message) return alert('გთხოვთ შეიყვანოთ შეტყობინება');
       const actorEmail = (window.Auth?.getSavedEmail?.() || '').trim();
       if (!actorEmail) {
         alert('ავტორიზაცია ვერ დადასტურდა');
         return;
       }
-      const submitBtn = DOM.statementsForm.querySelector('button[type="submit"]');
+
+      // gather data
+      const fd = new FormData(DOM.statementsForm);
+      const message = utils.getTrimmed(fd, 'message');
+      if (!message) return alert('გთხოვთ შეიყვანოთ შეტყობინება');
+
+      const fileInput = DOM.statementsForm.querySelector('input[name=\"attachment\"]');
+      const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+      if (file) {
+        if (file.size > 100 * 1024 * 1024) {
+          alert('ფაილი აღემატება 100MB-ს');
+          return;
+        }
+        if (!/\.(zip|rar|pdf|jpg|jpeg)$/i.test(file.name || '')) {
+          alert('დასაშვებია: ZIP, RAR, PDF, JPEG');
+          return;
+        }
+      }
+
+      // build body with trimmed message
+      const body = new FormData();
+      body.set('message', message);
+      if (file) body.set('attachment', file);
+
+      const submitBtn = DOM.statementsForm.querySelector('button[type=\"submit\"]');
       submitBtn?.setAttribute('disabled', 'true');
       try {
-      const response = await fetch(`${API_BASE}/statements`, {
+        const response = await fetch(`${API_BASE}/statements`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          ...getActorHeaders(),
-          },
-          body: JSON.stringify({ message }),
+          headers: { ...getActorHeaders() }, // let browser set Content-Type
+          body,
           credentials: 'include',
         });
         if (!response.ok) {

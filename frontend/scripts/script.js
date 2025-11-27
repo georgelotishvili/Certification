@@ -715,16 +715,25 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('ავტორიზაცია ვერ დადასტურდა');
         return;
       }
+
+      // Build multipart/form-data payload (backend expects Form(...) + File(...))
+      const payload = new FormData();
+      payload.set('message', message);
+      try {
+        const fileInput = DOM.footerForm.querySelector('input[type="file"], input[name="attachment"]');
+        const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+        if (file) payload.set('attachment', file);
+      } catch {}
       const submitBtn = DOM.footerForm.querySelector('button[type="submit"]');
       submitBtn?.setAttribute('disabled', 'true');
       try {
         const response = await fetch(`${API_BASE}/statements`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            // Do NOT set Content-Type manually; browser will add multipart/form-data with boundary
             'x-actor-email': actorEmail,
           },
-          body: JSON.stringify({ message }),
+          body: payload,
           credentials: 'include',
         });
         if (!response.ok) {

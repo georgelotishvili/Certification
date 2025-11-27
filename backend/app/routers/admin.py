@@ -786,6 +786,31 @@ def delete_result(
     return
 
 
+@router.get("/statements/{statement_id}/file")
+def admin_download_statement_file(
+    statement_id: int,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    actor: str | None = Query(None, alias="actor"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, actor or x_actor_email)
+    st = db.get(Statement, statement_id)
+    if not st or not st.attachment_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    try:
+        path = resolve_storage_path(st.attachment_path)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    return FileResponse(
+        path,
+        media_type=st.attachment_mime_type or "application/octet-stream",
+        filename=st.attachment_filename or path.name,
+    )
+
 
 # ================= Users admin endpoints =================
 
@@ -1088,6 +1113,8 @@ def admin_user_statements(
             created_at=statement.created_at,
             seen_at=statement.seen_at,
             seen_by=statement.seen_by,
+            attachment_filename=statement.attachment_filename,
+            attachment_size_bytes=statement.attachment_size_bytes,
         )
         for statement in statements
     ]
@@ -1107,6 +1134,14 @@ def admin_delete_statement(
     statement = db.get(Statement, statement_id)
     if not statement:
         return
+    # Remove stored attachment if present
+    if statement.attachment_path:
+        try:
+            abs_path = resolve_storage_path(statement.attachment_path)
+            if abs_path.exists():
+                abs_path.unlink()
+        except Exception:
+            pass
     db.delete(statement)
     db.commit()
     return

@@ -266,6 +266,10 @@
         <div class="results-modal-body">
           <form id="userStatementForm" class="statement-compose">
             <textarea name="message" placeholder="განცხადების ტექსტი" rows="4" required></textarea>
+            <label class="statement-file">
+              <span>Attach file (ZIP, RAR, PDF, JPEG)</span>
+              <input type="file" name="attachment" accept=".zip,.rar,.pdf,.jpg,.jpeg" />
+            </label>
             <div class="compose-actions">
               <button type="submit" class="submit">გაგზავნა</button>
             </div>
