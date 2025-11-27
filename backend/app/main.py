@@ -13,11 +13,13 @@ try:
     from backend.scripts.migrate_media_table import run as run_media_migration
     from backend.scripts.migrate_certificate_score import run as run_certificate_score_migration
     from backend.scripts.migrate_certificate_file_cols import run as run_certificate_file_cols_migration
+    from backend.scripts.migrate_statements_attachment import run as run_statements_attachment_migration
 except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.main:app`
     from scripts.migrate_results_cols import run as run_results_migration  # type: ignore
     from scripts.migrate_media_table import run as run_media_migration  # type: ignore
     from scripts.migrate_certificate_score import run as run_certificate_score_migration  # type: ignore
     from scripts.migrate_certificate_file_cols import run as run_certificate_file_cols_migration  # type: ignore
+    from scripts.migrate_statements_attachment import run as run_statements_attachment_migration  # type: ignore
 
 
 def create_app() -> FastAPI:
@@ -25,7 +27,7 @@ def create_app() -> FastAPI:
 
     Base.metadata.create_all(bind=engine)
     # Ensure additive columns for results exist (idempotent)
-    for migrate in (run_results_migration, run_media_migration, run_certificate_score_migration, run_certificate_file_cols_migration):
+    for migrate in (run_results_migration, run_media_migration, run_certificate_score_migration, run_certificate_file_cols_migration, run_statements_attachment_migration):
         try:
             migrate()
         except Exception:
@@ -37,7 +39,6 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
         allow_origin_regex=r".*",
         allow_credentials=True,
         allow_methods=["*"],

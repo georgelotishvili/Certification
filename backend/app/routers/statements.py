@@ -81,33 +81,40 @@ def create_statement(
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ) -> StatementOut:
-    user = _get_actor_user(db, x_actor_email)
-    msg = (message or "").strip()
-    if not msg:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="message required")
+    try:
+        user = _get_actor_user(db, x_actor_email)
+        msg = (message or "").strip()
+        if not msg:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="message required")
 
-    st = Statement(user_id=user.id, message=msg)
-    db.add(st)
-    db.commit()
-    db.refresh(st)
-
-    if attachment:
-        _validate_attachment(attachment)
-        rel, name, mime, size = _save_attachment(user.id, st.id, attachment)
-        st.attachment_path = rel
-        st.attachment_filename = name
-        st.attachment_mime_type = mime
-        st.attachment_size_bytes = size
+        st = Statement(user_id=user.id, message=msg)
         db.add(st)
         db.commit()
         db.refresh(st)
 
-    return StatementOut(
-        id=st.id,
-        message=st.message,
-        created_at=st.created_at,
-        attachment_filename=st.attachment_filename,
-    )
+        if attachment:
+            _validate_attachment(attachment)
+            rel, name, mime, size = _save_attachment(user.id, st.id, attachment)
+            st.attachment_path = rel
+            st.attachment_filename = name
+            st.attachment_mime_type = mime
+            st.attachment_size_bytes = size
+            db.add(st)
+            db.commit()
+            db.refresh(st)
+
+        return StatementOut(
+            id=st.id,
+            message=st.message,
+            created_at=st.created_at,
+            attachment_filename=getattr(st, 'attachment_filename', None),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal error: {str(e)}")
 
 
 @router.get("/me", response_model=List[StatementOut])
@@ -115,21 +122,26 @@ def list_my_statements(
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ) -> List[StatementOut]:
-    user = _get_actor_user(db, x_actor_email)
-    statements = db.scalars(
-        select(Statement)
-        .where(Statement.user_id == user.id)
-        .order_by(Statement.created_at.desc(), Statement.id.desc())
-    ).all()
-    return [
-        StatementOut(
-            id=statement.id,
-            message=statement.message,
-            created_at=statement.created_at,
-            attachment_filename=statement.attachment_filename,
-        )
-        for statement in statements
-    ]
+    try:
+        user = _get_actor_user(db, x_actor_email)
+        statements = db.scalars(
+            select(Statement)
+            .where(Statement.user_id == user.id)
+            .order_by(Statement.created_at.desc(), Statement.id.desc())
+        ).all()
+        return [
+            StatementOut(
+                id=statement.id,
+                message=statement.message,
+                created_at=statement.created_at,
+                attachment_filename=getattr(statement, 'attachment_filename', None),
+            )
+            for statement in statements
+        ]
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal error: {str(e)}")
 
 
 @router.get("/summary")
