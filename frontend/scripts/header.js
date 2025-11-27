@@ -107,6 +107,7 @@
       case 'terms':
       case 'process':
       case 'legal-base':
+      case 'team':
         return `../partials/site-info/${type}.html`;
       case 'contract':
         return `../partials/site-info/exam-service-contract.html`;
@@ -127,7 +128,8 @@
         process: 'საგამოცდო პროცესი',
         contract: 'საგამოცდო ხელშეკრულება',
         'certification-contract': 'სასერტიფიკაციო ხელშეკრულება',
-        'legal-base': 'საკანონმდებლო ბაზა'
+        'legal-base': 'საკანონმდებლო ბაზა',
+        team: 'ჩვენი გუნდი'
       };
       if (els.title) els.title.textContent = titles[type] || 'ინფორმაცია';
 
@@ -397,6 +399,14 @@
         closeDrawerAboutSubmenu();
         if (DOM.body.classList.contains('menu-open')) closeMenu();
         openSiteInfo('legal-base');
+        return;
+      }
+      if (closest(el, '.dropdown-item.team, .drawer-submenu-item.team')) {
+        event.preventDefault();
+        closeAboutDropdown();
+        closeDrawerAboutSubmenu();
+        if (DOM.body.classList.contains('menu-open')) closeMenu();
+        openSiteInfo('team');
         return;
       }
       // About panel items (desktop + mobile)
