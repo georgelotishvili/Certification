@@ -107,6 +107,8 @@
       case 'terms':
       case 'process':
       case 'contract':
+      case 'certification-contract':
+      case 'legal-base':
         return `../partials/site-info/${type}.html`;
       default:
         return `../partials/site-info/about.html`;
@@ -121,7 +123,9 @@
         about: 'ჩვენს შესახებ',
         terms: 'წესები და პირობები',
         process: 'საგამოცდო პროცესი',
-        contract: 'ხელშეკრულების შაბლონი'
+        contract: 'საგამოცდო ხელშეკრულება',
+        'certification-contract': 'სასერტიფიკაციო ხელშეკრულება',
+        'legal-base': 'საკანონმდებლო ბაზა'
       };
       if (els.title) els.title.textContent = titles[type] || 'ინფორმაცია';
 
@@ -375,6 +379,22 @@
         closeDrawerAboutSubmenu();
         if (DOM.body.classList.contains('menu-open')) closeMenu();
         openSiteInfo('contract');
+        return;
+      }
+      if (closest(el, '.dropdown-item.certification-contract, .drawer-submenu-item.certification-contract')) {
+        event.preventDefault();
+        closeAboutDropdown();
+        closeDrawerAboutSubmenu();
+        if (DOM.body.classList.contains('menu-open')) closeMenu();
+        openSiteInfo('certification-contract');
+        return;
+      }
+      if (closest(el, '.dropdown-item.legal-base, .drawer-submenu-item.legal-base')) {
+        event.preventDefault();
+        closeAboutDropdown();
+        closeDrawerAboutSubmenu();
+        if (DOM.body.classList.contains('menu-open')) closeMenu();
+        openSiteInfo('legal-base');
         return;
       }
       // About panel items (desktop + mobile)

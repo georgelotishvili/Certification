@@ -100,7 +100,7 @@ header {
   position: absolute;
   top: 100%;
   left: 0;
-  min-width: 220px;
+  min-width: 224px;
   background: #ffffff;
   border: 1px solid #cbd5f5;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
@@ -123,6 +123,7 @@ header {
   text-align: left;
   color: #0f172a;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .dropdown-item:hover {
@@ -306,6 +307,7 @@ header {
   padding: 10px 0 10px 16px;
   text-align: left;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .drawer-submenu-item:hover {
