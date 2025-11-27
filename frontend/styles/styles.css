@@ -29,7 +29,7 @@ body {
   --shadow-medium: 0 14px 32px rgba(17, 27, 48, 0.38);
   --radius-sm: 4px;
   --radius-md: 6px;
-  --transition-base: 0.25s ease;
+  --transition-base: 0.3s ease;
   --overlay-scrim: rgba(6, 11, 25, 0.7);
   --surface-elevated: rgba(9, 15, 31, 0.98);
   --surface-muted: rgba(13, 21, 39, 0.95);
@@ -358,7 +358,7 @@ footer {
   justify-content: center;
   padding: 24px;
   z-index: 600;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.3s ease;
   opacity: 0;
 }
 

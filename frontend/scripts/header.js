@@ -54,15 +54,31 @@
 
   function transitionTo(url) {
     try {
+      // Ensure URL doesn't have hash to scroll to top
+      const cleanUrl = url.split('#')[0];
+      // Skip transition for admin page
+      if (cleanUrl.includes('admin.html')) {
+        window.location.href = cleanUrl;
+        return;
+      }
       const el = mountPageCover(false);
-      if (!el) { window.location.href = url; return; }
+      if (!el) { 
+        window.location.href = cleanUrl;
+        return; 
+      }
       void el.offsetWidth; // reflow to ensure transition applies
       el.style.transition = 'opacity 0.3s ease';
       el.style.opacity = '1';
       sessionStorage.setItem('pageCover', '1');
-      setTimeout(() => { window.location.href = url; }, 300);
+      setTimeout(() => { window.location.href = cleanUrl; }, 300);
     } catch {
-      window.location.href = url;
+      const cleanUrl = url.split('#')[0];
+      // Skip transition for admin page
+      if (cleanUrl.includes('admin.html')) {
+        window.location.href = cleanUrl;
+        return;
+      }
+      window.location.href = cleanUrl;
     }
   }
 
@@ -224,7 +240,15 @@
     on(DOM.drawerLoginBtn, 'click', () => { closeMenu(); openAuthModal(); });
     on(DOM.navLogo, 'click', (event) => {
       if (event && typeof event.preventDefault === 'function') event.preventDefault();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const isIndexPage = window.location.pathname.includes('index.html') || 
+                         (window.location.pathname.endsWith('/') || window.location.pathname.endsWith('index.html'));
+      if (isIndexPage) {
+        // Already on index page, just scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        // Navigate to index page
+        transitionTo('index.html');
+      }
     });
 
     // Exam dropdown (desktop)

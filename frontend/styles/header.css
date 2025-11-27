@@ -368,13 +368,15 @@ body.menu-open .burger {
   padding: 24px;
   background: rgba(15, 23, 42, 0.2);
   backdrop-filter: blur(8px);
-  opacity: 1;
+  opacity: 0;
   z-index: 140;
+  transition: opacity 0.3s ease;
 }
 
 .login-modal.show {
   display: grid;
   place-items: center;
+  opacity: 1;
 }
 
 .modal-content {
@@ -390,6 +392,14 @@ body.menu-open .burger {
   text-align: center;
   border-radius: 4px;
   box-shadow: 0 32px 70px rgba(15, 23, 42, 0.18);
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.login-modal.show .modal-content {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .modal-close {
@@ -601,10 +611,13 @@ body.modal-open {
   z-index: 150;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .site-info-modal.show {
   display: flex;
+  opacity: 1;
 }
 
 .site-info-content {
@@ -620,6 +633,14 @@ body.modal-open {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.site-info-modal.show .site-info-content {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .site-info-close {
