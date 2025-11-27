@@ -48,6 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
     statementsMeta: document.getElementById('userStatementsMeta'),
     statementsForm: document.getElementById('userStatementForm'),
     statementsTextarea: document.querySelector('#userStatementForm textarea[name="message"]'),
+    statementFileChoose: document.getElementById('statementFileChoose'),
+    statementFileInput: document.getElementById('statementFileInput'),
+    statementFileDisplay: document.getElementById('statementFileDisplay'),
     pfFirstName: document.getElementById('myFirstName'),
     pfLastName: document.getElementById('myLastName'),
     pfPersonalId: document.getElementById('myPersonalId'),
@@ -1215,6 +1218,28 @@ document.addEventListener('DOMContentLoaded', () => {
         message.className = 'statement-message';
         message.textContent = item.message || '';
         details.appendChild(message);
+        
+        // Add attachment download button and filename if attachment exists
+        if (item.attachment_filename) {
+          const attachmentWrapper = document.createElement('div');
+          attachmentWrapper.className = 'statement-attachment';
+          const downloadBtn = document.createElement('button');
+          downloadBtn.type = 'button';
+          downloadBtn.className = 'statement-attachment-download';
+          downloadBtn.textContent = 'ჩამოტვირთვა';
+          const actorEmail = getActorEmail();
+          const downloadUrl = `${API_BASE}/statements/${encodeURIComponent(item.id)}/attachment${actorEmail ? `?actor=${encodeURIComponent(actorEmail)}` : ''}`;
+          downloadBtn.addEventListener('click', () => {
+            window.location.href = downloadUrl;
+          });
+          const filenameSpan = document.createElement('span');
+          filenameSpan.className = 'statement-attachment-filename';
+          filenameSpan.textContent = item.attachment_filename;
+          attachmentWrapper.appendChild(downloadBtn);
+          attachmentWrapper.appendChild(filenameSpan);
+          details.appendChild(attachmentWrapper);
+        }
+        
         fragment.appendChild(details);
       });
       DOM.statementsList.innerHTML = '';
@@ -1318,7 +1343,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const message = utils.getTrimmed(fd, 'message');
       if (!message) return alert('გთხოვთ შეიყვანოთ შეტყობინება');
 
-      const fileInput = DOM.statementsForm.querySelector('input[name=\"attachment\"]');
+      const fileInput = DOM.statementFileInput || DOM.statementsForm.querySelector('input[name="attachment"]');
       const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
       if (file) {
         if (file.size > 100 * 1024 * 1024) {
@@ -1358,6 +1383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await response.json();
         alert('თქვენი განცხადება მიღებულია!');
         DOM.statementsForm.reset();
+        updateFileDisplay();
         handleNewStatement(data);
       } catch (error) {
         console.error('Failed to submit statement', error);
@@ -1384,12 +1410,30 @@ document.addEventListener('DOMContentLoaded', () => {
       if (DOM.statementsMeta) DOM.statementsMeta.textContent = '';
     }
 
+    function updateFileDisplay() {
+      if (!DOM.statementFileInput || !DOM.statementFileDisplay) return;
+      const file = DOM.statementFileInput.files && DOM.statementFileInput.files[0];
+      if (file) {
+        DOM.statementFileDisplay.value = file.name;
+      } else {
+        DOM.statementFileDisplay.value = '';
+      }
+    }
+
     function init() {
       utils.on(DOM.statementsClose, 'click', closeOverlay);
       utils.on(DOM.statementsOverlay, 'click', handleBackdropClick);
       utils.on(DOM.statementsForm, 'submit', handleComposeSubmit);
       utils.on(DOM.statementsTextarea, 'mousedown', ensureAuthForCompose);
       utils.on(DOM.statementsTextarea, 'focus', ensureAuthForCompose);
+      if (DOM.statementFileChoose) {
+        utils.on(DOM.statementFileChoose, 'click', () => {
+          if (DOM.statementFileInput) DOM.statementFileInput.click();
+        });
+      }
+      if (DOM.statementFileInput) {
+        utils.on(DOM.statementFileInput, 'change', updateFileDisplay);
+      }
       document.addEventListener('auth:logout', reset);
       document.addEventListener('auth:login', setMetaFromUser);
       setMetaFromUser();

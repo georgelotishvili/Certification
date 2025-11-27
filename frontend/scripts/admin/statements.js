@@ -150,15 +150,19 @@
         bindDownload(downloadBtn, item);
         actions.appendChild(downloadBtn);
 
-        // Attachment download link, if present
+        // Attachment download button, if present
         if (item.attachment_filename) {
           const actorEmail = (getActorHeaders()['x-actor-email'] || '').trim();
-          const attachLink = document.createElement('a');
-          attachLink.className = 'statement-attachment';
-          attachLink.textContent = `File: ${item.attachment_filename}`;
-          attachLink.href = `${API_BASE}/admin/statements/${encodeURIComponent(item.id)}/file${actorEmail ? `?actor=${encodeURIComponent(actorEmail)}` : ''}`;
-          attachLink.target = '_blank';
-          actions.appendChild(attachLink);
+          const attachBtn = document.createElement('button');
+          attachBtn.type = 'button';
+          attachBtn.className = 'statement-attachment-download';
+          attachBtn.textContent = 'ფაილის ჩამოტვირთვა';
+          attachBtn.setAttribute('aria-label', 'ატვირთული ფაილის ჩამოტვირთვა');
+          attachBtn.addEventListener('click', () => {
+            const url = `${API_BASE}/admin/statements/${encodeURIComponent(item.id)}/file${actorEmail ? `?actor=${encodeURIComponent(actorEmail)}` : ''}`;
+            window.open(url, '_blank');
+          });
+          actions.appendChild(attachBtn);
         }
 
         if (isFounderActor()) {

@@ -503,6 +503,39 @@ footer {
   white-space: pre-wrap;
   word-break: break-word;
 }
+.statement-attachment {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px 18px;
+  border-top: 1px solid #e2e8f0;
+  margin-top: -18px;
+  padding-top: 12px;
+}
+.statement-attachment-download {
+  padding: 6px 12px;
+  border: 1px solid #2563eb;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  white-space: nowrap;
+}
+.statement-attachment-download:hover,
+.statement-attachment-download:focus-visible {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  outline: none;
+}
+.statement-attachment-filename {
+  color: #475569;
+  font-size: 12px;
+  word-break: break-word;
+}
 
 .statements-placeholder {
   text-align: center;
@@ -576,6 +609,58 @@ footer {
 }
 .statement-compose .compose-cancel:focus-visible {
   outline: none;
+}
+.statement-file {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.statement-file-controls {
+  display: flex;
+  align-items: center;
+}
+.statement-file-choose {
+  padding: 8px 14px;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #94a3b8;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base), box-shadow var(--transition-base);
+}
+.statement-file-choose:hover,
+.statement-file-choose:focus-visible {
+  background: #e2e8f0;
+  border-color: #64748b;
+  color: #0f172a;
+  outline: none;
+}
+.statement-file-input {
+  position: absolute;
+  width: 0.1px;
+  height: 0.1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.statement-file-display {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #94a3b8;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+.statement-file-display::placeholder {
+  color: #94a3b8;
+}
+.statement-file-display:focus-visible {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
 @keyframes pulsePlaceholder {

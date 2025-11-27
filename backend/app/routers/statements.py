@@ -4,14 +4,15 @@ from datetime import datetime
 from typing import List, Optional
 import os
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, Header, HTTPException, status, UploadFile, File, Form, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Statement, User
 from ..schemas import StatementOut
-from ..services.media_storage import ensure_statement_dir, relative_storage_path
+from ..services.media_storage import ensure_statement_dir, relative_storage_path, resolve_storage_path
 
 
 router = APIRouter()
@@ -150,4 +151,41 @@ def statements_summary(
 ):
     total_unseen = db.scalar(select(func.count()).select_from(Statement).where(Statement.seen_at.is_(None))) or 0
     return {"has_unseen": total_unseen > 0, "unseen_total": total_unseen}
+
+
+@router.get("/{statement_id}/attachment")
+def download_statement_attachment(
+    statement_id: int,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    actor: str | None = Query(None, description="actor email (fallback for links)"),
+    db: Session = Depends(get_db),
+):
+    """Download statement attachment. Only the owner can download their own statement attachments."""
+    try:
+        user = _get_actor_user(db, x_actor_email or actor)
+        statement = db.scalar(select(Statement).where(Statement.id == statement_id))
+        if not statement:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Statement not found")
+        if statement.user_id != user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        if not statement.attachment_path:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+        try:
+            abs_path = resolve_storage_path(statement.attachment_path)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+        if not abs_path.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+        filename = statement.attachment_filename or abs_path.name
+        return FileResponse(
+            abs_path,
+            media_type=statement.attachment_mime_type or "application/octet-stream",
+            filename=filename,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal error: {str(e)}")
 
