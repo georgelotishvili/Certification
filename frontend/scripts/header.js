@@ -106,10 +106,12 @@
       case 'about':
       case 'terms':
       case 'process':
-      case 'contract':
-      case 'certification-contract':
       case 'legal-base':
         return `../partials/site-info/${type}.html`;
+      case 'contract':
+        return `../partials/site-info/exam-service-contract.html`;
+      case 'certification-contract':
+        return `../partials/site-info/certification-service-contract.html`;
       default:
         return `../partials/site-info/about.html`;
     }
