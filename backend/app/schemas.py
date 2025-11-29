@@ -432,3 +432,89 @@ class ExpertUploadCreate(BaseModel):
 class ExpertUploadUpdate(BaseModel):
     building_function: str | None = None
     cadastral_code: str | None = None
+
+
+# Project Evaluation Admin Schemas
+class AdminProjectEvaluationProjectOut(CamelModel):
+    id: int
+    project_type: str
+    project_code: str
+    pdf_filename: str
+    enabled: bool
+    created_at: datetime
+    violations_count: int = 0
+
+
+class AdminProjectEvaluationProjectCreate(CamelModel):
+    project_type: str
+    project_code: str
+    # pdf_file will be handled as UploadFile in the endpoint, not in schema
+
+
+class AdminProjectEvaluationProjectUpdate(CamelModel):
+    project_code: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
+class AdminProjectEvaluationViolationOut(CamelModel):
+    id: int
+    project_id: int
+    description: str
+    is_correct: bool
+    order_index: int
+    enabled: bool
+    created_at: datetime
+
+
+class AdminProjectEvaluationViolationCreate(CamelModel):
+    project_id: int
+    description: str
+    is_correct: bool = False
+    order_index: Optional[int] = None
+
+
+class AdminProjectEvaluationViolationUpdate(CamelModel):
+    description: Optional[str] = None
+    is_correct: Optional[bool] = None
+    order_index: Optional[int] = None
+    enabled: Optional[bool] = None
+
+
+class AdminProjectEvaluationSettingsOut(CamelModel):
+    project_type: str
+    duration_minutes: int
+    gate_password: str
+
+
+class AdminProjectEvaluationSettingsUpdate(CamelModel):
+    duration_minutes: Optional[int] = None
+    gate_password: Optional[str] = None
+
+
+class AdminProjectEvaluationSessionOut(CamelModel):
+    id: int
+    project_type: str
+    project_id: Optional[int] = None
+    project_code: Optional[str] = None
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+    active: bool
+    correct_violations_count: Optional[int] = None
+    incorrect_violations_count: Optional[int] = None
+    total_violations_count: Optional[int] = None
+    score_percent: Optional[float] = None
+
+
+class AdminProjectEvaluationProjectsListResponse(CamelModel):
+    projects: List[AdminProjectEvaluationProjectOut]
+    total: int
+
+
+class AdminProjectEvaluationViolationsListResponse(CamelModel):
+    violations: List[AdminProjectEvaluationViolationOut]
+    total: int
+
+
+class AdminProjectEvaluationSessionsListResponse(CamelModel):
+    sessions: List[AdminProjectEvaluationSessionOut]
+    total: int

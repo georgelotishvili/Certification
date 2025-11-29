@@ -45,7 +45,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads
+    from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, project_evaluation
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
@@ -55,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(registry.router, prefix="/certified-persons", tags=["registry"])
     app.include_router(reviews.router, prefix="/reviews", tags=["reviews"])
     app.include_router(expert_uploads.router, prefix="/expert-uploads", tags=["expert-uploads"])
+    app.include_router(project_evaluation.router, prefix="/project-evaluation", tags=["project-evaluation"])
 
     return app
 

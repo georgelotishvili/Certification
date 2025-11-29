@@ -1,15 +1,21 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+import os
+import shutil
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status, Path, Response, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, status, Path, Response, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select, or_
 from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
-from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam, Statement, Certificate
+from ..models import (
+    Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam, Statement, Certificate,
+    ProjectEvaluationProject, ProjectEvaluationViolation, ProjectEvaluationSettings, ProjectEvaluationSession,
+)
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -34,8 +40,20 @@ from ..schemas import (
     AdminStatementsResponse,
     AdminStatementOut,
     StatementSeenRequest,
+    AdminProjectEvaluationProjectOut,
+    AdminProjectEvaluationProjectCreate,
+    AdminProjectEvaluationProjectUpdate,
+    AdminProjectEvaluationViolationOut,
+    AdminProjectEvaluationViolationCreate,
+    AdminProjectEvaluationViolationUpdate,
+    AdminProjectEvaluationSettingsOut,
+    AdminProjectEvaluationSettingsUpdate,
+    AdminProjectEvaluationSessionOut,
+    AdminProjectEvaluationProjectsListResponse,
+    AdminProjectEvaluationViolationsListResponse,
+    AdminProjectEvaluationSessionsListResponse,
 )
-from ..services.media_storage import resolve_storage_path, ensure_media_root
+from ..services.media_storage import resolve_storage_path, ensure_media_root, relative_storage_path
 
 
 router = APIRouter()
@@ -99,63 +117,30 @@ def _exam_settings_payload(exam: Exam) -> ExamSettingsResponse:
         exam_id=exam.id,
         title=exam.title,
         duration_minutes=exam.duration_minutes,
-        gate_password=exam.gate_password or "",
+        gate_password=exam.gate_password,
     )
 
 
-def _blocks_payload(exam: Exam) -> AdminBlocksResponse:
-    ordered_blocks = sorted(exam.blocks, key=lambda b: (b.order_index or 0, b.id))
-    blocks: list[AdminBlockPayload] = []
-    for block_index, block in enumerate(ordered_blocks, start=1):
-        ordered_questions = sorted(block.questions, key=lambda q: (q.order_index or 0, q.id))
-        question_payloads: list[AdminQuestionPayload] = []
-        for question_index, question in enumerate(ordered_questions, start=1):
-            options = sorted(question.options, key=lambda o: o.id)
-            answers = [
-                AdminAnswerPayload(id=str(option.id), text=option.text)
-                for option in options
-            ]
-            correct_id = next((str(option.id) for option in options if option.is_correct), None)
-            question_payloads.append(
-                AdminQuestionPayload(
-                    id=str(question.id),
-                    text=question.text,
-                    code=question.code,
-                    answers=answers,
-                    correct_answer_id=correct_id,
-                    enabled=question.enabled,
-                )
-            )
-        blocks.append(
-            AdminBlockPayload(
-                id=str(block.id),
-                number=block.order_index or block_index,
-                name=block.title,
-                qty=block.qty,
-                enabled=block.enabled,
-                questions=question_payloads,
-            )
-        )
-    return AdminBlocksResponse(exam_id=exam.id, blocks=blocks)
-
+# ================= Auth =================
 
 @router.get("/auth/verify", status_code=status.HTTP_204_NO_CONTENT)
-def verify_admin_access(
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
-    db: Session = Depends(get_db),
-) -> Response:
-    _require_admin(db, x_actor_email)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.get("/exam/settings", response_model=ExamSettingsResponse)
-def get_exam_settings(
-    exam_id: int | None = None,
+def admin_verify(
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
     _require_admin(db, x_actor_email)
-    exam = _get_or_create_exam(db, exam_id)
+    return
+
+
+# ================= Exam Settings =================
+
+@router.get("/exam/settings", response_model=ExamSettingsResponse)
+def get_exam_settings(
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    exam = _get_or_create_exam(db)
     return _exam_settings_payload(exam)
 
 
@@ -169,16 +154,11 @@ def update_exam_settings(
     exam = _get_or_create_exam(db, payload.exam_id)
 
     if payload.title is not None:
-        candidate = payload.title.strip()
-        if candidate:
-            exam.title = candidate
-
+        exam.title = payload.title
     if payload.duration_minutes is not None:
-        duration = max(1, payload.duration_minutes)
-        exam.duration_minutes = duration
-
+        exam.duration_minutes = payload.duration_minutes
     if payload.gate_password is not None:
-        exam.gate_password = payload.gate_password.strip()
+        exam.gate_password = payload.gate_password
 
     db.add(exam)
     db.commit()
@@ -186,15 +166,50 @@ def update_exam_settings(
     return _exam_settings_payload(exam)
 
 
+# ================= Exam Blocks =================
+
 @router.get("/exam/blocks", response_model=AdminBlocksResponse)
 def get_exam_blocks(
-    exam_id: int | None = None,
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
     _require_admin(db, x_actor_email)
-    exam = _get_or_create_exam(db, exam_id)
+    exam = _get_or_create_exam(db)
     return _blocks_payload(exam)
+
+
+def _blocks_payload(exam: Exam) -> AdminBlocksResponse:
+    blocks = sorted(exam.blocks, key=lambda b: b.order_index)
+    return AdminBlocksResponse(
+        blocks=[
+            AdminBlockPayload(
+                id=str(b.id),
+                title=b.title,
+                qty=b.qty,
+                orderIndex=b.order_index,
+                enabled=b.enabled,
+                questions=[
+                    AdminQuestionPayload(
+                        id=str(q.id),
+                        text=q.text,
+                        code=q.code or "",
+                        orderIndex=q.order_index,
+                        enabled=q.enabled,
+                        answers=[
+                            AdminAnswerPayload(
+                                id=str(a.id),
+                                text=a.text,
+                                isCorrect=a.is_correct,
+                            )
+                            for a in sorted(q.options, key=lambda opt: opt.id)
+                        ],
+                    )
+                    for q in sorted(b.questions, key=lambda q: q.order_index)
+                ],
+            )
+            for b in blocks
+        ],
+    )
 
 
 @router.put("/exam/blocks", response_model=AdminBlocksResponse)
@@ -204,136 +219,81 @@ def update_exam_blocks(
     db: Session = Depends(get_db),
 ):
     _require_admin(db, x_actor_email)
-    exam = _get_or_create_exam(db, payload.exam_id)
+    exam = _get_or_create_exam(db)
 
-    existing_blocks = db.scalars(
-        select(Block)
-        .where(Block.exam_id == exam.id)
-        .options(
-            selectinload(Block.questions).selectinload(Question.options),
-            selectinload(Block.questions).selectinload(Question.answers),
-        )
-    ).all()
+    # Collect all IDs that should exist
+    block_ids_to_keep: set[int] = set()
+    question_ids_to_keep: set[int] = set()
+    answer_ids_to_keep: set[int] = set()
 
-    block_index_default = 0
-    processed_block_ids: set[int] = set()
-    block_by_id = {str(block.id): block for block in existing_blocks}
+    for block_payload in payload.blocks:
+        block_id = int(block_payload.id)
+        block_ids_to_keep.add(block_id)
+        for question_payload in block_payload.questions:
+            question_id = int(question_payload.id)
+            question_ids_to_keep.add(question_id)
+            for answer_payload in question_payload.answers:
+                answer_id = int(answer_payload.id)
+                answer_ids_to_keep.add(answer_id)
 
-    def _parse_int(value: str | int | None) -> int | None:
-        try:
-            if value is None:
-                return None
-            return int(value)
-        except (TypeError, ValueError):
-            return None
+    # Delete blocks that are not in the payload
+    existing_blocks = db.scalars(select(Block).where(Block.exam_id == exam.id)).all()
+    for block in existing_blocks:
+        if block.id not in block_ids_to_keep:
+            db.delete(block)
 
-    for block_index, block_payload in enumerate(payload.blocks or [], start=1):
-        questions_payload = block_payload.questions or []
-        qty = max(0, min(block_payload.qty, len(questions_payload)))
+    # Delete questions that are not in the payload
+    existing_questions = db.scalars(select(Question).where(Question.block_id.in_([b.id for b in existing_blocks]))).all()
+    for question in existing_questions:
+        if question.id not in question_ids_to_keep:
+            db.delete(question)
 
-        block_id_int = _parse_int(block_payload.id)
-        if block_id_int is not None and str(block_id_int) in block_by_id:
-            block = block_by_id[str(block_id_int)]
-        else:
-            block = Block(exam_id=exam.id)
+    # Delete answers that are not in the payload
+    existing_answers = db.scalars(select(Option).where(Option.question_id.in_([q.id for q in existing_questions]))).all()
+    for answer in existing_answers:
+        if answer.id not in answer_ids_to_keep:
+            db.delete(answer)
+
+    db.flush()
+
+    # Now create/update blocks, questions, and answers
+    for block_index, block_payload in enumerate(payload.blocks):
+        block_id = int(block_payload.id)
+        block = db.get(Block, block_id)
+        if not block:
+            block = Block(exam_id=exam.id, id=block_id)
             db.add(block)
-            exam.blocks.append(block)
-
-        block_index_default += 1
-        block.title = (block_payload.name or "").strip() or f"ბლოკი {block_index_default}"
-        block.qty = qty
-        block.order_index = block_payload.number or block_index_default
+        block.title = block_payload.title
+        block.qty = block_payload.qty
+        block.order_index = block_index
         block.enabled = block_payload.enabled
 
-        db.flush()
-
-        block_by_id[str(block.id)] = block
-        processed_block_ids.add(block.id)
-
-        existing_questions = {str(question.id): question for question in block.questions}
-        processed_question_ids: set[int] = set()
-
-        for question_index, question_payload in enumerate(questions_payload, start=1):
-            question_id_int = _parse_int(question_payload.id)
-            if question_id_int is not None and str(question_id_int) in existing_questions:
-                question = existing_questions[str(question_id_int)]
-            else:
-                question = Question(block_id=block.id)
+        for question_index, question_payload in enumerate(block_payload.questions):
+            question_id = int(question_payload.id)
+            question = db.get(Question, question_id)
+            if not question:
+                question = Question(block_id=block.id, id=question_id)
                 db.add(question)
-                block.questions.append(question)
-                existing_questions[str(question.id)] = question
-
-            question.code = question_payload.code or f"Q-{block.id}-{question_index}"
-            question.text = (question_payload.text or "").strip()
+            question.text = question_payload.text
+            question.code = question_payload.code or None
             question.order_index = question_index
             question.enabled = question_payload.enabled
 
-            db.flush()
-
-            processed_question_ids.add(question.id)
-
-            existing_options = {str(option.id): option for option in question.options}
-            processed_option_ids: set[int] = set()
-
-            for answer_payload in question_payload.answers or []:
-                option_id_int = _parse_int(answer_payload.id)
-                if option_id_int is not None and str(option_id_int) in existing_options:
-                    option = existing_options[str(option_id_int)]
-                else:
-                    option = Option(question_id=question.id)
-                    db.add(option)
-                    question.options.append(option)
-                    existing_options[str(option.id)] = option
-
-                option.text = (answer_payload.text or "").strip()
-                option.is_correct = (
-                    str(answer_payload.id) == str(question_payload.correct_answer_id)
-                    if question_payload.correct_answer_id is not None
-                    else False
-                )
-
-                db.flush()
-
-                processed_option_ids.add(option.id)
-
-            if question.options and not any(opt.is_correct for opt in question.options):
-                first_option = min(question.options, key=lambda opt: opt.id)
-                first_option.is_correct = True
-
-            if existing_options:
-                for option in list(existing_options.values()):
-                    if option.id not in processed_option_ids:
-                        has_answers = db.scalar(
-                            select(func.count()).select_from(Answer).where(Answer.option_id == option.id)
-                        )
-                        if has_answers:
-                            raise HTTPException(
-                                status_code=status.HTTP_409_CONFLICT,
-                                detail="ვერ წაშლით პასუხს, რადგან უკვე არსებობს შედეგები",
-                            )
-                        db.delete(option)
-
-        for question in list(existing_questions.values()):
-            if question.id not in processed_question_ids:
-                if question.answers:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="ვერ წაშლით შეკითხვას, რადგან უკვე არსებობს შედეგები",
-                    )
-                db.delete(question)
-
-    for block in existing_blocks:
-        if block.id not in processed_block_ids:
-            has_answers = any(question.answers for question in block.questions)
-            if has_answers:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="ვერ წაშლით ბლოკს, რადგან უკვე არსებობს შედეგები",
-                )
-            db.delete(block)
+            for answer_payload in question_payload.answers:
+                answer_id = int(answer_payload.id)
+                answer = db.get(Option, answer_id)
+                if not answer:
+                    answer = Option(question_id=question.id, id=answer_id)
+                    db.add(answer)
+                answer.text = answer_payload.text
+                answer.is_correct = answer_payload.isCorrect
 
     db.commit()
-    refreshed_exam = _get_or_create_exam(db, exam.id)
+
+    refreshed_exam = db.get(Exam, exam.id)
+    if not refreshed_exam:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to refresh exam")
+
     return _blocks_payload(refreshed_exam)
 
 
@@ -360,360 +320,164 @@ def admin_stats(
 def _session_status(session: ExamSession) -> str:
     if session.finished_at:
         return "completed"
-    if session.active:
-        return "in_progress"
-    return "aborted"
+    if not session.active:
+        return "inactive"
+    return "active"
 
 
-def _build_result_item(session: ExamSession, personal_id: str | None = None) -> ResultListItem:
-    return ResultListItem(
-        session_id=session.id,
-        started_at=session.started_at,
-        finished_at=session.finished_at,
-        candidate_first_name=session.candidate_first_name,
-        candidate_last_name=session.candidate_last_name,
-        candidate_code=session.candidate_code,
-        score_percent=session.score_percent or 0.0,
-        exam_id=session.exam_id,
-        ends_at=session.ends_at,
-        status=_session_status(session),
-        personal_id=personal_id,
-    )
+def _session_score(session: ExamSession) -> float | None:
+    if not session.finished_at:
+        return None
+    total = session.total_questions or 0
+    if total == 0:
+        return None
+    correct = session.correct_answers or 0
+    return round((correct / total) * 100, 2)
 
 
-# Results list
+# ================= Results =================
+
 @router.get("/results", response_model=ResultListResponse)
-def results_list(
-    page: int = 1,
-    size: int = 50,
-    candidate_code: str | None = None,
-    personal_id: str | None = None,
+def admin_results(
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=1000),
+    search: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),  # active|completed|inactive
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
     _require_admin(db, x_actor_email)
 
-    candidate_code_norm = (candidate_code or "").strip().lower() or None
-    personal_id_norm = (personal_id or "").strip().lower() or None
+    stmt = select(ExamSession).options(selectinload(ExamSession.exam))
+    if search:
+        q = f"%{search.lower()}%"
+        stmt = stmt.where(
+            or_(
+                ExamSession.candidate_first_name.ilike(q),
+                ExamSession.candidate_last_name.ilike(q),
+                ExamSession.candidate_code.ilike(q),
+            )
+        )
+    if status_filter == "completed":
+        stmt = stmt.where(ExamSession.finished_at.isnot(None))
+    elif status_filter == "active":
+        stmt = stmt.where(ExamSession.active == True, ExamSession.finished_at.is_(None))  # noqa: E712
+    elif status_filter == "inactive":
+        stmt = stmt.where(ExamSession.active == False)  # noqa: E712
 
-    stmt = select(ExamSession).order_by(ExamSession.started_at.desc())
+    stmt = stmt.order_by(ExamSession.started_at.desc())
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
 
-    code_filters: list[str] = []
-    if personal_id_norm:
-        codes_stmt = select(User.code).where(func.lower(User.personal_id) == personal_id_norm)
-        codes_for_personal = [code for code in db.scalars(codes_stmt).all() if code]
-        if not codes_for_personal:
-            return ResultListResponse(items=[], total=0)
-        code_filters.extend([code.strip().lower() for code in codes_for_personal if code])
+    offset = (page - 1) * size
+    sessions = db.scalars(stmt.offset(offset).limit(size)).all()
 
-    if candidate_code_norm:
-        code_filters.append(candidate_code_norm)
-
-    if code_filters:
-        stmt = stmt.where(func.lower(ExamSession.candidate_code).in_(code_filters))
-
-    filtered = bool(candidate_code_norm or personal_id_norm)
-
-    if filtered:
-        sessions = db.scalars(stmt).all()
-        total = len(sessions)
-    else:
-        offset = max(0, (page - 1) * size)
-        paged_stmt = stmt.offset(offset).limit(size)
-        sessions = db.scalars(paged_stmt).all()
-        total = db.scalar(select(func.count()).select_from(ExamSession)) or 0
-
-    candidate_codes = {
-        (s.candidate_code or "").strip().lower()
-        for s in sessions
-        if s.candidate_code
-    }
-    user_by_code: dict[str, User] = {}
-    if candidate_codes:
-        users = db.scalars(
-            select(User).where(func.lower(User.code).in_(list(candidate_codes)))
-        ).all()
-        user_by_code = {
-            (u.code or "").strip().lower(): u
-            for u in users
-            if u.code
-        }
-
-    items: list[ResultListItem] = []
+    items = []
     for s in sessions:
-        code_key = (s.candidate_code or "").strip().lower()
-        personal_id_value = user_by_code.get(code_key).personal_id if code_key in user_by_code else None
-        items.append(_build_result_item(s, personal_id_value))
+        items.append(
+            ResultListItem(
+                sessionId=s.id,
+                candidateFirstName=s.candidate_first_name or "",
+                candidateLastName=s.candidate_last_name or "",
+                candidateCode=s.candidate_code or "",
+                startedAt=s.started_at,
+                finishedAt=s.finished_at,
+                status=_session_status(s),
+                score=_session_score(s),
+                examTitle=s.exam.title if s.exam else "Unknown",
+            )
+        )
 
-    return ResultListResponse(items=items, total=total)
+    return ResultListResponse(items=items, total=total, page=page, size=size)
 
 
-# Result details
 @router.get("/results/{session_id}", response_model=ResultDetailResponse)
-def result_detail(
+def admin_result_detail(
     session_id: int = Path(...),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
     _require_admin(db, x_actor_email)
-    s = db.get(ExamSession, session_id)
-    if not s:
+
+    session = db.scalar(
+        select(ExamSession)
+        .where(ExamSession.id == session_id)
+        .options(selectinload(ExamSession.exam), selectinload(ExamSession.answers).selectinload(Answer.option))
+    )
+    if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-    personal_id_value: str | None = None
-    if s.candidate_code:
-        personal_id_value = db.scalar(
-            select(User.personal_id)
-            .where(func.lower(User.code) == func.lower(s.candidate_code))
-            .limit(1)
-        )
 
-    exam_title: str | None = None
-    if s.exam_id:
-        exam = db.get(Exam, s.exam_id)
-        if exam:
-            exam_title = exam.title
-
-    answers = db.scalars(select(Answer).where(Answer.session_id == s.id)).all()
-    answer_by_question = {ans.question_id: ans for ans in answers}
-
-    import json as _json
-
-    selected_map: dict[str, list[int]] = {}
-    if s.selected_map:
-        try:
-            raw_map = _json.loads(s.selected_map)
-            if isinstance(raw_map, dict):
-                for key, value in raw_map.items():
-                    try:
-                        int_key = int(key)
-                    except (TypeError, ValueError):
-                        continue
-                    cleaned: list[int] = []
-                    for item in value or []:
-                        try:
-                            cleaned.append(int(item))
-                        except (TypeError, ValueError):
-                            continue
-                    selected_map[str(int_key)] = cleaned
-        except Exception:
-            selected_map = {}
-
-    ordered_question_ids: list[int] = []
-    for _, qids in selected_map.items():
-        for qid in qids:
-            if qid not in ordered_question_ids:
-                ordered_question_ids.append(qid)
-
-    answers_sorted = sorted(answers, key=lambda a: a.answered_at or s.started_at)
-    if not ordered_question_ids:
-        ordered_question_ids = [ans.question_id for ans in answers_sorted]
-
-    question_ids = set(ordered_question_ids) | {ans.question_id for ans in answers}
-    questions = (
-        db.scalars(select(Q).where(Q.id.in_(question_ids))).all()
-        if question_ids
-        else []
-    )
-    question_map = {q.id: q for q in questions}
-
-    block_ids = {q.block_id for q in questions}
-    for key in selected_map.keys():
-        try:
-            block_ids.add(int(key))
-        except (TypeError, ValueError):
-            continue
-
-    blocks = (
-        db.scalars(select(Block).where(Block.id.in_(block_ids))).all()
-        if block_ids
-        else []
-    )
-    block_map = {b.id: b for b in blocks}
-
-    options = (
-        db.scalars(select(Option).where(Option.question_id.in_(question_ids))).all()
-        if question_ids
-        else []
-    )
-    options_by_id = {opt.id: opt for opt in options}
-    options_by_question: dict[int, list[Option]] = {}
-    for opt in options:
-        options_by_question.setdefault(opt.question_id, []).append(opt)
-    for question_options in options_by_question.values():
-        question_options.sort(key=lambda option: option.id)
-    correct_option_map: dict[int, Option] = {}
-    for opt in options:
-        if opt.is_correct:
-            correct_option_map[opt.question_id] = opt
-
-    question_sequence: list[int] = []
-    seen_questions: set[int] = set()
-    for qid in ordered_question_ids:
-        if qid not in seen_questions:
-            question_sequence.append(qid)
-            seen_questions.add(qid)
-    for ans in answers_sorted:
-        if ans.question_id not in seen_questions:
-            question_sequence.append(ans.question_id)
-            seen_questions.add(ans.question_id)
-
-    block_sequence: list[int] = []
-    seen_blocks: set[int] = set()
-    for key in selected_map.keys():
-        try:
-            block_id = int(key)
-        except (TypeError, ValueError):
-            continue
-        if block_id not in seen_blocks:
-            block_sequence.append(block_id)
-            seen_blocks.add(block_id)
-    if not block_sequence and block_map:
-        block_sequence = [
-            b.id for b in sorted(block_map.values(), key=lambda blk: ((blk.order_index or 0), blk.id))
-        ]
-        seen_blocks = set(block_sequence)
-    for block_id in block_ids:
-        if block_id not in seen_blocks:
-            block_sequence.append(block_id)
-            seen_blocks.add(block_id)
-
-    raw_block_stats = []
-    if s.block_stats:
-        try:
-            raw_block_stats = _json.loads(s.block_stats)
-        except Exception:
-            raw_block_stats = []
-    raw_block_map = {}
-    for entry in raw_block_stats:
-        if not isinstance(entry, dict):
-            continue
-        try:
-            block_id = int(entry.get("block_id"))
-        except (TypeError, ValueError):
-            continue
-        raw_block_map[block_id] = entry
-
-    block_stats_payload: list[BlockStatDetail] = []
-    for block_id in block_sequence:
-        entry = raw_block_map.get(block_id)
-        if entry:
-            total = int(entry.get("total", 0) or 0)
-            correct = int(entry.get("correct", 0) or 0)
-            percent = float(entry.get("percent", 0.0) or 0.0)
-        else:
-            question_ids_in_block = selected_map.get(str(block_id), [])
-            if not question_ids_in_block and block_id in block_map:
-                question_ids_in_block = [
-                    q.id for q in question_map.values() if q.block_id == block_id
-                ]
-            total = len(question_ids_in_block)
-            answers_for_block = [
-                answer_by_question[qid]
-                for qid in question_ids_in_block
-                if qid in answer_by_question
-            ]
-            correct = sum(1 for ans in answers_for_block if ans.is_correct)
-            percent = round((correct / total) * 100.0, 2) if total else 0.0
-
-        block_stats_payload.append(
-            BlockStatDetail(
-                block_id=block_id,
-                block_title=block_map.get(block_id).title if block_id in block_map else None,
-                total=total,
-                correct=correct,
-                percent=percent,
+    answers_detail = []
+    for answer in sorted(session.answers, key=lambda a: a.question_id or 0):
+        option_detail = None
+        if answer.option:
+            option_detail = AnswerOptionDetail(
+                id=answer.option.id,
+                text=answer.option.text,
+                isCorrect=answer.option.is_correct,
+            )
+        answers_detail.append(
+            AnswerDetail(
+                questionId=answer.question_id or 0,
+                questionText=answer.question_text or "",
+                optionId=answer.option_id,
+                option=option_detail,
+                isCorrect=answer.is_correct or False,
             )
         )
 
-    answers_payload: list[AnswerDetail] = []
-    for qid in question_sequence:
-        question = question_map.get(qid)
-        if not question:
-            continue
-        answer = answer_by_question.get(qid)
-        selected_option = options_by_id.get(answer.option_id) if answer else None
-        correct_option = correct_option_map.get(qid)
-        option_details: list[AnswerOptionDetail] = []
-        for option in options_by_question.get(qid, []):
-            option_details.append(
-                AnswerOptionDetail(
-                    option_id=option.id,
-                    option_text=option.text,
-                    is_correct=bool(option.is_correct),
-                    is_selected=bool(answer and option.id == answer.option_id),
+    blocks_detail = []
+    if session.exam:
+        for block in sorted(session.exam.blocks, key=lambda b: b.order_index):
+            block_answers = [a for a in answers_detail if any(q.id == a.questionId for q in block.questions)]
+            correct_in_block = sum(1 for a in block_answers if a.isCorrect)
+            total_in_block = len(block_answers)
+            blocks_detail.append(
+                BlockStatDetail(
+                    blockId=block.id,
+                    blockTitle=block.title,
+                    correct=correct_in_block,
+                    total=total_in_block,
                 )
             )
-        block = block_map.get(question.block_id)
-        answers_payload.append(
-            AnswerDetail(
-                question_id=question.id,
-                question_code=question.code,
-                question_text=question.text,
-                block_id=question.block_id,
-                block_title=block.title if block else None,
-                selected_option_id=selected_option.id if selected_option else None,
-                selected_option_text=selected_option.text if selected_option else None,
-                is_correct=answer.is_correct if answer else None,
-                answered_at=answer.answered_at if answer else None,
-                correct_option_id=correct_option.id if correct_option else None,
-                correct_option_text=correct_option.text if correct_option else None,
-                options=option_details,
-            )
-        )
-
-    total_questions = len(question_sequence)
-    answered_questions = sum(1 for qid in question_sequence if qid in answer_by_question)
-    correct_answers = sum(1 for ans in answer_by_question.values() if ans.is_correct)
-
-    session_payload = _build_result_item(s, personal_id_value)
 
     return ResultDetailResponse(
-        session=session_payload,
-        exam_title=exam_title,
-        total_questions=total_questions,
-        answered_questions=answered_questions,
-        correct_answers=correct_answers,
-        block_stats=block_stats_payload,
-        answers=answers_payload,
+        sessionId=session.id,
+        candidateFirstName=session.candidate_first_name or "",
+        candidateLastName=session.candidate_last_name or "",
+        candidateCode=session.candidate_code or "",
+        startedAt=session.started_at,
+        finishedAt=session.finished_at,
+        status=_session_status(session),
+        score=_session_score(session),
+        examTitle=session.exam.title if session.exam else "Unknown",
+        totalQuestions=session.total_questions or 0,
+        correctAnswers=session.correct_answers or 0,
+        answers=answers_detail,
+        blocks=blocks_detail,
     )
 
 
 @router.get("/results/{session_id}/media", response_model=ResultMediaResponse)
-def result_media_meta(
+def admin_result_media(
     session_id: int = Path(...),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
-    actor: str | None = Query(None, alias="actor"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, actor or x_actor_email)
-    records = db.scalars(select(ExamMedia).where(ExamMedia.session_id == session_id)).all()
-    media_map: dict[str, ExamMedia] = {}
-    for record in records:
-        media_type = (record.media_type or "camera").strip().lower()
-        if media_type not in MEDIA_TYPES:
-            continue
-        if media_type not in media_map or media_map[media_type].updated_at <= record.updated_at:
-            media_map[media_type] = record
+    _require_admin(db, x_actor_email)
 
-    items: list[ResultMediaItem] = []
-    for media_type in MEDIA_TYPES:
-        record = media_map.get(media_type)
-        available = bool(record and record.completed)
-        download_url = (
-            f"/admin/results/{session_id}/media/file?media_type={media_type}"
-            if available
-            else None
-        )
+    session = db.get(ExamSession, session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    media_records = db.scalars(select(ExamMedia).where(ExamMedia.session_id == session_id)).all()
+    items = []
+    for media in media_records:
         items.append(
             ResultMediaItem(
-                media_type=media_type,
-                available=available,
-                download_url=download_url,
-                filename=record.filename if record else None,
-                mime_type=record.mime_type if record else None,
-                size_bytes=record.size_bytes if record else None,
-                duration_seconds=record.duration_seconds if record else None,
-                updated_at=record.updated_at if record else None,
+                mediaType=media.media_type,
+                filename=media.filename,
+                storagePath=media.storage_path,
+                uploadedAt=media.uploaded_at,
             )
         )
 
@@ -721,47 +485,38 @@ def result_media_meta(
 
 
 @router.get("/results/{session_id}/media/file")
-def result_media_file(
+def admin_download_media_file(
     session_id: int = Path(...),
+    media_type: str = Query(...),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
-    actor: str | None = Query(None, alias="actor"),
-    media_type: str = Query("camera", alias="media_type"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, actor or x_actor_email)
-    media_type_norm = (media_type or "camera").strip().lower()
-    if media_type_norm not in MEDIA_TYPES:
+    _require_admin(db, x_actor_email)
+
+    if media_type not in MEDIA_TYPES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid media type")
 
+    session = db.get(ExamSession, session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
     media = db.scalar(
-        select(ExamMedia).where(
-            ExamMedia.session_id == session_id,
-            ExamMedia.media_type == media_type_norm,
-        )
+        select(ExamMedia).where(ExamMedia.session_id == session_id, ExamMedia.media_type == media_type)
     )
-    if not media and media_type_norm == "camera":
-        # Backwards compatibility for legacy rows without media_type set
-        media = db.scalar(
-            select(ExamMedia).where(
-                ExamMedia.session_id == session_id,
-                (ExamMedia.media_type.is_(None)),
-            )
-        )
-    if not media or not media.completed:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
+    if not media or not media.storage_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
 
     try:
         path = resolve_storage_path(media.storage_path)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found") from exc
-
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
     if not path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file missing")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
 
     return FileResponse(
         path,
-        media_type=media.mime_type or "video/webm",
-        filename=media.filename or path.name,
+        media_type="video/webm",
+        filename=media.filename or f"{media_type}_{session_id}.webm",
     )
 
 
@@ -773,16 +528,11 @@ def delete_result(
 ):
     _require_admin(db, x_actor_email)
 
-    settings = get_settings()
-    founder_email = (settings.founder_admin_email or "").lower()
-    if founder_email != (x_actor_email or "").lower():
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete results")
-
     session_obj = db.get(ExamSession, session_id)
     if not session_obj:
-        return
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
-    # Delete video files from disk before deleting the session
+    # Delete related media files
     media_records = db.scalars(select(ExamMedia).where(ExamMedia.session_id == session_id)).all()
     for media in media_records:
         if media.storage_path:
@@ -903,218 +653,146 @@ def admin_users(
         cert_data = None
         if u.certificate:
             cert_data = {
-                'unique_code': u.certificate.unique_code,
-                'level': u.certificate.level,
-                'status': u.certificate.status,
-                'issue_date': u.certificate.issue_date,
-                'validity_term': u.certificate.validity_term,
-                'valid_until': u.certificate.valid_until,
+                "id": u.certificate.id,
+                "issuedAt": u.certificate.issued_at,
+                "expiresAt": u.certificate.expires_at,
             }
-        user_dict = {
-            'id': u.id,
-            'personal_id': u.personal_id,
-            'first_name': u.first_name,
-            'last_name': u.last_name,
-            'phone': u.phone,
-            'email': u.email,
-            'code': u.code,
-            'is_admin': (u.email.lower() == founder_email) or bool(u.is_admin),
-            'is_founder': (u.email.lower() == founder_email),
-            'created_at': u.created_at,
-            'has_unseen_statements': unseen_count > 0,
-            'unseen_statement_count': unseen_count,
-        }
-        if cert_data:
-            user_dict['certificate'] = cert_data
-            user_dict['certificate_info'] = cert_data
-        items.append(UserOut(**user_dict))
-    return UsersListResponse(items=items, total=len(items))
+        items.append(
+            UserOut(
+                id=u.id,
+                firstName=u.first_name or "",
+                lastName=u.last_name or "",
+                email=u.email or "",
+                phone=u.phone or "",
+                personalId=u.personal_id or "",
+                code=u.code or "",
+                isAdmin=u.is_admin,
+                isFounder=_is_founder_actor(u.email),
+                createdAt=u.created_at,
+                unseenStatementsCount=unseen_count,
+                certificate=cert_data,
+            )
+        )
+
+    return UsersListResponse(users=items, total=len(items))
 
 
-@router.patch("/users/{user_id}/admin", status_code=status.HTTP_204_NO_CONTENT)
-def admin_toggle_user(
-    user_id: int,
-    payload: ToggleAdminRequest,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
-    db: Session = Depends(get_db),
-):
-    settings = get_settings()
-    if not _is_founder_actor(x_actor_email):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can modify admin status")
-
-    u = db.get(User, user_id)
-    if not u:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if (settings.founder_admin_email or "").lower() == u.email.lower():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Founder admin cannot be modified")
-
-    u.is_admin = bool(payload.is_admin)
-    db.add(u)
-    db.commit()
-    return
-
-
-@router.patch("/users/{user_id}", response_model=UserOut)
+@router.put("/users/{user_id}", response_model=UserOut)
 def admin_update_user(
-    user_id: int,
-    payload: AdminUserUpdateRequest,
+    user_id: int = Path(...),
+    payload: AdminUserUpdateRequest = ...,
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
     _require_admin(db, x_actor_email)
-    if not _is_founder_actor(x_actor_email):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can modify user data")
-
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     settings = get_settings()
     founder_email = (settings.founder_admin_email or "").lower()
-    updates_made = False
+    user_email = (user.email or "").lower()
 
-    if payload.first_name is not None:
-        first_name = (payload.first_name or "").strip()
-        if not first_name:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="first_name must not be empty")
-        if first_name != user.first_name:
-            user.first_name = first_name
-            updates_made = True
-
-    if payload.last_name is not None:
-        last_name = (payload.last_name or "").strip()
-        if not last_name:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="last_name must not be empty")
-        if last_name != user.last_name:
-            user.last_name = last_name
-            updates_made = True
-
-    if payload.personal_id is not None:
-        personal_id = (payload.personal_id or "").strip()
-        if len(personal_id) != 11 or not personal_id.isdigit():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="personal_id must be 11 digits")
-        exists_pid = db.scalar(
-            select(User.id).where(
-                User.personal_id == personal_id,
-                User.id != user.id,
-            )
-        )
-        if exists_pid:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="personal_id already registered")
-        if personal_id != user.personal_id:
-            user.personal_id = personal_id
-            updates_made = True
-
-    if payload.phone is not None:
-        phone = (payload.phone or "").strip()
-        if not phone:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="phone must not be empty")
-        if phone != user.phone:
-            user.phone = phone
-            updates_made = True
-
+    if payload.firstName is not None:
+        user.first_name = payload.firstName
+    if payload.lastName is not None:
+        user.last_name = payload.lastName
     if payload.email is not None:
-        email = (payload.email or "").strip().lower()
-        if not email:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="email must not be empty")
-        if user.email.lower() == founder_email and email != founder_email:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Founder email cannot be changed")
-        existing_email = db.scalar(
-            select(User.id).where(
-                func.lower(User.email) == email,
-                User.id != user.id,
-            )
-        )
-        if existing_email:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="email already in use")
-        if email != user.email.lower():
-            user.email = email
-            updates_made = True
-        else:
-            # Ensure canonical lowercase storage
-            user.email = email
-
+        new_email = payload.email.strip().lower()
+        if new_email != user_email:
+            existing = db.scalar(select(User).where(func.lower(User.email) == new_email))
+            if existing and existing.id != user_id:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use")
+            user.email = new_email
+    if payload.phone is not None:
+        user.phone = payload.phone
+    if payload.personalId is not None:
+        user.personal_id = payload.personalId
     if payload.code is not None:
-        code_candidate = (payload.code or "").strip()
-        if code_candidate != user.code:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="code cannot be modified")
+        user.code = payload.code
+    if payload.isAdmin is not None:
+        if user_email == founder_email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot modify founder admin status")
+        user.is_admin = payload.isAdmin
 
-    if updates_made:
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        db.refresh(user)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
     unseen_count = db.scalar(
-        select(func.count()).select_from(Statement).where(
-            Statement.user_id == user.id,
-            Statement.seen_at.is_(None),
-        )
+        select(func.count()).select_from(Statement).where(Statement.user_id == user_id, Statement.seen_at.is_(None))
     ) or 0
+
+    cert_data = None
+    if user.certificate:
+        cert_data = {
+            "id": user.certificate.id,
+            "issuedAt": user.certificate.issued_at,
+            "expiresAt": user.certificate.expires_at,
+        }
 
     return UserOut(
         id=user.id,
-        personal_id=user.personal_id,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        phone=user.phone,
-        email=user.email,
-        code=user.code,
-        is_admin=(user.email.lower() == founder_email) or bool(user.is_admin),
-        is_founder=(user.email.lower() == founder_email),
-        created_at=user.created_at,
-        has_unseen_statements=unseen_count > 0,
-        unseen_statement_count=unseen_count,
+        firstName=user.first_name or "",
+        lastName=user.last_name or "",
+        email=user.email or "",
+        phone=user.phone or "",
+        personalId=user.personal_id or "",
+        code=user.code or "",
+        isAdmin=user.is_admin,
+        isFounder=_is_founder_actor(user.email),
+        createdAt=user.created_at,
+        unseenStatementsCount=unseen_count,
+        certificate=cert_data,
     )
+
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_user(
-    user_id: int,
+    user_id: int = Path(...),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
+    _require_admin(db, x_actor_email)
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     settings = get_settings()
-    if not _is_founder_actor(x_actor_email):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete")
+    founder_email = (settings.founder_admin_email or "").lower()
+    user_email = (user.email or "").lower()
 
-    u = db.get(User, user_id)
-    if not u:
-        return
-    if (settings.founder_admin_email or "").lower() == u.email.lower():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Founder admin cannot be deleted")
+    if user_email == founder_email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete founder")
 
-    db.delete(u)
+    db.delete(user)
     db.commit()
     return
 
 
-# Bulk delete all non-founder users
 @router.delete("/users", status_code=status.HTTP_204_NO_CONTENT)
-def admin_delete_all_users(
+def admin_delete_users(
+    user_ids: list[int] = Query(...),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
+    _require_admin(db, x_actor_email)
     settings = get_settings()
-    # Only founder can delete all users
     founder_email = (settings.founder_admin_email or "").lower()
-    if not _is_founder_actor(x_actor_email):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete all users")
 
-    # Do not delete founder
-    from sqlalchemy import select
-    users = db.scalars(select(User)).all()  # fetch all users
-    for u in users:
-        if (u.email or "").lower() == founder_email:
-            continue
-        db.delete(u)
+    users = db.scalars(select(User).where(User.id.in_(user_ids))).all()
+    for user in users:
+        user_email = (user.email or "").lower()
+        if user_email == founder_email:
+            continue  # Skip founder
+        db.delete(user)
     db.commit()
     return
 
 
 @router.get("/users/{user_id}/statements", response_model=AdminStatementsResponse)
 def admin_user_statements(
-    user_id: int,
+    user_id: int = Path(...),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
@@ -1123,52 +801,43 @@ def admin_user_statements(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    statements = db.scalars(
-        select(Statement)
-        .where(Statement.user_id == user.id)
-        .order_by(Statement.created_at.desc(), Statement.id.desc())
-    ).all()
-    items = [
-        AdminStatementOut(
-            id=statement.id,
-            user_id=user.id,
-            user_first_name=user.first_name,
-            user_last_name=user.last_name,
-            user_email=user.email,
-            message=statement.message,
-            created_at=statement.created_at,
-            seen_at=statement.seen_at,
-            seen_by=statement.seen_by,
-            attachment_filename=statement.attachment_filename,
-            attachment_size_bytes=statement.attachment_size_bytes,
+    statements = db.scalars(select(Statement).where(Statement.user_id == user_id).order_by(Statement.created_at.desc())).all()
+    items = []
+    for st in statements:
+        items.append(
+            AdminStatementOut(
+                id=st.id,
+                message=st.message,
+                attachmentFilename=st.attachment_filename,
+                seenAt=st.seen_at,
+                seenBy=st.seen_by,
+                createdAt=st.created_at,
+            )
         )
-        for statement in statements
-    ]
-    return AdminStatementsResponse(items=items, total=len(items))
+
+    return AdminStatementsResponse(statements=items, total=len(items))
 
 
 @router.delete("/statements/{statement_id}", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_statement(
-    statement_id: int,
+    statement_id: int = Path(...),
     x_actor_email: str | None = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ):
     _require_admin(db, x_actor_email)
-    if not _is_founder_actor(x_actor_email):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete statements")
+    st = db.get(Statement, statement_id)
+    if not st:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Statement not found")
 
-    statement = db.get(Statement, statement_id)
-    if not statement:
-        return
-    # Remove stored attachment if present
-    if statement.attachment_path:
+    if st.attachment_path:
         try:
-            abs_path = resolve_storage_path(statement.attachment_path)
-            if abs_path.exists():
-                abs_path.unlink()
+            path = resolve_storage_path(st.attachment_path)
+            if path.exists():
+                path.unlink()
         except Exception:
             pass
-    db.delete(statement)
+
+    db.delete(st)
     db.commit()
     return
 
@@ -1192,11 +861,11 @@ def admin_mark_statements_seen(
     db: Session = Depends(get_db),
 ):
     _require_admin(db, x_actor_email)
-    actor_email = _actor_email_normalized(x_actor_email) or "admin"
-    statement_ids = [sid for sid in payload.statement_ids if isinstance(sid, int)]
+    now = datetime.now(timezone.utc)
+    actor_email = _actor_email_normalized(x_actor_email)
+    statement_ids = payload.statement_ids or []
     if not statement_ids:
         return
-    now = datetime.utcnow()
     db.execute(
         Statement.__table__.update()
         .where(Statement.id.in_(statement_ids))
@@ -1204,3 +873,426 @@ def admin_mark_statements_seen(
     )
     db.commit()
     return
+
+
+# ================= Project Evaluation Admin Endpoints =================
+
+def _ensure_project_pdf_dir() -> Path:
+    """Ensure and return the directory for storing project PDFs."""
+    root = ensure_media_root()
+    pdf_dir = root / "project_evaluation" / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    return pdf_dir
+
+
+@router.get("/project-evaluation/projects", response_model=AdminProjectEvaluationProjectsListResponse)
+def admin_project_evaluation_projects(
+    project_type: str | None = Query(None),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    
+    stmt = select(ProjectEvaluationProject)
+    if project_type:
+        stmt = stmt.where(ProjectEvaluationProject.project_type == project_type)
+    stmt = stmt.order_by(ProjectEvaluationProject.created_at.desc())
+    
+    projects = db.scalars(stmt).all()
+    
+    items = []
+    for p in projects:
+        violations_count = db.scalar(
+            select(func.count()).select_from(ProjectEvaluationViolation)
+            .where(ProjectEvaluationViolation.project_id == p.id)
+        ) or 0
+        items.append(
+            AdminProjectEvaluationProjectOut(
+                id=p.id,
+                projectType=p.project_type,
+                projectCode=p.project_code,
+                pdfFilename=p.pdf_filename,
+                enabled=p.enabled,
+                createdAt=p.created_at,
+                violationsCount=violations_count,
+            )
+        )
+    
+    return AdminProjectEvaluationProjectsListResponse(projects=items, total=len(items))
+
+
+@router.post("/project-evaluation/projects", response_model=AdminProjectEvaluationProjectOut)
+def admin_create_project_evaluation_project(
+    project_type: str = Form(...),
+    project_code: str = Form(...),
+    pdf_file: UploadFile = File(...),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    
+    if project_type not in {"residential", "multifunctional"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project type")
+    
+    # Check if project code already exists
+    existing = db.scalar(
+        select(ProjectEvaluationProject).where(ProjectEvaluationProject.project_code == project_code)
+    )
+    if existing:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Project code already exists")
+    
+    # Validate PDF file
+    if not pdf_file.filename or not pdf_file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File must be a PDF")
+    
+    # Save PDF file
+    pdf_dir = _ensure_project_pdf_dir()
+    safe_filename = f"{project_code}_{pdf_file.filename}"
+    pdf_path = pdf_dir / safe_filename
+    
+    with open(pdf_path, "wb") as f:
+        shutil.copyfileobj(pdf_file.file, f)
+    
+    # Get file size
+    file_size = pdf_path.stat().st_size
+    
+    # Create project record
+    project = ProjectEvaluationProject(
+        project_type=project_type,
+        project_code=project_code,
+        pdf_path=relative_storage_path(pdf_path),
+        pdf_filename=pdf_file.filename,
+        pdf_mime_type="application/pdf",
+        pdf_size_bytes=file_size,
+    )
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    
+    violations_count = 0
+    
+    return AdminProjectEvaluationProjectOut(
+        id=project.id,
+        projectType=project.project_type,
+        projectCode=project.project_code,
+        pdfFilename=project.pdf_filename,
+        enabled=project.enabled,
+        createdAt=project.created_at,
+        violationsCount=violations_count,
+    )
+
+
+@router.put("/project-evaluation/projects/{project_id}", response_model=AdminProjectEvaluationProjectOut)
+def admin_update_project_evaluation_project(
+    project_id: int = Path(...),
+    payload: AdminProjectEvaluationProjectUpdate = ...,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    
+    project = db.get(ProjectEvaluationProject, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    
+    if payload.project_code is not None:
+        # Check if new code already exists
+        existing = db.scalar(
+            select(ProjectEvaluationProject)
+            .where(ProjectEvaluationProject.project_code == payload.project_code, ProjectEvaluationProject.id != project_id)
+        )
+        if existing:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Project code already exists")
+        project.project_code = payload.project_code
+    
+    if payload.enabled is not None:
+        project.enabled = payload.enabled
+    
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    
+    violations_count = db.scalar(
+        select(func.count()).select_from(ProjectEvaluationViolation)
+        .where(ProjectEvaluationViolation.project_id == project.id)
+    ) or 0
+    
+    return AdminProjectEvaluationProjectOut(
+        id=project.id,
+        projectType=project.project_type,
+        projectCode=project.project_code,
+        pdfFilename=project.pdf_filename,
+        enabled=project.enabled,
+        createdAt=project.created_at,
+        violationsCount=violations_count,
+    )
+
+
+@router.delete("/project-evaluation/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_project_evaluation_project(
+    project_id: int = Path(...),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    
+    project = db.get(ProjectEvaluationProject, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    
+    # Delete PDF file
+    try:
+        pdf_path = resolve_storage_path(project.pdf_path)
+        if pdf_path.exists():
+            pdf_path.unlink()
+    except Exception:
+        pass  # Continue even if file deletion fails
+    
+    db.delete(project)
+    db.commit()
+    return
+
+
+@router.get("/project-evaluation/projects/{project_id}/violations", response_model=AdminProjectEvaluationViolationsListResponse)
+def admin_project_evaluation_violations(
+    project_id: int = Path(...),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    
+    project = db.get(ProjectEvaluationProject, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    
+    violations = db.scalars(
+        select(ProjectEvaluationViolation)
+        .where(ProjectEvaluationViolation.project_id == project_id)
+        .order_by(ProjectEvaluationViolation.order_index, ProjectEvaluationViolation.id)
+    ).all()
+    
+    items = []
+    for v in violations:
+        items.append(
+            AdminProjectEvaluationViolationOut(
+                id=v.id,
+                projectId=v.project_id,
+                description=v.description,
+                isCorrect=v.is_correct,
+                orderIndex=v.order_index,
+                enabled=v.enabled,
+                createdAt=v.created_at,
+            )
+        )
+    
+    return AdminProjectEvaluationViolationsListResponse(violations=items, total=len(items))
+
+
+@router.post("/project-evaluation/projects/{project_id}/violations", response_model=AdminProjectEvaluationViolationOut)
+def admin_create_project_evaluation_violation(
+    project_id: int = Path(...),
+    payload: AdminProjectEvaluationViolationCreate = ...,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    
+    project = db.get(ProjectEvaluationProject, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    
+    # Get max order_index for this project
+    max_order = db.scalar(
+        select(func.max(ProjectEvaluationViolation.order_index))
+        .where(ProjectEvaluationViolation.project_id == project_id)
+    ) or 0
+    
+    order_index = payload.order_index if payload.order_index is not None else max_order + 1
+    
+    violation = ProjectEvaluationViolation(
+        project_id=project_id,
+        description=payload.description,
+        is_correct=payload.is_correct,
+        order_index=order_index,
+    )
+    db.add(violation)
+    db.commit()
+    db.refresh(violation)
+    
+    return AdminProjectEvaluationViolationOut(
+        id=violation.id,
+        projectId=violation.project_id,
+        description=violation.description,
+        isCorrect=violation.is_correct,
+        orderIndex=violation.order_index,
+        enabled=violation.enabled,
+        createdAt=violation.created_at,
+    )
+
+
+@router.put("/project-evaluation/violations/{violation_id}", response_model=AdminProjectEvaluationViolationOut)
+def admin_update_project_evaluation_violation(
+    violation_id: int = Path(...),
+    payload: AdminProjectEvaluationViolationUpdate = ...,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    
+    violation = db.get(ProjectEvaluationViolation, violation_id)
+    if not violation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Violation not found")
+    
+    if payload.description is not None:
+        violation.description = payload.description
+    if payload.is_correct is not None:
+        violation.is_correct = payload.is_correct
+    if payload.order_index is not None:
+        violation.order_index = payload.order_index
+    if payload.enabled is not None:
+        violation.enabled = payload.enabled
+    
+    db.add(violation)
+    db.commit()
+    db.refresh(violation)
+    
+    return AdminProjectEvaluationViolationOut(
+        id=violation.id,
+        projectId=violation.project_id,
+        description=violation.description,
+        isCorrect=violation.is_correct,
+        orderIndex=violation.order_index,
+        enabled=violation.enabled,
+        createdAt=violation.created_at,
+    )
+
+
+@router.delete("/project-evaluation/violations/{violation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_project_evaluation_violation(
+    violation_id: int = Path(...),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    
+    violation = db.get(ProjectEvaluationViolation, violation_id)
+    if not violation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Violation not found")
+    
+    db.delete(violation)
+    db.commit()
+    return
+
+
+@router.get("/project-evaluation/settings/{project_type}", response_model=AdminProjectEvaluationSettingsOut)
+def admin_get_project_evaluation_settings(
+    project_type: str = Path(...),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    
+    if project_type not in {"residential", "multifunctional"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project type")
+    
+    settings = db.scalar(
+        select(ProjectEvaluationSettings).where(ProjectEvaluationSettings.project_type == project_type)
+    )
+    if not settings:
+        # Create default settings
+        settings = ProjectEvaluationSettings(
+            project_type=project_type,
+            duration_minutes=60,
+            gate_password="cpig",
+        )
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    
+    return AdminProjectEvaluationSettingsOut(
+        projectType=settings.project_type,
+        durationMinutes=settings.duration_minutes,
+        gatePassword=settings.gate_password,
+    )
+
+
+@router.put("/project-evaluation/settings/{project_type}", response_model=AdminProjectEvaluationSettingsOut)
+def admin_update_project_evaluation_settings(
+    project_type: str = Path(...),
+    payload: AdminProjectEvaluationSettingsUpdate = ...,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    
+    if project_type not in {"residential", "multifunctional"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project type")
+    
+    settings = db.scalar(
+        select(ProjectEvaluationSettings).where(ProjectEvaluationSettings.project_type == project_type)
+    )
+    if not settings:
+        settings = ProjectEvaluationSettings(project_type=project_type, duration_minutes=60, gate_password="cpig")
+        db.add(settings)
+    
+    if payload.duration_minutes is not None:
+        settings.duration_minutes = payload.duration_minutes
+    if payload.gate_password is not None:
+        settings.gate_password = payload.gate_password
+    
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    
+    return AdminProjectEvaluationSettingsOut(
+        projectType=settings.project_type,
+        durationMinutes=settings.duration_minutes,
+        gatePassword=settings.gate_password,
+    )
+
+
+@router.get("/project-evaluation/sessions", response_model=AdminProjectEvaluationSessionsListResponse)
+def admin_project_evaluation_sessions(
+    project_type: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=1000),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    
+    stmt = select(ProjectEvaluationSession)
+    if project_type:
+        stmt = stmt.where(ProjectEvaluationSession.project_type == project_type)
+    stmt = stmt.order_by(ProjectEvaluationSession.started_at.desc())
+    
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    
+    offset = (page - 1) * size
+    sessions = db.scalars(stmt.offset(offset).limit(size)).all()
+    
+    items = []
+    for s in sessions:
+        project_code = None
+        if s.project_id:
+            project = db.get(ProjectEvaluationProject, s.project_id)
+            if project:
+                project_code = project.project_code
+        
+        items.append(
+            AdminProjectEvaluationSessionOut(
+                id=s.id,
+                projectType=s.project_type,
+                projectId=s.project_id,
+                projectCode=project_code,
+                startedAt=s.started_at,
+                finishedAt=s.finished_at,
+                active=s.active,
+                correctViolationsCount=s.correct_violations_count,
+                incorrectViolationsCount=s.incorrect_violations_count,
+                totalViolationsCount=s.total_violations_count,
+                scorePercent=s.score_percent,
+            )
+        )
+    
+    return AdminProjectEvaluationSessionsListResponse(sessions=items, total=total)

@@ -279,3 +279,102 @@ class ExpertUpload(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+
+
+class ProjectEvaluationProject(Base):
+    __tablename__ = "project_evaluation_projects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_type: Mapped[str] = mapped_column(String(32), index=True)  # residential, multifunctional
+    project_code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    pdf_path: Mapped[str] = mapped_column(String(1024))
+    pdf_filename: Mapped[str] = mapped_column(String(255))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    violations: Mapped[List["ProjectEvaluationViolation"]] = relationship(
+        "ProjectEvaluationViolation",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+
+class ProjectEvaluationViolation(Base):
+    __tablename__ = "project_evaluation_violations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project_evaluation_projects.id", ondelete="CASCADE"), index=True)
+    description: Mapped[str] = mapped_column(Text)
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)  # True if this is a real violation
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    project: Mapped["ProjectEvaluationProject"] = relationship("ProjectEvaluationProject", back_populates="violations")
+
+
+class ProjectEvaluationSession(Base):
+    __tablename__ = "project_evaluation_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_type: Mapped[str] = mapped_column(String(32), index=True)  # residential, multifunctional
+    project_id: Mapped[int] = mapped_column(ForeignKey("project_evaluation_projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    token: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    ends_at: Mapped[datetime] = mapped_column(DateTime)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    candidate_first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    candidate_last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    candidate_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Results
+    selected_violation_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array of violation IDs
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_real_violations: Mapped[int] = mapped_column(Integer, default=0)
+    score_percent: Mapped[float] = mapped_column(Float, default=0.0)
+
+    project: Mapped[Optional["ProjectEvaluationProject"]] = relationship("ProjectEvaluationProject")
+    media_entries: Mapped[List["ProjectEvaluationMedia"]] = relationship(
+        "ProjectEvaluationMedia",
+        back_populates="session",
+        cascade="all, delete-orphan",
+    )
+
+
+class ProjectEvaluationMedia(Base):
+    __tablename__ = "project_evaluation_media"
+    __table_args__ = (
+        UniqueConstraint("session_id", "media_type", name="uq_project_eval_media_session_type"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("project_evaluation_sessions.id", ondelete="CASCADE"))
+    media_type: Mapped[str] = mapped_column(String(32), default="camera")
+    storage_path: Mapped[str] = mapped_column(String(1024))
+    filename: Mapped[str] = mapped_column(String(255))
+    mime_type: Mapped[str] = mapped_column(String(128), default="video/webm")
+    size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    session: Mapped["ProjectEvaluationSession"] = relationship("ProjectEvaluationSession", back_populates="media_entries")
+
+
+class ProjectEvaluationSettings(Base):
+    __tablename__ = "project_evaluation_settings"
+    __table_args__ = (
+        UniqueConstraint("project_type", name="uq_project_eval_settings_type"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_type: Mapped[str] = mapped_column(String(32), unique=True, index=True)  # residential, multifunctional
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    gate_password: Mapped[str] = mapped_column(String(128), default="cpig")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

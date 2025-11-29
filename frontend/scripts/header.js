@@ -310,12 +310,24 @@
     function goToMultiApartment() {
       closeNavDropdown();
       closeDrawerSubmenu();
-      alert('მრავალბინიანის შეფასება — მალე დაემატება');
+      if (DOM.body.classList.contains('menu-open')) closeMenu();
+      if (!isLoggedIn()) {
+        alert('გთხოვთ გაიაროთ ავტორიზაცია');
+        openAuthModal();
+        return;
+      }
+      window.location.href = 'project-evaluation/index.html?type=residential';
     }
     function goToMultiFunctional() {
       closeNavDropdown();
       closeDrawerSubmenu();
-      alert('მრავალფუნქციურის შეფასება — მალე დაემატება');
+      if (DOM.body.classList.contains('menu-open')) closeMenu();
+      if (!isLoggedIn()) {
+        alert('გთხოვთ გაიაროთ ავტორიზაცია');
+        openAuthModal();
+        return;
+      }
+      window.location.href = 'project-evaluation/index.html?type=multifunctional';
     }
     function handleNavTrigger(event) {
       event.preventDefault();
