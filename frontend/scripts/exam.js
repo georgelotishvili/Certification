@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resultsClose: byId('resultsClose'),
     confirmLeaveYes: byId('confirmLeaveYes'),
     confirmLeaveNo: byId('confirmLeaveNo'),
+    windowsKeyCountdown: byId('windowsKeyCountdown'),
     agreeExit: byId('agreeExit'),
     returnToExam: byId('returnToExam'),
     ctTitle: qs('.ct-section.ct-title'),
@@ -50,6 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
     answerAllDialog: byId('answerAllDialog'),
     answerAllClose: byId('answerAllClose'),
     cameraSlot: qs('.camera-slot'),
+    examRoot: qs('.exam-root'),
+    examContainer: qs('.exam-container'),
   };
 
   const MEDIA_TYPES = {
@@ -102,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentBlockIndex: 0,
     pendingBlockTransition: null,
     trapFocusHandler: null,
+    windowsKeyDialogActive: false,
     cameraStream: null,
     cameraVideo: null,
     cameraDevices: [],
@@ -114,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
   };
 
-  const timers = { countdown: null };
+  const timers = { countdown: null, windowsKeyTimeout: null };
   let remainingMs = 0;
   let cameraStartPromise = null;
   let screenStartPromise = null;
@@ -1048,7 +1052,100 @@ document.addEventListener('DOMContentLoaded', () => {
     setHidden(DOM.examFinal, true);
     hide(DOM.confirmOverlay);
     hide(DOM.finalOverlay);
+    state.windowsKeyDialogActive = false;
+    if (timers.windowsKeyTimeout) {
+      clearTimeout(timers.windowsKeyTimeout);
+      timers.windowsKeyTimeout = null;
+    }
+    if (timers.windowsKeyCountdown) {
+      clearInterval(timers.windowsKeyCountdown);
+      timers.windowsKeyCountdown = null;
+    }
+    if (DOM.windowsKeyCountdown) {
+      setHidden(DOM.windowsKeyCountdown, true);
+    }
     DOM.examStart?.focus();
+  }
+
+  function playAlertSound() {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+      gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+      
+      setTimeout(() => {
+        try {
+          const oscillator2 = audioContext.createOscillator();
+          const gainNode2 = audioContext.createGain();
+          oscillator2.connect(gainNode2);
+          gainNode2.connect(audioContext.destination);
+          oscillator2.frequency.value = 1000;
+          oscillator2.type = 'sine';
+          gainNode2.gain.setValueAtTime(0.5, audioContext.currentTime);
+          gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+          oscillator2.start(audioContext.currentTime);
+          oscillator2.stop(audioContext.currentTime + 0.5);
+        } catch (e) {
+          dlog('second alert sound failed', e);
+        }
+      }, 100);
+    } catch (e) {
+      dlog('alert sound failed', e);
+    }
+  }
+
+  function handleWindowsKeyClick(event) {
+    if (state.windowsKeyDialogActive && state.examStarted) {
+      // თუ კლიკი მოხდა დიალოგზე ან დიალოგის ღილაკებზე
+      if (DOM.examConfirm?.contains(event.target) || 
+          DOM.confirmOverlay?.contains(event.target) ||
+          DOM.confirmLeaveNo?.contains(event.target) ||
+          DOM.confirmLeaveYes?.contains(event.target)) {
+        return;
+      }
+      // თუ კლიკი მოხდა გამოცდის ეკრანზე - Timer-ის გაუქმება
+      if (DOM.examRoot?.contains(event.target) || DOM.examContainer?.contains(event.target)) {
+        if (timers.windowsKeyTimeout) {
+          clearTimeout(timers.windowsKeyTimeout);
+          timers.windowsKeyTimeout = null;
+        }
+        if (timers.windowsKeyCountdown) {
+          clearInterval(timers.windowsKeyCountdown);
+          timers.windowsKeyCountdown = null;
+        }
+        if (DOM.windowsKeyCountdown) {
+          setHidden(DOM.windowsKeyCountdown, true);
+        }
+        return;
+      }
+      // თუ კლიკი არ მოხდა გამოცდის ეკრანზე - ხმაურიანი გაფრთხილება და გამოცდის დასრულება
+      state.windowsKeyDialogActive = false;
+      if (timers.windowsKeyTimeout) {
+        clearTimeout(timers.windowsKeyTimeout);
+        timers.windowsKeyTimeout = null;
+      }
+      if (timers.windowsKeyCountdown) {
+        clearInterval(timers.windowsKeyCountdown);
+        timers.windowsKeyCountdown = null;
+      }
+      if (DOM.windowsKeyCountdown) {
+        setHidden(DOM.windowsKeyCountdown, true);
+      }
+      playAlertSound();
+      exitFullscreen();
+      void safeNavigateHome();
+    }
   }
 
   function enterFullscreen() {
@@ -1755,6 +1852,61 @@ document.addEventListener('DOMContentLoaded', () => {
       showStep1();
       return;
     }
+    if (event.key === 'Meta' || event.key === 'OSLeft' || event.key === 'OSRight') {
+      event.preventDefault();
+      enterFullscreen();
+      try {
+        window.focus();
+      } catch (e) {
+        dlog('window.focus failed', e);
+      }
+      setTimeout(() => {
+        state.windowsKeyDialogActive = true;
+        showStep1();
+        // Countdown-ის ჩვენება
+        if (DOM.windowsKeyCountdown) {
+          setHidden(DOM.windowsKeyCountdown, false);
+        }
+        // Countdown timer-ის დაწყება
+        let remainingSeconds = 10;
+        const updateCountdown = () => {
+          if (DOM.windowsKeyCountdown && state.windowsKeyDialogActive) {
+            DOM.windowsKeyCountdown.textContent = `დარჩენილი დრო: ${remainingSeconds} წამი`;
+            remainingSeconds--;
+            if (remainingSeconds < 0) {
+              if (timers.windowsKeyCountdown) {
+                clearInterval(timers.windowsKeyCountdown);
+                timers.windowsKeyCountdown = null;
+              }
+            }
+          }
+        };
+        updateCountdown(); // დაუყოვნებლივ ჩვენება
+        if (timers.windowsKeyCountdown) {
+          clearInterval(timers.windowsKeyCountdown);
+        }
+        timers.windowsKeyCountdown = setInterval(updateCountdown, 1000);
+        // Timer-ის დაწყება - 10 წამი
+        if (timers.windowsKeyTimeout) {
+          clearTimeout(timers.windowsKeyTimeout);
+        }
+        timers.windowsKeyTimeout = setTimeout(() => {
+          if (state.windowsKeyDialogActive && state.examStarted) {
+            state.windowsKeyDialogActive = false;
+            if (timers.windowsKeyCountdown) {
+              clearInterval(timers.windowsKeyCountdown);
+              timers.windowsKeyCountdown = null;
+            }
+            if (DOM.windowsKeyCountdown) {
+              setHidden(DOM.windowsKeyCountdown, true);
+            }
+            exitFullscreen();
+            void safeNavigateHome();
+          }
+        }, 10000); // 10 წამი
+      }, 100);
+      return;
+    }
     ensureFullscreen();
   }
 
@@ -1820,6 +1972,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     DOM.cmContent?.addEventListener('click', handleAnswerClick);
     DOM.cmDotsWrap?.addEventListener('click', handleDotClick);
+
+    // Windows-ის ღილაკის დაჭერისას click listener-ის დამატება
+    document.addEventListener('click', handleWindowsKeyClick, true);
 
     if (DOM.prestartOverlay) {
       show(DOM.prestartOverlay);
