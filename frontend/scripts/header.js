@@ -307,10 +307,15 @@
       }
       window.location.href = 'exam.html';
     }
-    function goToReview() {
+    function goToMultiApartment() {
       closeNavDropdown();
       closeDrawerSubmenu();
-      alert('პროექტის განხილვა — მალე დაემატება');
+      alert('მრავალბინიანის შეფასება — მალე დაემატება');
+    }
+    function goToMultiFunctional() {
+      closeNavDropdown();
+      closeDrawerSubmenu();
+      alert('მრავალფუნქციურის შეფასება — მალე დაემატება');
     }
     function handleNavTrigger(event) {
       event.preventDefault();
@@ -348,9 +353,15 @@
         goToExam();
         return;
       }
-      if (closest(el, '.dropdown-item.review, .drawer-submenu-item.review')) {
+      if (closest(el, '.dropdown-item.multi-apartment, .drawer-submenu-item.multi-apartment')) {
         event.preventDefault();
-        goToReview();
+        goToMultiApartment();
+        return;
+      }
+      if (closest(el, '.dropdown-item.multi-functional, .drawer-submenu-item.multi-functional')) {
+        event.preventDefault();
+        goToMultiFunctional();
+        return;
       }
       // About / Terms open in modal (desktop + mobile)
       if (closest(el, '.dropdown-item.about-us, .drawer-submenu-item.about-us')) {
