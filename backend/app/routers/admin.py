@@ -35,7 +35,7 @@ from ..schemas import (
     AdminStatementOut,
     StatementSeenRequest,
 )
-from ..services.media_storage import resolve_storage_path
+from ..services.media_storage import resolve_storage_path, ensure_media_root
 
 
 router = APIRouter()
@@ -781,6 +781,32 @@ def delete_result(
     session_obj = db.get(ExamSession, session_id)
     if not session_obj:
         return
+
+    # Delete video files from disk before deleting the session
+    media_records = db.scalars(select(ExamMedia).where(ExamMedia.session_id == session_id)).all()
+    for media in media_records:
+        if media.storage_path:
+            try:
+                abs_path = resolve_storage_path(media.storage_path)
+                if abs_path.exists():
+                    abs_path.unlink()
+            except Exception:
+                pass  # Continue even if file deletion fails
+
+    # Delete the session directory if it exists and is empty
+    try:
+        media_root = ensure_media_root()
+        session_dir = media_root / f"session_{session_id}"
+        if session_dir.exists() and session_dir.is_dir():
+            # Try to remove the directory (will only work if empty or all files deleted)
+            try:
+                session_dir.rmdir()
+            except OSError:
+                # Directory not empty or other error, that's okay
+                pass
+    except Exception:
+        pass  # Continue even if directory deletion fails
+
     db.delete(session_obj)
     db.commit()
     return
