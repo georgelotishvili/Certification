@@ -106,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     pendingBlockTransition: null,
     trapFocusHandler: null,
     windowsKeyDialogActive: false,
+    lastVisibilityState: !document.hidden,
     cameraStream: null,
     cameraVideo: null,
     cameraDevices: [],
@@ -1148,6 +1149,95 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function triggerSecurityDialog() {
+    // OS-ის დონის event-ის დეტექცია - დიალოგის ჩვენება
+    if (state.examStarted && !state.windowsKeyDialogActive) {
+      state.windowsKeyDialogActive = true;
+      enterFullscreen();
+      try {
+        window.focus();
+      } catch (e) {
+        dlog('window.focus failed', e);
+      }
+      setTimeout(() => {
+        showStep1();
+        // Countdown-ის ჩვენება
+        if (DOM.windowsKeyCountdown) {
+          setHidden(DOM.windowsKeyCountdown, false);
+        }
+        // Countdown timer-ის დაწყება
+        let remainingSeconds = 10;
+        const updateCountdown = () => {
+          if (DOM.windowsKeyCountdown && state.windowsKeyDialogActive) {
+            DOM.windowsKeyCountdown.textContent = `დარჩენილი დრო: ${remainingSeconds} წამი`;
+            remainingSeconds--;
+            if (remainingSeconds < 0) {
+              if (timers.windowsKeyCountdown) {
+                clearInterval(timers.windowsKeyCountdown);
+                timers.windowsKeyCountdown = null;
+              }
+            }
+          }
+        };
+        updateCountdown();
+        if (timers.windowsKeyCountdown) {
+          clearInterval(timers.windowsKeyCountdown);
+        }
+        timers.windowsKeyCountdown = setInterval(updateCountdown, 1000);
+        // Timer-ის დაწყება - 10 წამი
+        if (timers.windowsKeyTimeout) {
+          clearTimeout(timers.windowsKeyTimeout);
+        }
+        timers.windowsKeyTimeout = setTimeout(() => {
+          if (state.windowsKeyDialogActive && state.examStarted) {
+            state.windowsKeyDialogActive = false;
+            if (timers.windowsKeyCountdown) {
+              clearInterval(timers.windowsKeyCountdown);
+              timers.windowsKeyCountdown = null;
+            }
+            if (DOM.windowsKeyCountdown) {
+              setHidden(DOM.windowsKeyCountdown, true);
+            }
+            exitFullscreen();
+            void safeNavigateHome();
+          }
+        }, 10000);
+      }, 100);
+    }
+  }
+
+  function handleWindowsKeySecurityEvent() {
+    // Ctrl+Alt+Del, Task Manager ან სხვა OS-ის დონის event-ების დამუშავება
+    // visibilitychange event-ის დამუშავება
+    const wasVisible = state.lastVisibilityState;
+    const isHidden = document.hidden;
+    state.lastVisibilityState = !isHidden;
+    
+    // მხოლოდ მაშინ, როცა გვერდი visible-დან hidden-ზე გადავიდა
+    if (state.examStarted && !state.windowsKeyDialogActive && isHidden && wasVisible) {
+      // მცირე დაყოვნებით შემოწმება, რომ დარწმუნდეთ, რომ გვერდი კვლავ hidden არის
+      setTimeout(() => {
+        if (state.examStarted && !state.windowsKeyDialogActive && document.hidden) {
+          triggerSecurityDialog();
+        }
+      }, 200);
+    }
+  }
+
+  function handleWindowsKeyBlur() {
+    // blur event-ის დამუშავება - Ctrl+Alt+Del-ის დეტექცია
+    if (state.examStarted && !state.windowsKeyDialogActive) {
+      // მცირე დაყოვნებით შემოწმება, რომ დარწმუნდეთ, რომ ფანჯარა კვლავ არ არის აქტიური
+      setTimeout(() => {
+        if (state.examStarted && !state.windowsKeyDialogActive) {
+          if (document.hasFocus && !document.hasFocus()) {
+            triggerSecurityDialog();
+          }
+        }
+      }, 200);
+    }
+  }
+
   function enterFullscreen() {
     try {
       const request = DOM.root.requestFullscreen || DOM.root.webkitRequestFullscreen || DOM.root.msRequestFullscreen;
@@ -1852,7 +1942,10 @@ document.addEventListener('DOMContentLoaded', () => {
       showStep1();
       return;
     }
-    if (event.key === 'Meta' || event.key === 'OSLeft' || event.key === 'OSRight') {
+    // Windows-ის ღილაკის დამუშავება
+    const isWindowsKey = event.key === 'Meta' || event.key === 'OSLeft' || event.key === 'OSRight';
+    
+    if (isWindowsKey) {
       event.preventDefault();
       enterFullscreen();
       try {
@@ -1975,6 +2068,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Windows-ის ღილაკის დაჭერისას click listener-ის დამატება
     document.addEventListener('click', handleWindowsKeyClick, true);
+    // Ctrl+Alt+Del-ის დეტექციისთვის visibilitychange და blur event listeners
+    document.addEventListener('visibilitychange', handleWindowsKeySecurityEvent);
+    window.addEventListener('blur', handleWindowsKeyBlur);
 
     if (DOM.prestartOverlay) {
       show(DOM.prestartOverlay);
