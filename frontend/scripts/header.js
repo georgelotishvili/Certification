@@ -310,7 +310,13 @@
     function goToMultiApartment() {
       closeNavDropdown();
       closeDrawerSubmenu();
-      alert('მრავალბინიანის შეფასება — მალე დაემატება');
+      if (DOM.body.classList.contains('menu-open')) closeMenu();
+      if (!isLoggedIn()) {
+        alert('გთხოვთ გაიაროთ ავტორიზაცია');
+        openAuthModal();
+        return;
+      }
+      transitionTo('../project-evaluation/evaluation.html?type=multi-apartment');
     }
     function goToMultiFunctional() {
       closeNavDropdown();

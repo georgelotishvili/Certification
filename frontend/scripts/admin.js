@@ -112,7 +112,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'გამოცდა': 'exam',
     'რეგისტრაციები': 'registrations',
     'რეგისტრირებული პირები': 'registrations',
-    'პროექტი': null,
+    'მრავალბინიანი': null,
+    'მრავალფუნქციური': null,
   };
 
   const on = (element, event, handler) => element && element.addEventListener(event, handler);
