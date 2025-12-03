@@ -59,6 +59,9 @@
       const canEdit = isFounderActor();
       const checked = founderRow ? 'checked' : (user.is_admin ? 'checked' : '');
       const disabled = founderRow ? 'disabled' : (isFounderActor() ? '' : 'disabled');
+      // exam_permission: მთავარ ადმინს ყოველთვის true, სხვა ადმინებს თუ is_admin = true, მაშინ exam_permission-იც true
+      const examChecked = founderRow ? 'checked' : (user.exam_permission ? 'checked' : '');
+      const examDisabled = founderRow ? 'disabled' : '';
       const safeId = escapeHtml(user.id);
       const safeFullName = escapeHtml(fullNameRaw);
       const safePersonalId = escapeHtml(user.personal_id || '');
@@ -79,12 +82,16 @@
       
       return `
         <div class="block-tile block-card${user.has_unseen_statements ? ' has-new-statements' : ''}" data-id="${safeId}">
-        <div class="block-head" style="grid-template-columns:auto 1fr auto auto auto;">
+        <div class="block-head" style="grid-template-columns:auto 1fr auto auto auto auto;">
             <div class="block-order"></div>
             <div style="font-size:16px;font-weight:700;color:${nameColor};">${safeFullName}</div>
             <label title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}" style="display:inline-flex;gap:4px;align-items:center;padding:4px 8px;border-radius:6px;border:2px solid #e5e7eb;background:#fff;user-select:none;">
               <input type="checkbox" class="chk-admin" ${checked} ${disabled} style="width:16px;height:16px;accent-color:#9500FF;" />
               <span style="font-size:12px;color:#0f172a;font-weight:600;">ადმინი</span>
+            </label>
+            <label title="გამოცდა" style="display:inline-flex;gap:4px;align-items:center;padding:4px 8px;border-radius:6px;border:2px solid #e5e7eb;background:#fff;user-select:none;">
+              <input type="checkbox" class="chk-exam" ${examChecked} ${examDisabled} style="width:16px;height:16px;accent-color:#9500FF;" />
+              <span style="font-size:12px;color:#0f172a;font-weight:600;">გამოცდა</span>
             </label>
             <button class="head-delete" type="button" aria-label="წაშლა" title="წაშლა" ${founderRow || !isFounderActor() ? 'disabled' : ''}>×</button>
             <button class="head-toggle" type="button" aria-expanded="false">▾</button>
@@ -146,6 +153,25 @@
           } catch {
             event.target.checked = !desired;
             alert('ვერ შეინახა სტატუსი');
+          }
+        });
+      }
+
+      const examCheckbox = card.querySelector('.chk-exam');
+      if (examCheckbox) {
+        examCheckbox.addEventListener('change', async (event) => {
+          const id = card.dataset.id;
+          const desired = !!event.target.checked;
+          try {
+            const response = await fetch(`${API_BASE}/admin/users/${id}/exam-permission`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
+              body: JSON.stringify({ exam_permission: desired }),
+            });
+            if (!response.ok) throw new Error('failed');
+          } catch {
+            event.target.checked = !desired;
+            alert('ვერ შეინახა გამოცდის უფლება');
           }
         });
       }

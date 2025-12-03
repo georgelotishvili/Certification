@@ -63,6 +63,14 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       if (!response.ok) throw new Error('failed');
     },
+    async updateExamPermission(id, hasPermission) {
+      const response = await fetch(`${API_BASE}/admin/users/${id}/exam-permission`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...access.adminHeaders() },
+        body: JSON.stringify({ exam_permission: !!hasPermission }),
+      });
+      if (!response.ok) throw new Error('failed');
+    },
     async deleteUser(id) {
       const response = await fetch(`${API_BASE}/admin/users/${id}`, {
         method: 'DELETE',
@@ -113,6 +121,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const isChecked = founderRow ? 'checked' : (user.is_admin ? 'checked' : '');
     const disableAdminToggle = founderRow ? 'disabled' : (access.isFounderActor() ? '' : 'disabled');
     const disableDelete = founderRow || !access.isFounderActor() ? 'disabled' : '';
+    // exam_permission: მთავარ ადმინს ყოველთვის true, სხვა ადმინებს თუ is_admin = true, მაშინ exam_permission-იც true
+    const examChecked = founderRow ? 'checked' : (user.exam_permission ? 'checked' : '');
+    const disableExamToggle = founderRow ? 'disabled' : '';
     const fullName = `${(user.first_name || '').trim()} ${(user.last_name || '').trim()}`.trim() || '(უსახელო)';
 
     const wrapper = document.createElement('div');
@@ -147,6 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <label class="a-correct-wrap" title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}" style="width:fit-content;">
                       <input type="checkbox" class="chk-admin" ${isChecked} ${disableAdminToggle} />
                       <span>ადმინი</span>
+                    </label>
+                    <label class="a-correct-wrap" title="გამოცდა" style="width:fit-content;">
+                      <input type="checkbox" class="chk-exam" ${examChecked} ${disableExamToggle} />
+                      <span>გამოცდა</span>
                     </label>
                     <button class="btn-delete" ${disableDelete} style="width:fit-content;padding:6px 12px;">წაშლა</button>
                   </div>
@@ -209,6 +224,20 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch {
           event.target.checked = !want;
           alert('ვერ შეინახა სტატუსი');
+        }
+      });
+    }
+
+    const examCheckbox = card.querySelector('.chk-exam');
+    if (examCheckbox && !examCheckbox.disabled) {
+      examCheckbox.addEventListener('change', async (event) => {
+        const want = !!event.target.checked;
+        try {
+          await api.updateExamPermission(user.id, want);
+          mutateUser(user.id, { exam_permission: want });
+        } catch {
+          event.target.checked = !want;
+          alert('ვერ შეინახა გამოცდის უფლება');
         }
       });
     }

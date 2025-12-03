@@ -946,6 +946,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function revokeExamPermission(options = {}) {
+    if (!state.sessionId || !state.sessionToken) {
+      dlog('skip revoke exam permission — missing session/token');
+      return;
+    }
+    try {
+      const request = asJson('POST', {});
+      if (options.keepalive) request.keepalive = true;
+      const response = await fetch(`${API_BASE}/exam/${state.sessionId}/consume-permission`, request);
+      if (!response.ok) {
+        throw new Error(`consume failed ${response.status}`);
+      }
+      dlog('exam permission consumed for session', state.sessionId);
+    } catch (error) {
+      console.error('Failed to revoke exam permission:', error);
+    }
+  }
+
   function isLoggedIn() {
     try {
       return localStorage.getItem('authLoggedIn') === 'true';
@@ -1017,6 +1035,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     stopCamera();
     stopScreenCapture();
+    
+    // თუ გამოცდა დაიწყო, exam_permission-ის გამორთვა
+    // await-ით რომ დავრწმუნდეთ რომ სრულდება სანამ გვერდი გაითიშება
+    if (state.examStarted) {
+      try {
+        await revokeExamPermission();
+      } catch (error) {
+        console.error('Failed to revoke exam permission in safeNavigateHome:', error);
+      }
+    }
+    
     try {
       if (document.fullscreenElement) {
         (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen)?.call(document);
@@ -1570,7 +1599,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => ensureFullscreen(), 50);
   }
 
-  function showResults() {
+  async function showResults() {
     try {
       void finalizeRecording({ waitForUploads: false });
       stopCountdown();
@@ -1632,6 +1661,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       show(DOM.resultsOverlay);
       setHidden(DOM.examResults, false);
+      
+      // გამოცდის შედეგების გამოჩენისას exam_permission-ის გამორთვა
+      // await-ით რომ დავრწმუნდეთ რომ სრულდება
+      console.log('Results shown, revoking exam permission...');
+      await revokeExamPermission();
     } catch {}
   }
 
@@ -2103,13 +2137,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function initialize() {
+  async function initialize() {
     // Block entire exam for unauthenticated users
     if (!isLoggedIn()) {
       alert('გთხოვთ გაიაროთ ავტორიზაცია');
       window.location.href = 'index.html';
       return;
     }
+    
+    // შემოწმება exam_permission-ის
+    try {
+      const getSavedEmail = () => {
+        try { return (window.Auth?.getSavedEmail?.() || localStorage.getItem('savedEmail') || '').trim(); } catch { return ''; }
+      };
+      const email = getSavedEmail();
+      if (email) {
+        const response = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(email)}`, {
+          headers: { 'x-actor-email': email },
+        });
+        
+        if (response.ok) {
+          const user = await response.json();
+          // მთავარ ადმინს ყოველთვის exam_permission = true
+          const hasPermission = user.is_founder || user.exam_permission;
+          
+          if (!hasPermission) {
+            alert('გამოცდის უფლება უნდა მოგანიჭოთ ადმინისტრატორმა');
+            window.location.href = 'index.html';
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check exam permission:', error);
+      // თუ error-ია, მაინც გავაგრძელოთ (gate-ი მაინც იმუშავებს)
+    }
+    
     hideAll();
     focusTrap.enable();
     updateUserHeader();
@@ -2134,6 +2197,15 @@ document.addEventListener('DOMContentLoaded', () => {
       void finalizeRecording({ waitForUploads: false });
       stopCamera();
       stopScreenCapture();
+      
+      // თუ გამოცდა დაიწყო, exam_permission-ის გამორთვა
+      if (state.examStarted) {
+        try {
+          void revokeExamPermission({ keepalive: true });
+        } catch (error) {
+          console.error('Failed to revoke exam permission on beforeunload:', error);
+        }
+      }
     });
     const handleDeviceChange = async () => {
       await refreshCameraDevices().catch(() => []);

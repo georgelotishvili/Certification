@@ -254,6 +254,7 @@ class UserOut(BaseModel):
     code: str
     is_admin: bool
     is_founder: bool = False
+    exam_permission: bool = False
     created_at: datetime
     has_unseen_statements: bool | None = None
     unseen_statement_count: int | None = None
@@ -311,6 +312,10 @@ class StatementSeenRequest(BaseModel):
 
 class ToggleAdminRequest(BaseModel):
     is_admin: bool
+
+
+class ToggleExamPermissionRequest(BaseModel):
+    exam_permission: bool
 
 
 class AdminUserUpdateRequest(CamelModel):

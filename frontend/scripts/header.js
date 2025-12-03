@@ -296,7 +296,7 @@
       closeAboutDropdown();
       document.removeEventListener('click', handleDocClickCloseAbout);
     }
-    function goToExam() {
+    async function goToExam() {
       closeNavDropdown();
       closeDrawerSubmenu();
       if (DOM.body.classList.contains('menu-open')) closeMenu();
@@ -305,7 +305,48 @@
         openAuthModal();
         return;
       }
-      window.location.href = 'exam.html';
+      
+      // შემოწმება exam_permission-ის
+      try {
+        const getSavedEmail = () => {
+          try { return (window.Auth?.getSavedEmail?.() || localStorage.getItem('savedEmail') || '').trim(); } catch { return ''; }
+        };
+        const email = getSavedEmail();
+        if (!email) {
+          alert('გთხოვთ გაიაროთ ავტორიზაცია');
+          openAuthModal();
+          return;
+        }
+        
+        const API_BASE = (window.APP_CONFIG && typeof window.APP_CONFIG.API_BASE === 'string')
+          ? window.APP_CONFIG.API_BASE
+          : 'http://127.0.0.1:8000';
+        
+        const response = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(email)}`, {
+          headers: { 'x-actor-email': email },
+        });
+        
+        if (!response.ok) {
+          // თუ API error-ია, მაინც გადავიდეთ exam.html-ზე, exam.js-ში შემოწმდება
+          window.location.href = 'exam.html';
+          return;
+        }
+        
+        const user = await response.json();
+        // მთავარ ადმინს ყოველთვის exam_permission = true
+        const hasPermission = user.is_founder || user.exam_permission;
+        
+        if (!hasPermission) {
+          alert('გამოცდის უფლება უნდა მოგანიჭოთ ადმინისტრატორმა');
+          return;
+        }
+        
+        window.location.href = 'exam.html';
+      } catch (error) {
+        // თუ error-ია, მაინც გადავიდეთ exam.html-ზე, exam.js-ში შემოწმდება
+        console.error('Failed to check exam permission:', error);
+        window.location.href = 'exam.html';
+      }
     }
     function goToMultiApartment() {
       closeNavDropdown();

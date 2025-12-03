@@ -30,6 +30,7 @@ from ..schemas import (
     UsersListResponse,
     UserOut,
     ToggleAdminRequest,
+    ToggleExamPermissionRequest,
     AdminUserUpdateRequest,
     AdminStatementsResponse,
     AdminStatementOut,
@@ -910,6 +911,18 @@ def admin_users(
                 'validity_term': u.certificate.validity_term,
                 'valid_until': u.certificate.valid_until,
             }
+        is_founder_user = (u.email.lower() == founder_email)
+        is_admin_user = is_founder_user or bool(u.is_admin)
+        # მთავარ ადმინს ყოველთვის exam_permission = true
+        # სხვა ადმინებს exam_permission = true (როცა is_admin = true, exam_permission-იც ავტომატურად true ხდება)
+        # არა-ადმინებს exam_permission = u.exam_permission (რაც ბაზაშია)
+        if is_founder_user:
+            exam_perm = True
+        elif is_admin_user:
+            exam_perm = True  # ადმინებს exam_permission ყოველთვის true
+        else:
+            exam_perm = bool(u.exam_permission)  # არა-ადმინებს რაც ბაზაშია
+        
         user_dict = {
             'id': u.id,
             'personal_id': u.personal_id,
@@ -918,8 +931,9 @@ def admin_users(
             'phone': u.phone,
             'email': u.email,
             'code': u.code,
-            'is_admin': (u.email.lower() == founder_email) or bool(u.is_admin),
-            'is_founder': (u.email.lower() == founder_email),
+            'is_admin': is_admin_user,
+            'is_founder': is_founder_user,
+            'exam_permission': exam_perm,
             'created_at': u.created_at,
             'has_unseen_statements': unseen_count > 0,
             'unseen_statement_count': unseen_count,
@@ -949,6 +963,36 @@ def admin_toggle_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Founder admin cannot be modified")
 
     u.is_admin = bool(payload.is_admin)
+    # როცა ადმინი ხდება, exam_permission-იც ჩაირთოს
+    # როცა ადმინი გაეთიშება, exam_permission-იც გაითიშოს
+    if payload.is_admin:
+        u.exam_permission = True
+    else:
+        u.exam_permission = False
+    db.add(u)
+    db.commit()
+    return
+
+
+@router.patch("/users/{user_id}/exam-permission", status_code=status.HTTP_204_NO_CONTENT)
+def admin_toggle_exam_permission(
+    user_id: int,
+    payload: ToggleExamPermissionRequest,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    settings = get_settings()
+    
+    u = db.get(User, user_id)
+    if not u:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    # მთავარ ადმინს exam_permission-ის შეცვლა არ შეიძლება
+    if (settings.founder_admin_email or "").lower() == u.email.lower():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Founder admin exam permission cannot be modified")
+    
+    u.exam_permission = bool(payload.exam_permission)
     db.add(u)
     db.commit()
     return

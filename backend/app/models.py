@@ -154,6 +154,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     code: Mapped[str] = mapped_column(String(10), index=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    exam_permission: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     statements: Mapped[List["Statement"]] = relationship(
         "Statement",

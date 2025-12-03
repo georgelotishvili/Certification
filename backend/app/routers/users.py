@@ -91,6 +91,16 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
+    is_admin_user = is_founder or bool(user.is_admin)
+    # მთავარ ადმინს ყოველთვის exam_permission = true
+    # სხვა ადმინებს exam_permission = true
+    # არა-ადმინებს exam_permission = user.exam_permission (რაც ბაზაშია)
+    if is_founder:
+        exam_perm = True
+    elif is_admin_user:
+        exam_perm = True  # ადმინებს exam_permission ყოველთვის true
+    else:
+        exam_perm = bool(user.exam_permission)  # არა-ადმინებს რაც ბაზაშია
     return UserOut(
         id=user.id,
         personal_id=user.personal_id,
@@ -99,8 +109,9 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
         phone=user.phone,
         email=user.email,
         code=user.code,
-        is_admin=True if is_founder else bool(user.is_admin),
+        is_admin=is_admin_user,
         is_founder=is_founder,
+        exam_permission=exam_perm,
         created_at=user.created_at,
     )
 
@@ -124,6 +135,16 @@ def public_profile(
     settings = get_settings()
     founder_email = (settings.founder_admin_email or "").lower()
     is_founder = (user.email or "").lower() == founder_email
+    is_admin_user = is_founder or bool(user.is_admin)
+    # მთავარ ადმინს ყოველთვის exam_permission = true
+    # სხვა ადმინებს exam_permission = true
+    # არა-ადმინებს exam_permission = user.exam_permission (რაც ბაზაშია)
+    if is_founder:
+        exam_perm = True
+    elif is_admin_user:
+        exam_perm = True  # ადმინებს exam_permission ყოველთვის true
+    else:
+        exam_perm = bool(user.exam_permission)  # არა-ადმინებს რაც ბაზაშია
     return UserOut(
         id=user.id,
         personal_id=user.personal_id,
@@ -132,8 +153,9 @@ def public_profile(
         phone=user.phone,
         email=user.email,
         code=user.code,
-        is_admin=True if is_founder else bool(user.is_admin),
+        is_admin=is_admin_user,
         is_founder=is_founder,
+        exam_permission=exam_perm,
         created_at=user.created_at,
     )
 
@@ -163,6 +185,16 @@ def profile(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor not found")
     if actor.email != eml and not (actor.is_admin or actor.email.lower() == founder_email):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    is_admin_user = is_founder or bool(u.is_admin)
+    # მთავარ ადმინს ყოველთვის exam_permission = true
+    # სხვა ადმინებს exam_permission = true
+    # არა-ადმინებს exam_permission = u.exam_permission (რაც ბაზაშია)
+    if is_founder:
+        exam_perm = True
+    elif is_admin_user:
+        exam_perm = True  # ადმინებს exam_permission ყოველთვის true
+    else:
+        exam_perm = bool(u.exam_permission)  # არა-ადმინებს რაც ბაზაშია
     return UserOut(
         id=u.id,
         personal_id=u.personal_id,
@@ -171,8 +203,9 @@ def profile(
         phone=u.phone,
         email=u.email,
         code=u.code,
-        is_admin=(eml == founder_email) or bool(u.is_admin),
+        is_admin=is_admin_user,
         is_founder=is_founder,
+        exam_permission=exam_perm,
         created_at=u.created_at,
     )
 
