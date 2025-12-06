@@ -14,6 +14,7 @@
     const state = { data: [], saveTimer: null, pendingNotify: false };
 
     const generateId = () => `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const generateProjectCode = () => String(Math.floor(10000 + Math.random() * 90000));
 
     let DOM_ELEMENTS = {
       grid: null,
@@ -30,6 +31,18 @@
     function updateStats() {
       if (DOM_ELEMENTS.blocksCount) {
         DOM_ELEMENTS.blocksCount.textContent = String(state.data.length || 0);
+      }
+    }
+
+    function updateProjectCount(projectId) {
+      const card = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${projectId}"]`);
+      if (!card) return;
+      const projectIndex = state.data.findIndex((project) => project.id === projectId);
+      if (projectIndex === -1) return;
+      const project = state.data[projectIndex];
+      const headCount = card.querySelector('.head-count');
+      if (headCount) {
+        headCount.textContent = String(Array.isArray(project.answers) ? project.answers.length : 0);
       }
     }
 
@@ -74,12 +87,38 @@
               <input class="head-file-input" type="file" accept=".pdf" data-project-id="${escapeHtml(project.id)}" aria-label="PDF ფაილის ატვირთვა" />
               <span class="head-file-name">${escapeHtml(project.pdfFile || 'No file chosen')}</span>
             </div>
+            <span class="q-code" aria-label="პროექტის კოდი">${escapeHtml(project.code || '')}</span>
             <button class="head-delete" type="button" aria-label="პროექტის წაშლა" title="წაშლა">×</button>
             <button class="head-toggle" type="button" aria-expanded="false">▾</button>
             <span class="head-count" title="პასუხების რაოდენობა">${escapeHtml(Array.isArray(project.answers) ? project.answers.length : 0)}</span>
           </div>
           <div class="block-questions" aria-hidden="true">
-            <!-- პროექტის დეტალები შემდეგ დაემატება -->
+            <div class="answers-list">
+              ${(Array.isArray(project.answers) ? project.answers : []).map((answer, aIndex, answersArr) => `
+                <div class="answer-card" data-answer-id="${escapeHtml(answer.id)}">
+                  <div class="a-head">
+                    <div class="a-order">
+                      <button class="i-btn a-up" ${aIndex === 0 ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
+                      <button class="i-btn a-down" ${aIndex === answersArr.length - 1 ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
+                    </div>
+                    <textarea class="a-text" rows="3" placeholder="პასუხი ${aIndex + 1}" aria-label="პასუხი ${aIndex + 1}">${escapeHtml(answer.text || '')}</textarea>
+                    <div class="a-actions">
+                      <div class="a-actions-row">
+                        <label class="a-correct-wrap" title="სწორი პასუხი">
+                          <input class="a-correct" type="radio" name="correct-${escapeHtml(project.id)}" ${project.correctAnswerId === answer.id ? 'checked' : ''} />
+                          <span>სწორია</span>
+                        </label>
+                        <button class="a-delete" type="button" aria-label="პასუხის წაშლა" title="წაშლა">×</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+            <button class="block-tile add-tile q-add-tile" type="button" aria-label="პასუხის დამატება">
+              <span class="add-icon" aria-hidden="true">+</span>
+              <span class="add-text">პასუხის დამატება</span>
+            </button>
           </div>
         `;
         DOM_ELEMENTS.grid.appendChild(card);
@@ -99,7 +138,7 @@
 
     function addProject() {
       const id = generateId();
-      state.data.push({ id, number: nextNumber(), pdfFile: null, answers: [] });
+      state.data.push({ id, number: nextNumber(), pdfFile: null, answers: [], correctAnswerId: null, code: generateProjectCode() });
       save();
       render();
       const card = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${id}"]`);
@@ -167,6 +206,18 @@
         setCardOpen(card, !isOpen);
         return;
       }
+
+      if (target.closest?.('.q-add-tile')) {
+        const answerId = generateId();
+        if (!Array.isArray(project.answers)) project.answers = [];
+        project.answers.push({ id: answerId, text: '' });
+        save();
+        updateProjectCount(projectId);
+        render();
+        const updatedCard = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${projectId}"]`);
+        if (updatedCard) setCardOpen(updatedCard, true);
+        return;
+      }
     }
 
     function handleGridKeydown(event) {
@@ -209,6 +260,59 @@
           if (fileNameSpan) fileNameSpan.textContent = file.name;
           save();
         }
+        return;
+      }
+
+      const answerCard = target.closest?.('.answer-card');
+      if (answerCard) {
+        const answerId = answerCard.dataset.answerId;
+        if (!answerId) return;
+        if (!Array.isArray(project.answers)) project.answers = [];
+        const answerIndex = project.answers.findIndex((answer) => answer.id === answerId);
+        if (answerIndex === -1) return;
+
+        if (target.classList.contains('a-delete')) {
+          if (confirm('ნამდვილად გსურთ პასუხის წაშლა?')) {
+            project.answers.splice(answerIndex, 1);
+            if (project.correctAnswerId === answerId) {
+              project.correctAnswerId = null;
+            }
+            save();
+            updateProjectCount(projectId);
+            render();
+            const updatedCard = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${projectId}"]`);
+            if (updatedCard) setCardOpen(updatedCard, true);
+          }
+          return;
+        }
+
+        if (target.classList.contains('a-up')) {
+          if (answerIndex > 0) {
+            [project.answers[answerIndex - 1], project.answers[answerIndex]] = [project.answers[answerIndex], project.answers[answerIndex - 1]];
+            save();
+            render();
+            const updatedCard = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${projectId}"]`);
+            if (updatedCard) setCardOpen(updatedCard, true);
+          }
+          return;
+        }
+
+        if (target.classList.contains('a-down')) {
+          if (answerIndex < project.answers.length - 1) {
+            [project.answers[answerIndex + 1], project.answers[answerIndex]] = [project.answers[answerIndex], project.answers[answerIndex + 1]];
+            save();
+            render();
+            const updatedCard = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${projectId}"]`);
+            if (updatedCard) setCardOpen(updatedCard, true);
+          }
+          return;
+        }
+
+        if (target.classList.contains('a-correct') || target.closest?.('.a-correct')) {
+          project.correctAnswerId = answerId;
+          save();
+          return;
+        }
       }
     }
 
@@ -228,6 +332,18 @@
           project.number = value;
           save();
         }
+        return;
+      }
+
+      if (target.classList.contains('a-text')) {
+        const answerCard = target.closest?.('.answer-card');
+        const answerId = answerCard?.dataset.answerId;
+        if (!answerId) return;
+        if (!Array.isArray(project.answers)) project.answers = [];
+        const answerIndex = project.answers.findIndex((answer) => answer.id === answerId);
+        if (answerIndex === -1) return;
+        project.answers[answerIndex].text = String(target.value || '').trim();
+        save();
         return;
       }
 

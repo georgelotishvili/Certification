@@ -739,7 +739,7 @@ main {
   background: var(--surface-muted);
 }
 .multi-apartment-head {
-  grid-template-columns: auto auto 90px minmax(140px, 1fr) auto auto auto;
+  grid-template-columns: auto auto 90px minmax(140px, 1fr) auto auto auto auto;
 }
 .block-card.open .block-head { border-bottom: 2px solid var(--border-strong); }
 
@@ -851,22 +851,38 @@ main {
 .q-head { position: relative; display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: stretch; background: var(--surface-muted); border-radius: 4px; }
 .q-actions { display: grid; grid-template-rows: auto 1fr; align-items: stretch; justify-items: end; gap: 4px; height: 100%; }
 .q-actions-row { display: inline-grid; grid-auto-flow: column; gap: 6px; }
-.q-code { color: var(--accent); font-weight: 700; font-size: 12px; align-self: end; margin-bottom: 2px; }
+.q-code { color: var(--accent); font-weight: 700; font-size: 12px; align-self: center; }
 .q-order { display: inline-flex; gap: 6px; }
 .q-toggle { width: 32px; height: 32px; border: 2px solid var(--border-soft); background: var(--surface-elevated); cursor: pointer; font-weight: 800; border-radius: 4px; color: var(--text-muted); transition: all 0.2s ease; }
 .q-toggle:hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 6px 16px rgba(47, 91, 168, 0.16); }
 .q-details { padding-top: 0; max-height: 0; overflow: hidden; opacity: 0; transition: opacity .25s ease, padding-top .25s ease; }
 .question-card.open .q-details { padding-top: 4px; max-height: none; opacity: 1; overflow: visible; }
 .q-answers { display: grid; grid-template-columns: 1fr; gap: 8px; }
-.answer-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+.answer-row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; }
 .a-order { display: inline-flex; gap: 6px; }
 .a-correct-wrap { display: inline-flex; gap: 6px; align-items: center; padding: 4px 6px; border: 2px solid rgba(31, 138, 77, 0.35); background: var(--success-soft); user-select: none; border-radius: 4px; }
 .a-correct-wrap:hover { border-color: var(--success); }
 .a-correct-wrap input { width: 16px; height: 16px; }
 .a-correct-wrap span { color: var(--success); font-weight: 700; }
 .a-correct { accent-color: var(--success); }
-.a-text { min-height: 44px; padding: 8px 10px; border: 2px solid rgba(31, 138, 77, 0.35); width: 100%; resize: vertical; background: var(--surface-elevated); color: var(--text-strong); border-radius: 4px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.a-text { min-height: 72px; padding: 8px 10px; border: 2px solid rgba(31, 138, 77, 0.35); width: 100%; resize: vertical; background: var(--surface-elevated); color: var(--text-strong); border-radius: 4px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
 .a-text:focus { outline: none; border-color: var(--success); box-shadow: 0 0 0 3px rgba(31, 138, 77, 0.18); }
+.a-delete { width: 32px; height: 32px; padding: 0; border: 2px solid var(--danger); color: var(--danger); background: var(--surface-elevated); font-weight: 900; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1; border-radius: 4px; }
+.a-delete:hover { background: var(--danger-soft); }
+.answers-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.answer-card {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 2px solid var(--border-soft);
+  background: var(--surface-elevated);
+  box-shadow: 0 8px 20px rgba(29, 39, 68, 0.08);
+}
+.a-head { position: relative; display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: stretch; background: var(--surface-muted); border-radius: 4px; }
+.a-actions { display: grid; grid-template-rows: auto 1fr; align-items: stretch; justify-items: end; gap: 4px; height: 100%; }
+.a-actions-row { display: inline-grid; grid-auto-flow: column; gap: 6px; align-items: center; }
 .q-text { min-height: 72px; padding: 8px 10px; border: 2px solid var(--border-strong); resize: vertical; background: var(--surface-elevated); color: var(--text-strong); border-radius: 4px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
 .q-text:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(47, 91, 168, 0.18); }
 .q-delete { width: 32px; height: 32px; padding: 0; border: 2px solid var(--danger); color: var(--danger); background: var(--surface-elevated); font-weight: 900; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1; border-radius: 4px; }
