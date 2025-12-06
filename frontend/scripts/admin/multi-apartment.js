@@ -62,18 +62,21 @@
         const atTop = index === 0;
         const atBottom = index === state.data.length - 1;
         card.innerHTML = `
-          <div class="block-head">
+          <div class="block-head multi-apartment-head">
             <div class="block-order">
               <button class="i-btn up" ${atTop ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
               <button class="i-btn down" ${atBottom ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
             </div>
             <span class="head-label">პროექტი</span>
             <input class="head-number" type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(project.number ?? '')}" aria-label="პროექტის ნომერი" />
-            <input class="head-name" type="text" placeholder="პროექტის სახელი" value="${escapeHtml(project.name || '')}" aria-label="პროექტის სახელი" />
-            <span class="head-qty-label">რაოდენობა</span>
-            <input class="head-qty" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(typeof project.qty === 'number' ? project.qty : '')}" aria-label="რაოდენობა" />
+            <div class="head-file-group">
+              <button type="button" class="head-file-choose" data-project-id="${escapeHtml(project.id)}">Choose File</button>
+              <input class="head-file-input" type="file" accept=".pdf" data-project-id="${escapeHtml(project.id)}" aria-label="PDF ფაილის ატვირთვა" />
+              <span class="head-file-name">${escapeHtml(project.pdfFile || 'No file chosen')}</span>
+            </div>
             <button class="head-delete" type="button" aria-label="პროექტის წაშლა" title="წაშლა">×</button>
             <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+            <span class="head-count" title="პასუხების რაოდენობა">${escapeHtml(Array.isArray(project.answers) ? project.answers.length : 0)}</span>
           </div>
           <div class="block-questions" aria-hidden="true">
             <!-- პროექტის დეტალები შემდეგ დაემატება -->
@@ -96,7 +99,7 @@
 
     function addProject() {
       const id = generateId();
-      state.data.push({ id, number: nextNumber(), name: '', qty: 0 });
+      state.data.push({ id, number: nextNumber(), pdfFile: null, answers: [] });
       save();
       render();
       const card = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${id}"]`);
@@ -186,17 +189,26 @@
         return;
       }
 
-      if (target.classList.contains('head-name')) {
-        project.name = String(target.value || '').trim();
-        save();
+      if (target.classList.contains('head-file-choose')) {
+        const projectId = target.dataset.projectId;
+        const fileInput = DOM_ELEMENTS.grid?.querySelector?.(`.head-file-input[data-project-id="${projectId}"]`);
+        if (fileInput) fileInput.click();
         return;
       }
 
-      if (target.classList.contains('head-qty')) {
-        const value = parseInt(String(target.value || '').trim(), 10);
-        project.qty = (!Number.isNaN(value) && value >= 0) ? value : 0;
-        save();
-        updateStats();
+      if (target.classList.contains('head-file-input')) {
+        const file = target.files?.[0];
+        if (file) {
+          if (file.type !== 'application/pdf') {
+            showToast('მხოლოდ PDF ფაილებია დაშვებული', 'error');
+            target.value = '';
+            return;
+          }
+          project.pdfFile = file.name;
+          const fileNameSpan = card.querySelector('.head-file-name');
+          if (fileNameSpan) fileNameSpan.textContent = file.name;
+          save();
+        }
       }
     }
 
@@ -219,19 +231,6 @@
         return;
       }
 
-      if (target.classList.contains('head-name')) {
-        project.name = String(target.value || '').trim();
-        save();
-        return;
-      }
-
-      if (target.classList.contains('head-qty')) {
-        const value = parseInt(String(target.value || '').trim(), 10);
-        project.qty = (!Number.isNaN(value) && value >= 0) ? value : 0;
-        save();
-        updateStats();
-        return;
-      }
     }
 
     function init() {
@@ -239,6 +238,7 @@
       DOM_ELEMENTS.blocksCount = document.getElementById('multiApartmentBlocksCount');
       if (!DOM_ELEMENTS.grid) return;
       on(DOM_ELEMENTS.grid, 'click', handleGridClick);
+      on(DOM_ELEMENTS.grid, 'change', handleGridClick);
       on(DOM_ELEMENTS.grid, 'keydown', handleGridKeydown);
       on(DOM_ELEMENTS.grid, 'focusout', handleGridFocusout);
       render();
