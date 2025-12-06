@@ -64,6 +64,44 @@ def resolve_storage_path(storage_path: str) -> Path:
     return candidate
 
 
+def delete_storage_file(storage_path: str, *, remove_empty_parents: bool = True, max_depth: int = 5) -> None:
+    """
+    Delete a stored file (by its relative storage path) and optionally
+    clean up any now-empty parent directories up to the media root.
+
+    All filesystem errors are swallowed – this helper is best-effort only.
+    """
+    try:
+        path = resolve_storage_path(storage_path)
+    except ValueError:
+        # Invalid/legacy path – nothing to do
+        return
+
+    try:
+        if path.exists():
+            path.unlink()
+    except OSError:
+        # If we couldn't delete the file, don't attempt to remove parents
+        return
+
+    if not remove_empty_parents:
+        return
+
+    root = ensure_media_root().resolve()
+    current = path.parent.resolve()
+    depth = 0
+
+    # Walk upwards, removing empty directories, but never beyond media root
+    while current != root and depth < max_depth:
+        try:
+            current.rmdir()
+        except OSError:
+            # Directory not empty or other OS error – stop trying higher
+            break
+        current = current.parent.resolve()
+        depth += 1
+
+
 def ensure_certificate_dir(user_id: int) -> Path:
     """Ensure and return the directory for a specific user's certificate files."""
     root = ensure_media_root()

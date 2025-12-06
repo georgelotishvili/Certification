@@ -12,7 +12,7 @@ from ..models import User, Certificate
 from ..schemas import UserCreate, UserOut, CertificateOut, CertificateCreate, CertificateUpdate
 from ..config import get_settings
 from ..security import hash_code
-from ..services.media_storage import resolve_storage_path, relative_storage_path, certificate_file_path
+from ..services.media_storage import resolve_storage_path, relative_storage_path, certificate_file_path, delete_storage_file
 
 
 router = APIRouter()
@@ -345,12 +345,7 @@ def delete_certificate(
 
     # Delete file from disk if exists
     if cert.file_path:
-        try:
-            path = resolve_storage_path(cert.file_path)
-            if path.exists():
-                path.unlink()
-        except Exception:
-            pass
+        delete_storage_file(cert.file_path)
 
     db.delete(cert)
     db.commit()

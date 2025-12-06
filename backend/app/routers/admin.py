@@ -36,7 +36,7 @@ from ..schemas import (
     AdminStatementOut,
     StatementSeenRequest,
 )
-from ..services.media_storage import resolve_storage_path, ensure_media_root
+from ..services.media_storage import resolve_storage_path, ensure_media_root, delete_storage_file
 
 
 router = APIRouter()
@@ -787,12 +787,8 @@ def delete_result(
     media_records = db.scalars(select(ExamMedia).where(ExamMedia.session_id == session_id)).all()
     for media in media_records:
         if media.storage_path:
-            try:
-                abs_path = resolve_storage_path(media.storage_path)
-                if abs_path.exists():
-                    abs_path.unlink()
-            except Exception:
-                pass  # Continue even if file deletion fails
+            # We keep session directory cleanup logic below, so don't touch parents here
+            delete_storage_file(media.storage_path, remove_empty_parents=False)
 
     # Delete the session directory if it exists and is empty
     try:
@@ -1206,12 +1202,7 @@ def admin_delete_statement(
         return
     # Remove stored attachment if present
     if statement.attachment_path:
-        try:
-            abs_path = resolve_storage_path(statement.attachment_path)
-            if abs_path.exists():
-                abs_path.unlink()
-        except Exception:
-            pass
+        delete_storage_file(statement.attachment_path)
     db.delete(statement)
     db.commit()
     return

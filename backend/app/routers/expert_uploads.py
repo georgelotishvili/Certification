@@ -14,7 +14,7 @@ from ..database import get_db
 from ..config import get_settings
 from ..models import User, Certificate, ExpertUpload
 from ..schemas import ExpertUploadOut
-from ..services.media_storage import ensure_media_root, resolve_storage_path
+from ..services.media_storage import ensure_media_root, resolve_storage_path, delete_storage_file
 
 
 router = APIRouter()
@@ -224,12 +224,7 @@ def delete_file(
     name_attr = f"{file_type}_filename"
     path = getattr(eu, path_attr, None)
     if path:
-        try:
-            abs_path = resolve_storage_path(path)
-            if abs_path.exists():
-                abs_path.unlink()
-        except Exception:
-            pass
+        delete_storage_file(path)
     setattr(eu, path_attr, None)
     setattr(eu, name_attr, None)
     db.commit()
@@ -344,12 +339,7 @@ def admin_delete_upload(
     for path_attr in ("expertise_path", "project_path"):
         path = getattr(eu, path_attr, None)
         if path:
-            try:
-                abs_path = resolve_storage_path(path)
-                if abs_path.exists():
-                    abs_path.unlink()
-            except Exception:
-                pass
+            delete_storage_file(path)
     db.delete(eu)
     db.commit()
     return {"ok": True}

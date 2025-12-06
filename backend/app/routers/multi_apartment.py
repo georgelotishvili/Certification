@@ -24,6 +24,7 @@ from ..services.media_storage import (
     multi_apartment_pdf_path,
     relative_storage_path,
     resolve_storage_path,
+    delete_storage_file,
 )
 from ..routers.admin import _require_admin
 
@@ -274,14 +275,9 @@ async def update_projects(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="ვერ წაშლით პროექტს, რადგან უკვე არსებობს შეფასებები",
                 )
-            # Delete PDF file
+            # Delete PDF file (and its empty directory, if any)
             if project.pdf_path:
-                try:
-                    pdf_path = resolve_storage_path(project.pdf_path)
-                    if pdf_path.exists():
-                        pdf_path.unlink()
-                except Exception:
-                    pass
+                delete_storage_file(project.pdf_path)
             db.delete(project)
     
     try:
@@ -331,12 +327,7 @@ def delete_project(
         )
     
     if project.pdf_path:
-        try:
-            pdf_path = resolve_storage_path(project.pdf_path)
-            if pdf_path.exists():
-                pdf_path.unlink()
-        except Exception:
-            pass
+        delete_storage_file(project.pdf_path)
     
     db.delete(project)
     db.commit()
