@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sections: {
       exam: document.getElementById('exam-settings'),
       registrations: document.getElementById('registrations-section'),
+      multiApartment: document.getElementById('multi-apartment-section'),
     },
     durationInput: document.getElementById('examDuration'),
     saveDurationBtn: document.getElementById('saveExamDuration'),
@@ -112,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'გამოცდა': 'exam',
     'რეგისტრაციები': 'registrations',
     'რეგისტრირებული პირები': 'registrations',
-    'მრავალბინიანი': null,
+    'მრავალბინიანი': 'multiApartment',
     'მრავალფუნქციური': null,
   };
 
@@ -243,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return redirectToHome();
   }
 
-  function wireNavigation({ users }) {
+  function wireNavigation({ users, multiApartment }) {
     const setMenu = (open) => {
       DOM.body?.classList.toggle('menu-open', open);
       if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -274,6 +275,9 @@ document.addEventListener('DOMContentLoaded', () => {
         showSection(targetSection);
         if (targetSection === 'registrations') {
           users?.render?.();
+        }
+        if (targetSection === 'multiApartment') {
+          multiApartment?.render?.();
         }
       });
     });
@@ -348,10 +352,14 @@ document.addEventListener('DOMContentLoaded', () => {
         })
       : { init: () => {}, open: () => {}, close: () => {} };
 
+    const multiApartmentModule = modules.createMultiApartmentModule
+      ? modules.createMultiApartmentModule(moduleContextBase)
+      : { init: () => {}, render: () => {} };
+
     const hasAccess = await ensureAdminAccess();
     if (!hasAccess) return;
 
-    wireNavigation({ users: usersModule });
+    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule });
 
     examSettings.init();
     blocksModule.init();
@@ -359,6 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
     statementsModule.init();
     certificateModule.init();
     usersModule.init();
+    multiApartmentModule.init();
 
     usersModule.refreshUnseenSummary?.();
 

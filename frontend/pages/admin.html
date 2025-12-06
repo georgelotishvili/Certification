@@ -9,6 +9,7 @@
     <script src="../scripts/admin/shared.js" defer></script>
     <script src="../scripts/admin/exam-settings.js" defer></script>
     <script src="../scripts/admin/blocks.js" defer></script>
+    <script src="../scripts/admin/multi-apartment.js" defer></script>
     <script src="../scripts/admin/statements.js" defer></script>
     <script src="../scripts/admin/results.js" defer></script>
     <script src="../scripts/admin/certificate.js" defer></script>
@@ -123,6 +124,40 @@
             </div>
           </div>
           <div id="usersGrid" class="exam-blocks-grid"></div>
+        </div>
+      </section>
+      <section id="multi-apartment-section" class="exam-settings" style="display:none;">
+        <div class="exam-topbar">
+          <div class="duration-group">
+            <label for="multiApartmentDuration" class="duration-label">ხანგრძლივობა (წუთი)</label>
+            <input id="multiApartmentDuration" class="duration-input" type="number" min="1" max="300" value="60" />
+            <button id="saveMultiApartmentDuration" class="duration-save">შენახვა</button>
+          </div>
+          <div id="multiApartmentDurationFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
+          <div class="duration-group">
+            <label for="multiApartmentAdminGatePassword" class="duration-label">ადმინისტრატორის პაროლი</label>
+            <input id="multiApartmentAdminGatePassword" class="duration-input" type="text" placeholder="მაგ: cpig" />
+            <button id="saveMultiApartmentAdminGatePassword" class="duration-save">შენახვა</button>
+          </div>
+          <div id="multiApartmentGatePwdFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
+        </div>
+
+        <div class="exam-content">
+          <div class="exam-blocks-header" aria-label="მრავალბინიანი">
+            <h2 class="exam-blocks-title">მრავალბინიანი</h2>
+            <div class="exam-blocks-stats">
+              <span class="stat stat-blocks"><span class="label">პროექტი</span> <span id="multiApartmentBlocksCount">0</span></span>
+            </div>
+            <input id="multiApartmentSearch" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="მრავალბინიანის ძებნა" />
+          </div>
+
+          <div class="exam-blocks-grid" id="multiApartmentGrid">
+            <button id="addMultiApartmentTile" class="block-tile add-tile" type="button" aria-label="პროექტის დამატება">
+              <span class="add-icon" aria-hidden="true">+</span>
+              <span class="add-text">პროექტის დამატება</span>
+            </button>
+            <!-- აქ შემდგომ დაემატება ინდივიდუალური ბლოკების ბარათები -->
+          </div>
         </div>
       </section>
     </main>
@@ -376,6 +411,6 @@
 
     <script src="../vendor/jspdf.umd.min.js"></script>
     <script src="../vendor/svg2pdf.min.js"></script>
-    <script src="../scripts/admin.js?v=4" defer></script>
+    <script src="../scripts/admin.js?v=5" defer></script>
   </body>
 </html>
