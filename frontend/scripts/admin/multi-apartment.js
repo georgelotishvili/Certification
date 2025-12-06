@@ -392,6 +392,29 @@
       if (projectIndex === -1) return;
       const project = state.data[projectIndex];
 
+      if (target.classList.contains('head-file-choose')) {
+        const projectIdForFile = target.dataset.projectId;
+        const fileInput = DOM_ELEMENTS.grid?.querySelector?.(`.head-file-input[data-project-id="${projectIdForFile}"]`);
+        if (fileInput) {
+          fileInput.click();
+        }
+        return;
+      }
+
+      if (target.classList.contains('head-file-input')) {
+        if (event.type !== 'change') return;
+        const file = target.files?.[0];
+        if (file) {
+          if (file.type !== 'application/pdf') {
+            showToast('მხოლოდ PDF ფაილებია დაშვებული', 'error');
+            target.value = '';
+            return;
+          }
+          void uploadPdf(project, file);
+        }
+        return;
+      }
+
       if (target.classList.contains('up')) {
         if (projectIndex > 0) {
           [state.data[projectIndex - 1], state.data[projectIndex]] = [state.data[projectIndex], state.data[projectIndex - 1]];
