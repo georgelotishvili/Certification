@@ -86,3 +86,17 @@ def ensure_statement_dir(user_id: int, statement_id: int) -> Path:
     return d
 
 
+def ensure_multi_apartment_dir(project_id: int) -> Path:
+    """Ensure and return the directory for a specific multi-apartment project."""
+    root = ensure_media_root()
+    project_dir = root / "multi_apartment" / str(project_id)
+    project_dir.mkdir(parents=True, exist_ok=True)
+    return project_dir
+
+
+def multi_apartment_pdf_path(project_id: int, filename: str) -> Path:
+    """Return an absolute path for storing the project PDF."""
+    safe_name = filename or "project.pdf"
+    return ensure_multi_apartment_dir(project_id) / safe_name
+
+

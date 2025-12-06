@@ -280,3 +280,59 @@ class ExpertUpload(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+
+
+class MultiApartmentProject(Base):
+    __tablename__ = "multi_apartment_projects"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_multi_apartment_code"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    number: Mapped[int] = mapped_column(Integer)
+    code: Mapped[str] = mapped_column(String(32), index=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    pdf_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    pdf_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    answers: Mapped[List["MultiApartmentAnswer"]] = relationship(
+        "MultiApartmentAnswer",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="MultiApartmentAnswer.order_index",
+    )
+    submissions: Mapped[List["MultiApartmentSubmission"]] = relationship(
+        "MultiApartmentSubmission",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+
+class MultiApartmentAnswer(Base):
+    __tablename__ = "multi_apartment_answers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("multi_apartment_projects.id", ondelete="CASCADE"))
+    text: Mapped[str] = mapped_column(Text)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    project: Mapped["MultiApartmentProject"] = relationship("MultiApartmentProject", back_populates="answers")
+
+
+class MultiApartmentSubmission(Base):
+    __tablename__ = "multi_apartment_submissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("multi_apartment_projects.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    selected_answer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("multi_apartment_answers.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    project: Mapped["MultiApartmentProject"] = relationship("MultiApartmentProject", back_populates="submissions")
+    user: Mapped["User"] = relationship("User")

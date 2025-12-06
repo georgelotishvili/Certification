@@ -437,3 +437,39 @@ class ExpertUploadCreate(BaseModel):
 class ExpertUploadUpdate(BaseModel):
     building_function: str | None = None
     cadastral_code: str | None = None
+
+
+# Multi-apartment project evaluation
+class MultiApartmentAnswerPayload(CamelModel):
+    id: str
+    text: str
+
+
+class MultiApartmentProjectPayload(CamelModel):
+    id: str
+    number: int
+    code: str
+    pdfFile: Optional[str] = None
+    answers: List[MultiApartmentAnswerPayload]
+    correctAnswerId: Optional[str] = None
+
+
+class MultiApartmentProjectsResponse(CamelModel):
+    projects: List[MultiApartmentProjectPayload]
+
+
+class MultiApartmentProjectsUpdateRequest(CamelModel):
+    projects: List[MultiApartmentProjectPayload]
+
+
+class PublicMultiApartmentProjectResponse(CamelModel):
+    id: int
+    number: int
+    code: str
+    pdfUrl: Optional[str] = None
+    answers: List[MultiApartmentAnswerPayload]
+
+
+class MultiApartmentEvaluationSubmitRequest(CamelModel):
+    projectCode: str
+    selectedAnswerId: int

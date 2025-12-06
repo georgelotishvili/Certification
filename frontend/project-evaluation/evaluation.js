@@ -1,10 +1,34 @@
 document.addEventListener('DOMContentLoaded', () => {
   const qs = (selector) => document.querySelector(selector);
   
+  const API_BASE = (window.APP_CONFIG && typeof window.APP_CONFIG.API_BASE === 'string')
+    ? window.APP_CONFIG.API_BASE
+    : 'http://127.0.0.1:8000';
+
+  function getCurrentUser() {
+    try {
+      const raw = localStorage.getItem('currentUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function getActorHeaders() {
+    const user = getCurrentUser();
+    const email = user?.email || '';
+    return email ? { 'x-actor-email': email } : {};
+  }
+
   const DOM = {
     cameraSlot: qs('.camera-slot'),
     userInfo: qs('.pe-lb-1'),
     rightDateTime: qs('#rightDateTime'),
+    projectCode: qs('.pe-lb-3'),
+    centerContent: qs('.pe-center-content'),
+    rightMid: qs('.pe-right-mid'),
+    startBtn: qs('.btn.primary'),
+    finishBtn: qs('.btn.finish'),
   };
 
   const state = {
@@ -13,6 +37,10 @@ document.addEventListener('DOMContentLoaded', () => {
     cameraDevices: [],
     cameraDeviceId: null,
     cameraDeviceLabel: '',
+    project: null,
+    selectedAnswerId: null,
+    started: false,
+    finished: false,
   };
 
   function showCameraMessage(message) {
@@ -326,15 +354,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function getCurrentUser() {
-    try {
-      const raw = localStorage.getItem('currentUser');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  }
-
   function updateUserInfo() {
     if (!DOM.userInfo) return;
     const user = getCurrentUser();
@@ -342,6 +361,150 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.userInfo.textContent = `${user.firstName} ${user.lastName} — ${user.code}`;
     } else {
       DOM.userInfo.textContent = '';
+    }
+  }
+
+  function getProjectCodeFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('code') || params.get('projectCode') || '';
+  }
+
+  async function loadProject(code) {
+    if (!code) {
+      showError('პროექტის კოდი არ არის მითითებული');
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE}/public/multi-apartment/projects/${encodeURIComponent(code)}`, {
+        headers: { 'Cache-Control': 'no-cache', ...getActorHeaders() },
+      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          showError('პროექტი ვერ მოიძებნა');
+        } else {
+          showError('პროექტის ჩატვირთვა ვერ მოხერხდა');
+        }
+        return;
+      }
+      const project = await response.json();
+      state.project = project;
+      renderProject();
+    } catch (err) {
+      console.error('Failed to load project', err);
+      showError('პროექტის ჩატვირთვა ვერ მოხერხდა');
+    }
+  }
+
+  function showError(message) {
+    if (DOM.centerContent) {
+      DOM.centerContent.innerHTML = `<div style="padding: 20px; text-align: center; color: #d32f2f;">${message}</div>`;
+    }
+  }
+
+  function renderProject() {
+    if (!state.project) return;
+
+    // Update project code display
+    if (DOM.projectCode) {
+      DOM.projectCode.textContent = `პროექტის კოდი - ${state.project.code}`;
+    }
+
+    // Render PDF in center
+    if (DOM.centerContent && state.project.pdfUrl) {
+      const pdfUrl = state.project.pdfUrl.startsWith('http')
+        ? state.project.pdfUrl
+        : `${API_BASE}${state.project.pdfUrl}`;
+      DOM.centerContent.innerHTML = `
+        <iframe 
+          src="${pdfUrl}" 
+          style="width: 100%; height: 100%; border: none;"
+          title="პროექტის PDF"
+        ></iframe>
+      `;
+    } else if (DOM.centerContent) {
+      DOM.centerContent.innerHTML = '<div style="padding: 20px; text-align: center;">PDF ფაილი არ არის ხელმისაწვდომი</div>';
+    }
+
+    // Render answers in right column
+    if (DOM.rightMid && Array.isArray(state.project.answers)) {
+      const answersHtml = state.project.answers.map((answer, index) => `
+        <div class="answer-option" data-answer-id="${answer.id}" style="
+          padding: 10px;
+          margin: 5px 0;
+          border: 2px solid #ccc;
+          border-radius: 4px;
+          cursor: pointer;
+          background: ${state.selectedAnswerId === String(answer.id) ? '#e3f2fd' : '#fff'};
+        ">
+          <strong>${index + 1}.</strong> ${escapeHtml(answer.text)}
+        </div>
+      `).join('');
+      DOM.rightMid.innerHTML = `
+        <div style="padding: 10px;">
+          <h3 style="margin-top: 0;">პასუხები:</h3>
+          ${answersHtml}
+        </div>
+      `;
+
+      // Add click handlers
+      DOM.rightMid.querySelectorAll('.answer-option').forEach((el) => {
+        el.addEventListener('click', () => {
+          const answerId = el.dataset.answerId;
+          if (answerId) {
+            state.selectedAnswerId = answerId;
+            renderProject();
+          }
+        });
+      });
+    }
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  async function submitEvaluation() {
+    if (!state.project || !state.selectedAnswerId) {
+      alert('გთხოვთ აირჩიოთ პასუხი');
+      return;
+    }
+
+    if (state.finished) {
+      alert('შეფასება უკვე გაგზავნილია');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/public/multi-apartment/evaluations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getActorHeaders(),
+        },
+        body: JSON.stringify({
+          projectCode: state.project.code,
+          selectedAnswerId: parseInt(state.selectedAnswerId, 10),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Evaluation submission failed', errorText);
+        alert('შეფასების გაგზავნა ვერ მოხერხდა');
+        return;
+      }
+
+      state.finished = true;
+      if (DOM.finishBtn) {
+        DOM.finishBtn.disabled = true;
+        DOM.finishBtn.textContent = 'გაგზავნილია';
+      }
+      alert('შეფასება წარმატებით გაიგზავნა');
+    } catch (err) {
+      console.error('Failed to submit evaluation', err);
+      alert('შეფასების გაგზავნა ვერ მოხერხდა');
     }
   }
 
@@ -384,6 +547,30 @@ document.addEventListener('DOMContentLoaded', () => {
       navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
     } else if (navigator.mediaDevices) {
       navigator.mediaDevices.ondevicechange = handleDeviceChange;
+    }
+
+    // Load project
+    const projectCode = getProjectCodeFromURL();
+    if (projectCode) {
+      await loadProject(projectCode);
+    } else {
+      showError('პროექტის კოდი არ არის მითითებული. გთხოვთ გამოიყენოთ ?code=XXX URL პარამეტრი');
+    }
+
+    // Button handlers
+    if (DOM.startBtn) {
+      DOM.startBtn.addEventListener('click', () => {
+        state.started = true;
+        if (DOM.startBtn) DOM.startBtn.disabled = true;
+        if (DOM.finishBtn) DOM.finishBtn.disabled = false;
+      });
+    }
+
+    if (DOM.finishBtn) {
+      DOM.finishBtn.disabled = true;
+      DOM.finishBtn.addEventListener('click', () => {
+        void submitEvaluation();
+      });
     }
 
     // Cleanup on page unload

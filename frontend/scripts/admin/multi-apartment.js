@@ -11,10 +11,48 @@
       getActorHeaders,
     } = context;
 
-    const state = { data: [], saveTimer: null, pendingNotify: false };
+    const state = { data: [], saveTimer: null, pendingNotify: false, loading: false, initialized: false, pendingSave: false };
 
     const generateId = () => `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const generateProjectCode = () => String(Math.floor(10000 + Math.random() * 90000));
+
+    async function fetchProjectsFromServer() {
+      const response = await fetch(`${API_BASE}/admin/multi-apartment/projects`, {
+        headers: { ...getAdminHeaders(), ...getActorHeaders() },
+      });
+      if (!response.ok) {
+        await handleAdminErrorResponse(response, 'პროექტების ჩატვირთვა ვერ მოხერხდა', showToast);
+        throw new Error('handled');
+      }
+      return await response.json();
+    }
+
+    function migrateProjects(data) {
+      return (Array.isArray(data?.projects) ? data.projects : []).map((project) => {
+        if (!project || typeof project !== 'object') return project;
+        const projectId = project?.id != null ? String(project.id) : generateId();
+        const answers = Array.isArray(project.answers) ? project.answers : [];
+        const migratedAnswers = answers.map((answer) => {
+          if (!answer || typeof answer !== 'object') {
+            return { id: generateId(), text: String(answer || '') };
+          }
+          return {
+            ...answer,
+            id: answer.id != null ? String(answer.id) : generateId(),
+            text: String(answer.text || ''),
+          };
+        });
+        return {
+          ...project,
+          id: projectId,
+          number: Number(project.number) || 1,
+          code: String(project.code || generateProjectCode()),
+          pdfFile: project.pdfFile || null,
+          answers: migratedAnswers,
+          correctAnswerId: project.correctAnswerId != null ? String(project.correctAnswerId) : null,
+        };
+      });
+    }
 
     let DOM_ELEMENTS = {
       grid: null,
@@ -138,24 +176,105 @@
 
     function addProject() {
       const id = generateId();
-      state.data.push({ id, number: nextNumber(), pdfFile: null, answers: [], correctAnswerId: null, code: generateProjectCode() });
-      save();
+      const newProject = { 
+        id, 
+        number: nextNumber(), 
+        pdfFile: null, 
+        answers: [], // Start with empty answers array - user will add answers manually
+        correctAnswerId: null, // Don't mark any answer as correct by default
+        code: generateProjectCode() 
+      };
+      console.log('addProject: adding project', newProject);
+      console.log('addProject: state.data before push:', state.data.length);
+      state.data.push(newProject);
+      console.log('addProject: state.data after push:', state.data.length, state.data);
+      save({ notify: true });
       render();
       const card = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${id}"]`);
-      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (card) {
+        setCardOpen(card, false); // Add project in closed state
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
 
     function save(options = {}) {
+      console.log('save() called, state.data length:', state.data.length);
       state.pendingNotify = state.pendingNotify || !!options.notify;
       clearTimeout(state.saveTimer);
       state.saveTimer = setTimeout(() => {
         state.saveTimer = null;
-        // TODO: შემდეგ დაემატება სერვერზე შენახვა
+        console.log('save() timeout fired, calling persistProjects, state.data length:', state.data.length);
+        void persistProjects();
+      }, 400);
+    }
+
+    async function persistProjects() {
+      const payload = {
+        projects: state.data.map((p) => {
+          const projectPayload = {
+            id: String(p.id || generateId()),
+            number: Number(p.number) || 1,
+            code: String(p.code || generateProjectCode()).trim(),
+            answers: (Array.isArray(p.answers) ? p.answers : []).map((a) => ({
+              id: String(a.id || generateId()),
+              text: String(a.text || '').trim(),
+            })),
+          };
+          if (p.correctAnswerId != null) {
+            projectPayload.correctAnswerId = String(p.correctAnswerId);
+          }
+          if (p.pdfFile != null) {
+            projectPayload.pdfFile = String(p.pdfFile);
+          }
+          return projectPayload;
+        }),
+      };
+      
+      try {
+        const response = await fetch(`${API_BASE}/admin/multi-apartment/projects`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
+          body: JSON.stringify(payload),
+        });
+        
+        if (!response.ok) {
+          await handleAdminErrorResponse(response, 'პროექტების შენახვა ვერ მოხერხდა', showToast);
+          return;
+        }
+        const data = await response.json();
+        state.data = migrateProjects(data);
+        render();
+        updateStats();
         if (state.pendingNotify) {
-          state.pendingNotify = false;
           showToast('შენახულია', 'success');
         }
-      }, 400);
+      } catch (err) {
+        console.error('Failed to save projects', err);
+        showToast('პროექტების შენახვა ვერ მოხერხდა', 'error');
+      } finally {
+        state.pendingNotify = false;
+      }
+    }
+
+    async function loadInitialProjects() {
+      if (DOM_ELEMENTS.grid) {
+        DOM_ELEMENTS.grid.innerHTML = '<div class="blocks-loading">იტვირთება...</div>';
+      }
+      try {
+        const payload = await fetchProjectsFromServer();
+        console.log('loadInitialProjects: received payload', payload);
+        state.data = migrateProjects(payload);
+        console.log('loadInitialProjects: migrated data', state.data);
+      } catch (err) {
+        console.error('Failed to load projects', err);
+        if ((err?.message || '') !== 'handled') {
+          showToast('პროექტების ჩატვირთვა ვერ მოხერხდა', 'error');
+          state.data = migrateProjects({ projects: [] });
+        }
+      }
+      state.initialized = true;
+      render();
+      updateStats();
     }
 
     function handleGridClick(event) {
@@ -194,9 +313,7 @@
 
       if (target.classList.contains('head-delete')) {
         if (confirm('ნამდვილად გსურთ პროექტის წაშლა?')) {
-          state.data.splice(projectIndex, 1);
-          save();
-          render();
+          void deleteProject(project);
         }
         return;
       }
@@ -307,10 +424,7 @@
             target.value = '';
             return;
           }
-          project.pdfFile = file.name;
-          const fileNameSpan = card.querySelector('.head-file-name');
-          if (fileNameSpan) fileNameSpan.textContent = file.name;
-          save();
+          void uploadPdf(project, file);
         }
         return;
       }
@@ -394,11 +508,72 @@
         if (!Array.isArray(project.answers)) project.answers = [];
         const answerIndex = project.answers.findIndex((answer) => answer.id === answerId);
         if (answerIndex === -1) return;
-        project.answers[answerIndex].text = String(target.value || '').trim();
+        const newText = String(target.value || '').trim();
+        console.log('Saving answer text:', { answerId, answerIndex, newText, length: newText.length });
+        project.answers[answerIndex].text = newText;
+        console.log('Answer after save:', project.answers[answerIndex]);
         save();
         return;
       }
 
+    }
+
+    async function deleteProject(project) {
+      const projectId = project.id;
+      try {
+        const projectIdInt = parseInt(projectId, 10);
+        if (Number.isNaN(projectIdInt)) {
+          // Local project, not saved yet
+          state.data = state.data.filter((p) => p.id !== projectId);
+          save();
+          render();
+          return;
+        }
+        const response = await fetch(`${API_BASE}/admin/multi-apartment/projects/${projectIdInt}`, {
+          method: 'DELETE',
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+        });
+        if (!response.ok) {
+          await handleAdminErrorResponse(response, 'პროექტის წაშლა ვერ მოხერხდა', showToast);
+          return;
+        }
+        state.data = state.data.filter((p) => p.id !== projectId);
+        render();
+        updateStats();
+        showToast('პროექტი წაიშალა', 'success');
+      } catch (err) {
+        console.error('Failed to delete project', err);
+        showToast('პროექტის წაშლა ვერ მოხერხდა', 'error');
+      }
+    }
+
+    async function uploadPdf(project, file) {
+      const projectId = project.id;
+      try {
+        const projectIdInt = parseInt(projectId, 10);
+        if (Number.isNaN(projectIdInt)) {
+          showToast('ჯერ შეინახეთ პროექტი', 'error');
+          return;
+        }
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await fetch(`${API_BASE}/admin/multi-apartment/projects/${projectIdInt}/pdf`, {
+          method: 'POST',
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+          body: formData,
+        });
+        if (!response.ok) {
+          await handleAdminErrorResponse(response, 'PDF ატვირთვა ვერ მოხერხდა', showToast);
+          return;
+        }
+        project.pdfFile = file.name;
+        const fileNameSpan = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${projectId}"] .head-file-name`);
+        if (fileNameSpan) fileNameSpan.textContent = file.name;
+        showToast('PDF ატვირთულია', 'success');
+      } catch (err) {
+        console.error('Failed to upload PDF', err);
+        showToast('PDF ატვირთვა ვერ მოხერხდა', 'error');
+      }
     }
 
     function init() {
@@ -409,7 +584,7 @@
       on(DOM_ELEMENTS.grid, 'change', handleGridClick);
       on(DOM_ELEMENTS.grid, 'keydown', handleGridKeydown);
       on(DOM_ELEMENTS.grid, 'focusout', handleGridFocusout);
-      render();
+      void loadInitialProjects();
     }
 
     return {

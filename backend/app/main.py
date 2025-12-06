@@ -15,6 +15,7 @@ try:
     from backend.scripts.migrate_certificate_file_cols import run as run_certificate_file_cols_migration
     from backend.scripts.migrate_statements_attachment import run as run_statements_attachment_migration
     from backend.scripts.migrate_exam_permission import run as run_exam_permission_migration
+    from backend.scripts.migrate_multi_apartment import run as run_multi_apartment_migration
 except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.main:app`
     from scripts.migrate_results_cols import run as run_results_migration  # type: ignore
     from scripts.migrate_media_table import run as run_media_migration  # type: ignore
@@ -22,6 +23,7 @@ except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.
     from scripts.migrate_certificate_file_cols import run as run_certificate_file_cols_migration  # type: ignore
     from scripts.migrate_statements_attachment import run as run_statements_attachment_migration  # type: ignore
     from scripts.migrate_exam_permission import run as run_exam_permission_migration  # type: ignore
+    from scripts.migrate_multi_apartment import run as run_multi_apartment_migration  # type: ignore
 
 
 def create_app() -> FastAPI:
@@ -29,7 +31,7 @@ def create_app() -> FastAPI:
 
     Base.metadata.create_all(bind=engine)
     # Ensure additive columns for results exist (idempotent)
-    for migrate in (run_results_migration, run_media_migration, run_certificate_score_migration, run_certificate_file_cols_migration, run_statements_attachment_migration, run_exam_permission_migration):
+    for migrate in (run_results_migration, run_media_migration, run_certificate_score_migration, run_certificate_file_cols_migration, run_statements_attachment_migration, run_exam_permission_migration, run_multi_apartment_migration):
         try:
             migrate()
         except Exception:
@@ -47,7 +49,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads
+    from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, multi_apartment
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
@@ -57,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(registry.router, prefix="/certified-persons", tags=["registry"])
     app.include_router(reviews.router, prefix="/reviews", tags=["reviews"])
     app.include_router(expert_uploads.router, prefix="/expert-uploads", tags=["expert-uploads"])
+    app.include_router(multi_apartment.router, tags=["multi-apartment"])
 
     return app
 
