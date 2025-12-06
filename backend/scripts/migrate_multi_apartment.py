@@ -66,6 +66,18 @@ def run() -> None:
                     )
                 """)
                 statements.append("CREATE INDEX idx_multi_apartment_submissions_user ON multi_apartment_submissions(user_id)")
+
+            # Create multi_apartment_settings table
+            if "multi_apartment_settings" not in tables:
+                statements.append("""
+                    CREATE TABLE multi_apartment_settings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        duration_minutes INTEGER NOT NULL DEFAULT 60,
+                        gate_password VARCHAR(64) NOT NULL DEFAULT 'cpig',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
             
             for sql in statements:
                 connection.execute(text(sql))

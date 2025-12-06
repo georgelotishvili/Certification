@@ -11,7 +11,16 @@
       getActorHeaders,
     } = context;
 
-    const state = { data: [], saveTimer: null, pendingNotify: false, loading: false, initialized: false, pendingSave: false };
+    const state = {
+      data: [],
+      saveTimer: null,
+      pendingNotify: false,
+      loading: false,
+      initialized: false,
+      pendingSave: false,
+      settings: null,
+      settingsTimer: null,
+    };
 
     const generateId = () => `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const generateProjectCode = () => String(Math.floor(10000 + Math.random() * 90000));
@@ -24,6 +33,14 @@
         await handleAdminErrorResponse(response, 'პროექტების ჩატვირთვა ვერ მოხერხდა', showToast);
         throw new Error('handled');
       }
+      return await response.json();
+    }
+
+    async function fetchSettingsFromServer() {
+      const response = await fetch(`${API_BASE}/admin/multi-apartment/settings`, {
+        headers: { ...getAdminHeaders(), ...getActorHeaders() },
+      });
+      if (!response.ok) throw new Error('settings failed');
       return await response.json();
     }
 
@@ -58,6 +75,17 @@
       grid: null,
       blocksCount: null,
     };
+
+    function populateSettingsFields() {
+      if (!state.settings) return;
+      const durationValue = Number(state.settings.durationMinutes || 0);
+      if (DOM.multiApartmentDurationInput) {
+        DOM.multiApartmentDurationInput.value = durationValue ? String(durationValue) : '';
+      }
+      if (DOM.multiApartmentGatePwdInput) {
+        DOM.multiApartmentGatePwdInput.value = state.settings.gatePassword || '';
+      }
+    }
 
     function nextNumber() {
       if (state.data.length === 0) return 1;
@@ -208,6 +236,39 @@
       }, 400);
     }
 
+    async function persistSettings(patch = {}, { notifyDuration = false, notifyPassword = false } = {}) {
+      const current = state.settings || {};
+      const payload = {
+        durationMinutes: patch.durationMinutes ?? current.durationMinutes ?? 60,
+        gatePassword: patch.gatePassword ?? current.gatePassword ?? '',
+      };
+      try {
+        const response = await fetch(`${API_BASE}/admin/multi-apartment/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error('failed');
+        const data = await response.json();
+        state.settings = data;
+        populateSettingsFields();
+        if (notifyDuration && DOM.multiApartmentDurationFlash) {
+          const value = Number(state.settings.durationMinutes || 0);
+          DOM.multiApartmentDurationFlash.textContent = `ხანგრძლივობა შეიცვალა: ${value} წუთი`;
+          DOM.multiApartmentDurationFlash.style.display = 'block';
+          setTimeout(() => {
+            if (DOM.multiApartmentDurationFlash) DOM.multiApartmentDurationFlash.style.display = 'none';
+          }, 3000);
+        }
+        if (notifyPassword) {
+          showToast('მრავალბინიანის ადმინისტრატორის პაროლი შენახულია');
+        }
+      } catch (err) {
+        console.error('Failed to save multi-apartment settings', err);
+        showToast('მრავალბინიანის პარამეტრების შენახვა ვერ მოხერხდა', 'error');
+      }
+    }
+
     async function persistProjects() {
       const payload = {
         projects: state.data.map((p) => {
@@ -275,6 +336,44 @@
       state.initialized = true;
       render();
       updateStats();
+    }
+
+    async function loadSettings() {
+      try {
+        state.settings = await fetchSettingsFromServer();
+      } catch (err) {
+        console.error('Failed to load multi-apartment settings', err);
+        showToast('მრავალბინიანის პარამეტრების ჩატვირთვა ვერ მოხერხდა', 'error');
+        state.settings = { durationMinutes: 60, gatePassword: '' };
+      }
+      populateSettingsFields();
+    }
+
+    function saveDuration() {
+      const value = Number(DOM.multiApartmentDurationInput?.value || 0);
+      if (!value || value < 1) {
+        alert('გთხოვთ შეიყვანოთ სწორი დრო (მინიმუმ 1 წუთი)');
+        return;
+      }
+      void persistSettings({ durationMinutes: value }, { notifyDuration: true });
+    }
+
+    function saveGatePassword() {
+      const value = String(DOM.multiApartmentGatePwdInput?.value || '').trim();
+      if (!value) {
+        showToast('გთხოვთ შეიყვანოთ პაროლი', 'error');
+        return;
+      }
+      void persistSettings({ gatePassword: value }, { notifyPassword: true });
+    }
+
+    function handleGatePwdInput() {
+      clearTimeout(state.settingsTimer);
+      state.settingsTimer = setTimeout(() => {
+        const value = String(DOM.multiApartmentGatePwdInput?.value || '').trim();
+        if (!value) return;
+        void persistSettings({ gatePassword: value });
+      }, 600);
     }
 
     function handleGridClick(event) {
@@ -580,10 +679,17 @@
       DOM_ELEMENTS.grid = document.getElementById('multiApartmentGrid');
       DOM_ELEMENTS.blocksCount = document.getElementById('multiApartmentBlocksCount');
       if (!DOM_ELEMENTS.grid) return;
+
+      // Wire settings controls
+      on(DOM.multiApartmentDurationSaveBtn, 'click', saveDuration);
+      on(DOM.multiApartmentGatePwdSaveBtn, 'click', saveGatePassword);
+      on(DOM.multiApartmentGatePwdInput, 'input', handleGatePwdInput);
+
       on(DOM_ELEMENTS.grid, 'click', handleGridClick);
       on(DOM_ELEMENTS.grid, 'change', handleGridClick);
       on(DOM_ELEMENTS.grid, 'keydown', handleGridKeydown);
       on(DOM_ELEMENTS.grid, 'focusout', handleGridFocusout);
+      void loadSettings();
       void loadInitialProjects();
     }
 

@@ -9,7 +9,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import MultiApartmentProject, MultiApartmentAnswer, MultiApartmentSubmission, User
+from ..models import MultiApartmentProject, MultiApartmentAnswer, MultiApartmentSubmission, MultiApartmentSettings, User
 from ..schemas import (
     MultiApartmentProjectsResponse,
     MultiApartmentProjectsUpdateRequest,
@@ -17,6 +17,8 @@ from ..schemas import (
     MultiApartmentAnswerPayload,
     PublicMultiApartmentProjectResponse,
     MultiApartmentEvaluationSubmitRequest,
+    MultiApartmentSettingsResponse,
+    MultiApartmentSettingsUpdateRequest,
 )
 from ..services.media_storage import (
     multi_apartment_pdf_path,
@@ -47,7 +49,50 @@ def _gen_unique_code(db: Session) -> str:
             return candidate
 
 
+def _get_or_create_settings(db: Session) -> MultiApartmentSettings:
+    """Return existing multi-apartment settings or create with defaults."""
+    settings = db.scalar(select(MultiApartmentSettings).limit(1))
+    if settings:
+        return settings
+
+    settings = MultiApartmentSettings(duration_minutes=60, gate_password="cpig")
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
 # Admin endpoints
+@router.get("/admin/multi-apartment/settings", response_model=MultiApartmentSettingsResponse)
+def get_multi_apartment_settings(
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    settings = _get_or_create_settings(db)
+    return settings
+
+
+@router.put("/admin/multi-apartment/settings", response_model=MultiApartmentSettingsResponse)
+def update_multi_apartment_settings(
+    payload: MultiApartmentSettingsUpdateRequest,
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, x_actor_email)
+    settings = _get_or_create_settings(db)
+
+    if payload.duration_minutes is not None:
+        settings.duration_minutes = max(1, payload.duration_minutes)
+    if payload.gate_password is not None:
+        settings.gate_password = (payload.gate_password or "").strip()
+
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
 @router.get("/admin/multi-apartment/projects", response_model=MultiApartmentProjectsResponse)
 def get_projects_endpoint(
     x_actor_email: str | None = Header(None, alias="x-actor-email"),

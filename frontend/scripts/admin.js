@@ -31,6 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
     durationFlash: document.getElementById('durationFlash'),
     gatePwdInput: document.getElementById('adminGatePassword'),
     gatePwdSaveBtn: document.getElementById('saveAdminGatePassword'),
+    // Multi-apartment settings
+    multiApartmentDurationInput: document.getElementById('multiApartmentDuration'),
+    multiApartmentDurationSaveBtn: document.getElementById('saveMultiApartmentDuration'),
+    multiApartmentDurationFlash: document.getElementById('multiApartmentDurationFlash'),
+    multiApartmentGatePwdInput: document.getElementById('multiApartmentAdminGatePassword'),
+    multiApartmentGatePwdSaveBtn: document.getElementById('saveMultiApartmentAdminGatePassword'),
+    multiApartmentGatePwdFlash: document.getElementById('multiApartmentGatePwdFlash'),
     blocksGrid: document.querySelector('.exam-blocks-grid'),
     blocksCount: document.getElementById('adminBlocksCount'),
     questionsCount: document.getElementById('adminQuestionsCount'),

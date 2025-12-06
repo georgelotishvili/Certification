@@ -45,6 +45,17 @@ class ExamSettingsUpdateRequest(CamelModel):
     gate_password: Optional[str] = None
 
 
+class MultiApartmentSettingsResponse(CamelModel):
+    model_config = ConfigDict(from_attributes=True)
+    duration_minutes: int
+    gate_password: str
+
+
+class MultiApartmentSettingsUpdateRequest(CamelModel):
+    duration_minutes: Optional[int] = None
+    gate_password: Optional[str] = None
+
+
 class AdminAnswerPayload(CamelModel):
     id: str
     text: str

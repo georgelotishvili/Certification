@@ -336,3 +336,13 @@ class MultiApartmentSubmission(Base):
 
     project: Mapped["MultiApartmentProject"] = relationship("MultiApartmentProject", back_populates="submissions")
     user: Mapped["User"] = relationship("User")
+
+
+class MultiApartmentSettings(Base):
+    __tablename__ = "multi_apartment_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    gate_password: Mapped[str] = mapped_column(String(64), default="cpig")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
