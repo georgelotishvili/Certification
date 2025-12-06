@@ -218,6 +218,58 @@
         if (updatedCard) setCardOpen(updatedCard, true);
         return;
       }
+
+      const answerCard = target.closest?.('.answer-card');
+      if (answerCard) {
+        const answerId = answerCard.dataset.answerId;
+        if (!answerId) return;
+        if (!Array.isArray(project.answers)) project.answers = [];
+        const answerIndex = project.answers.findIndex((answer) => answer.id === answerId);
+        if (answerIndex === -1) return;
+
+        if (target.classList.contains('a-delete')) {
+          if (confirm('ნამდვილად გსურთ პასუხის წაშლა?')) {
+            project.answers.splice(answerIndex, 1);
+            if (project.correctAnswerId === answerId) {
+              project.correctAnswerId = null;
+            }
+            save();
+            updateProjectCount(projectId);
+            render();
+            const updatedCard = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${projectId}"]`);
+            if (updatedCard) setCardOpen(updatedCard, true);
+          }
+          return;
+        }
+
+        if (target.closest?.('.a-up')) {
+          if (answerIndex > 0) {
+            [project.answers[answerIndex - 1], project.answers[answerIndex]] = [project.answers[answerIndex], project.answers[answerIndex - 1]];
+            save();
+            render();
+            const updatedCard = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${projectId}"]`);
+            if (updatedCard) setCardOpen(updatedCard, true);
+          }
+          return;
+        }
+
+        if (target.closest?.('.a-down')) {
+          if (answerIndex < project.answers.length - 1) {
+            [project.answers[answerIndex + 1], project.answers[answerIndex]] = [project.answers[answerIndex], project.answers[answerIndex + 1]];
+            save();
+            render();
+            const updatedCard = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${projectId}"]`);
+            if (updatedCard) setCardOpen(updatedCard, true);
+          }
+          return;
+        }
+
+        if (target.classList.contains('a-correct') || target.closest?.('.a-correct')) {
+          project.correctAnswerId = answerId;
+          save();
+          return;
+        }
+      }
     }
 
     function handleGridKeydown(event) {
