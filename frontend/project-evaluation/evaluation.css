@@ -69,6 +69,7 @@ body {
 .pe-right-mid,
 .pe-right-bottom {
   width: 100%;
+  box-sizing: border-box;       /* სიგანე ითვალისწინებს პადინგს/ბორდერს, მშობელს არ გადასცდება */
   border: 1px solid #000000;
   border-radius: 4px;
 }
@@ -178,10 +179,10 @@ body {
 .pe-center {
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: 5% 80% minmax(0, 1fr); /* ზედა 5%, შუა 80%, ქვედა რაც დარჩება */
+  gap: 5px;                                   /* 5px gap ზედა/შუა/ქვედა ნაწილებს შორის */
   padding: 5px 0;
-  gap: 5px;              /* 5px gap between top, content and bottom */
 }
 
 .pe-center-top,
@@ -190,11 +191,10 @@ body {
   width: 100%;
   border: 1px solid #000000;
   border-radius: 4px;
+  box-sizing: border-box;
 }
 
 .pe-center-top {
-  flex: 0 0 5%;
-  height: 5%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -207,14 +207,7 @@ body {
   font-family: 'DejaVu Sans', sans-serif;
 }
 
-.pe-center-content {
-  flex: 0 0 80%;   /* explicitly 80% of center height */
-  height: 80%;
-}
-
 .pe-center-bottom {
-  flex: 0 1 15%;          /* იდეურად 15%, მაგრამ შეიძლება შემცირდეს, რომ დაეტიოს მშობელში */
-  height: auto;           /* სიმაღლე იგება დარჩენილი სივრციდან */
   display: flex;
   align-items: center;
   justify-content: center;
