@@ -5,8 +5,8 @@ import string
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Path as FPath, UploadFile, File
 from fastapi.responses import FileResponse
-from sqlalchemy import select, func
-from sqlalchemy.orm import Session
+from sqlalchemy import select, func, exists
+from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
 from ..models import MultiApartmentProject, MultiApartmentAnswer, MultiApartmentSubmission, MultiApartmentSettings, User
@@ -403,6 +403,47 @@ def download_pdf(
 
 
 # Public endpoints
+@router.get("/public/multi-apartment/projects/random", response_model=PublicMultiApartmentProjectResponse)
+def get_random_project(
+    db: Session = Depends(get_db),
+):
+    """Get a random multi-apartment project."""
+    # Get all projects that have at least one answer
+    projects = db.scalars(
+        select(MultiApartmentProject)
+        .join(MultiApartmentAnswer, MultiApartmentAnswer.project_id == MultiApartmentProject.id)
+        .distinct()
+        .options(selectinload(MultiApartmentProject.answers))
+    ).all()
+    
+    if not projects:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No projects with answers found"
+        )
+    
+    # Select a random project
+    project = random.choice(projects)
+    
+    answers = sorted(project.answers, key=lambda a: (a.order_index, a.id))
+    pdf_url = (
+        f"/public/multi-apartment/projects/{project.code}/pdf"
+        if project.pdf_path
+        else None
+    )
+    
+    return PublicMultiApartmentProjectResponse(
+        id=project.id,
+        number=project.number,
+        code=project.code,
+        pdfUrl=pdf_url,
+        answers=[
+            MultiApartmentAnswerPayload(id=str(a.id), text=a.text)
+            for a in answers
+        ],
+    )
+
+
 @router.get("/public/multi-apartment/projects/{code}", response_model=PublicMultiApartmentProjectResponse)
 def get_public_project(
     code: str = FPath(...),

@@ -60,13 +60,12 @@ body {
   padding: 5px;
   box-sizing: border-box;
   display: grid;
-  grid-template-rows: 5% 10% minmax(0, 1fr); /* ქვედა ნაწილი იკავებს დარჩენილ სივრცეს */
+  grid-template-rows: 5% minmax(0, 1fr); /* ზედა — თარიღი/დრო, ქვედა — პასუხები */
   gap: 5px;              /* 5px gap მარჯვენა სვეტის შიდა ელემენტებს შორის */
 }
 
 /* Right column internal sections */
 .pe-right-top,
-.pe-right-mid,
 .pe-right-bottom {
   width: 100%;
   box-sizing: border-box;       /* სიგანე ითვალისწინებს პადინგს/ბორდერს, მშობელს არ გადასცდება */

@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     rightDateTime: qs('#rightDateTime'),
     projectCode: qs('.pe-lb-3'),
     centerContent: qs('.pe-center-content'),
-    rightMid: qs('.pe-right-mid'),
+    rightBottom: qs('.pe-right-bottom'),
     startBtn: qs('.btn.primary'),
     finishBtn: qs('.btn.finish'),
   };
@@ -394,6 +394,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function loadRandomProject() {
+    try {
+      console.log('Loading random project...');
+      const response = await fetch(`${API_BASE}/public/multi-apartment/projects/random`, {
+        headers: { 'Cache-Control': 'no-cache', ...getActorHeaders() },
+      });
+      if (!response.ok) {
+        console.error('Response not OK:', response.status, response.statusText);
+        if (response.status === 404) {
+          showError('პროექტი ვერ მოიძებნა');
+        } else {
+          showError('პროექტის ჩატვირთვა ვერ მოხერხდა');
+        }
+        return;
+      }
+      const project = await response.json();
+      console.log('Project loaded:', project);
+      state.project = project;
+      renderProject();
+    } catch (err) {
+      console.error('Failed to load random project', err);
+      showError('პროექტის ჩატვირთვა ვერ მოხერხდა');
+    }
+  }
+
   function showError(message) {
     if (DOM.centerContent) {
       DOM.centerContent.innerHTML = `<div style="padding: 20px; text-align: center; color: #d32f2f;">${message}</div>`;
@@ -401,11 +426,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderProject() {
-    if (!state.project) return;
+    if (!state.project) {
+      console.log('renderProject: No project in state');
+      return;
+    }
+    console.log('renderProject: Rendering project', state.project);
 
     // Update project code display
     if (DOM.projectCode) {
-      DOM.projectCode.textContent = `პროექტის კოდი - ${state.project.code}`;
+      DOM.projectCode.textContent = `პროექტის კოდი - P ${state.project.code}`;
+      console.log('Project code updated:', DOM.projectCode.textContent);
+    } else {
+      console.warn('DOM.projectCode is null');
     }
 
     // Render PDF in center
@@ -424,8 +456,10 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.centerContent.innerHTML = '<div style="padding: 20px; text-align: center;">PDF ფაილი არ არის ხელმისაწვდომი</div>';
     }
 
-    // Render answers in right column
-    if (DOM.rightMid && Array.isArray(state.project.answers)) {
+    // Render answers in right column bottom
+    console.log('DOM.rightBottom:', DOM.rightBottom);
+    console.log('state.project.answers:', state.project.answers);
+    if (DOM.rightBottom && Array.isArray(state.project.answers) && state.project.answers.length > 0) {
       const answersHtml = state.project.answers.map((answer, index) => `
         <div class="answer-option" data-answer-id="${answer.id}" style="
           padding: 10px;
@@ -438,7 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <strong>${index + 1}.</strong> ${escapeHtml(answer.text)}
         </div>
       `).join('');
-      DOM.rightMid.innerHTML = `
+      DOM.rightBottom.innerHTML = `
         <div style="padding: 10px;">
           <h3 style="margin-top: 0;">პასუხები:</h3>
           ${answersHtml}
@@ -446,7 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
 
       // Add click handlers
-      DOM.rightMid.querySelectorAll('.answer-option').forEach((el) => {
+      DOM.rightBottom.querySelectorAll('.answer-option').forEach((el) => {
         el.addEventListener('click', () => {
           const answerId = el.dataset.answerId;
           if (answerId) {
@@ -454,6 +488,14 @@ document.addEventListener('DOMContentLoaded', () => {
             renderProject();
           }
         });
+      });
+      console.log('Answers rendered successfully');
+    } else {
+      console.warn('Cannot render answers:', {
+        rightBottom: !!DOM.rightBottom,
+        answers: state.project.answers,
+        isArray: Array.isArray(state.project.answers),
+        length: state.project.answers?.length
       });
     }
   }
@@ -548,19 +590,17 @@ document.addEventListener('DOMContentLoaded', () => {
       navigator.mediaDevices.ondevicechange = handleDeviceChange;
     }
 
-    // Load project
-    const projectCode = getProjectCodeFromURL();
-    if (projectCode) {
-      await loadProject(projectCode);
-    }
-
     // Button handlers
     if (DOM.startBtn) {
-      DOM.startBtn.addEventListener('click', () => {
+      DOM.startBtn.addEventListener('click', async () => {
+        console.log('Start button clicked');
         state.started = true;
         if (DOM.startBtn) DOM.startBtn.disabled = true;
         if (DOM.finishBtn) DOM.finishBtn.disabled = false;
+        await loadRandomProject();
       });
+    } else {
+      console.warn('DOM.startBtn is null');
     }
 
     if (DOM.finishBtn) {
