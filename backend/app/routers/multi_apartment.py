@@ -395,11 +395,16 @@ def download_pdf(
     if not pdf_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file missing")
     
-    return FileResponse(
+    # Return PDF as inline so it can be displayed inside an <iframe>
+    response = FileResponse(
         pdf_path,
         media_type="application/pdf",
         filename=project.pdf_filename or pdf_path.name,
     )
+    response.headers["Content-Disposition"] = (
+        f'inline; filename="{project.pdf_filename or pdf_path.name}"'
+    )
+    return response
 
 
 # Public endpoints
@@ -408,22 +413,21 @@ def get_random_project(
     db: Session = Depends(get_db),
 ):
     """Get a random multi-apartment project."""
-    # Get all projects that have at least one answer
+    # Load all projects (with answers eagerly loaded)
     projects = db.scalars(
-        select(MultiApartmentProject)
-        .join(MultiApartmentAnswer, MultiApartmentAnswer.project_id == MultiApartmentProject.id)
-        .distinct()
-        .options(selectinload(MultiApartmentProject.answers))
+        select(MultiApartmentProject).options(selectinload(MultiApartmentProject.answers))
     ).all()
-    
+
     if not projects:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No projects with answers found"
+            detail="No projects configured"
         )
-    
-    # Select a random project
-    project = random.choice(projects)
+
+    # Prefer projects that actually have answers; if none have answers,
+    # fall back to any existing project so that at least the PDF/code are shown.
+    projects_with_answers = [p for p in projects if p.answers]
+    project = random.choice(projects_with_answers or projects)
     
     answers = sorted(project.answers, key=lambda a: (a.order_index, a.id))
     pdf_url = (
@@ -493,10 +497,13 @@ def get_public_pdf(
     if not pdf_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file missing")
     
+    # Return PDF as inline so it can be displayed inside an <iframe> without triggering download
     return FileResponse(
         pdf_path,
         media_type="application/pdf",
-        filename=project.pdf_filename or pdf_path.name,
+        headers={
+            "Content-Disposition": f'inline; filename="{project.pdf_filename or pdf_path.name}"',
+        },
     )
 
 
