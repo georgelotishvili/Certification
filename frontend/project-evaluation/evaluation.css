@@ -47,7 +47,6 @@ body {
   width: 60%;
   height: 100%;
   background: #957373;
-  border: 1px solid #000000;
   box-sizing: border-box;
 }
 
@@ -59,8 +58,8 @@ body {
   border: 1px solid #000000;
   box-sizing: border-box;
   display: grid;
-  grid-template-rows: 5% 10% 85%;
-  gap: 0;
+  grid-template-rows: 5% 10% minmax(0, 1fr); /* ქვედა ნაწილი იკავებს დარჩენილ სივრცეს */
+  gap: 5px;              /* 5px gap მარჯვენა სვეტის შიდა ელემენტებს შორის */
 }
 
 /* Right column internal sections */
@@ -68,6 +67,12 @@ body {
 .pe-right-mid,
 .pe-right-bottom {
   width: 100%;
+}
+
+/* მარჯვენა ქვედა ელემენტი ავსებს მხოლოდ თავის ქვედა ზონას და შიგნით სქროლდება, მშობელს აღარ სცდება */
+.pe-right-bottom {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .pe-right-top {
@@ -126,8 +131,8 @@ body {
   width: 100%;
   flex: 1 1 auto;                    /* fill remaining height */
   display: grid;
-  grid-template-rows: 5% 10% 5% 80%; /* heights inside bottom area */
-  gap: 0;                            /* no inner gap */
+  grid-template-rows: minmax(5%, auto) minmax(10%, auto) minmax(5%, auto) 1fr; /* top 3 keep min height, bottom fills remaining */
+  gap: 5px;                          /* 5px gap between elements */
 }
 
 .pe-left-bottom > div {
@@ -164,6 +169,11 @@ body {
   overflow-y: auto;
 }
 
+/* ქვედა კონტეინერს (რომელშიც არის 4 ელემენტი) ბორდერი არ აქვს, შიგნით 4 ელემენტს აქვს */
+.pe-layout .pe-left-bottom {
+  border: none !important;
+}
+
 /* Force 1px black border on all elements in this page */
 .pe-layout,
 .pe-layout * {
@@ -177,6 +187,8 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
+  padding: 5px 0;
+  gap: 5px;              /* 5px gap between top, content and bottom */
 }
 
 .pe-center-top {
@@ -203,8 +215,8 @@ body {
 
 .pe-center-bottom {
   width: 100%;
-  flex: 0 0 15%;
-  height: 15%;
+  flex: 0 1 15%;          /* იდეურად 15%, მაგრამ შეიძლება შემცირდეს, რომ დაეტიოს მშობელში */
+  height: auto;           /* სიმაღლე იგება დარჩენილი სივრციდან */
   display: flex;
   align-items: center;
   justify-content: center;

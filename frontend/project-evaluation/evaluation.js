@@ -371,7 +371,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function loadProject(code) {
     if (!code) {
-      showError('პროექტის კოდი არ არის მითითებული');
       return;
     }
     try {
@@ -553,8 +552,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const projectCode = getProjectCodeFromURL();
     if (projectCode) {
       await loadProject(projectCode);
-    } else {
-      showError('პროექტის კოდი არ არის მითითებული. გთხოვთ გამოიყენოთ ?code=XXX URL პარამეტრი');
     }
 
     // Button handlers
