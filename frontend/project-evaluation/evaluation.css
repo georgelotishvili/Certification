@@ -39,15 +39,18 @@ body {
   justify-content: flex-start;
   gap: 5px;
   padding: 5px;
-  background: #939393;
-  border: 1px solid #000000;
+  box-sizing: border-box;
+}
+
+/* მარცხენა სვეტის ყველა შიდა ელემენტი ზუსტად იგივე სიგანით, padding-ის გათვალისწინებით */
+.pe-col.pe-left > * {
+  width: 100%;
   box-sizing: border-box;
 }
 
 .pe-col.pe-center {
   width: 60%;
   height: 100%;
-  background: #957373;
   box-sizing: border-box;
 }
 
@@ -55,8 +58,6 @@ body {
   width: 20%;
   height: 100%;
   padding: 5px;
-  background: #737373;
-  border: 1px solid #000000;
   box-sizing: border-box;
   display: grid;
   grid-template-rows: 5% 10% minmax(0, 1fr); /* ქვედა ნაწილი იკავებს დარჩენილ სივრცეს */
@@ -68,13 +69,8 @@ body {
 .pe-right-mid,
 .pe-right-bottom {
   width: 100%;
-}
-
-/* მარჯვენა ნაწილის სამივე კონტენტ-ბლოკს (ზედა, შუა, ქვედა) აქვს 1px ბორდერი */
-.pe-layout .pe-right-top,
-.pe-layout .pe-right-mid,
-.pe-layout .pe-right-bottom {
-  border: 1px solid #000000 !important;
+  border: 1px solid #000000;
+  border-radius: 4px;
 }
 
 /* მარჯვენა ქვედა ელემენტი ავსებს მხოლოდ თავის ქვედა ზონას და შიგნით სქროლდება, მშობელს აღარ სცდება */
@@ -101,7 +97,6 @@ body {
 .camera-slot {
   width: 100%;
   aspect-ratio: 16 / 9;              /* 16:9 ratio, height derives from width */
-  background: #e3ebff;
   border: 1px solid #9fb3d9;
   border-radius: 4px;
   display: block;
@@ -129,30 +124,9 @@ body {
   line-height: 1.35;
   text-align: center;
   color: #d32f2f;                    /* წითელი წარწერა */
+  border: 1px solid #000000;
+  border-radius: 4px;
   box-sizing: border-box;
-}
-
-/* მარცხენა ნაწილის შუა ელემენტის (camera-note) ბორდერი + მომრგვალება */
-.pe-layout .pe-left-mid .camera-note {
-  border: 1px solid #000000 !important;
-  border-radius: 4px !important;
-}
-
-.pe-left-bottom {
-  width: 100%;
-  flex: 1 1 auto;                    /* fill remaining height */
-  display: grid;
-  grid-template-rows: minmax(5%, auto) minmax(10%, auto) minmax(5%, auto) 1fr; /* top 3 keep min height, bottom fills remaining */
-  gap: 5px;                          /* 5px gap between elements */
-}
-
-.pe-left-bottom > div {
-  width: 100%;
-}
-
-/* მარცხენა ქვედა ელემენტის შიგნით 4 კონტენტ-ბლოკს აქვს 1px ბორდერი */
-.pe-layout .pe-left-bottom > div {
-  border: 1px solid #000000 !important;
 }
 
 .pe-lb-1 {
@@ -181,26 +155,23 @@ body {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 10px;
   overflow-y: auto;
 }
 
-/* ქვედა კონტეინერს (რომელშიც არის 4 ელემენტი) ბორდერი არ აქვს, შიგნით 4 ელემენტს აქვს */
-.pe-layout .pe-left-bottom {
-  border: none !important;
+/* მარცხენა სვეტის 4 ბლოკი – ერთნაირი ბორდერი/რადიუსი და განლაგება */
+.pe-lb-1,
+.pe-lb-2,
+.pe-lb-3,
+.pe-lb-4 {
+  width: 100%;
+  border: 1px solid #000000;
+  border-radius: 4px;
+  padding: 5px;
 }
 
-/* Remove borders on all elements in this page */
-.pe-layout,
-.pe-layout * {
-  border: none !important;
-  box-sizing: border-box;
-}
-
-/* Remove background colors on all inner elements (ტექსტი და ბორდერები უცვლელად რჩება) */
-.pe-layout * {
-  background: transparent !important;
-  border-radius: 4px;           /* ყველა ბორდერიან ელემენტს 4px მომრგვალებული კუთხე */
+/* ბოლო (დიდი) ბლოკი ავსებს დარჩენილ სიმაღლეს */
+.pe-lb-4 {
+  flex: 1 1 auto;
 }
 
 /* Center column internal sections */
@@ -213,8 +184,15 @@ body {
   gap: 5px;              /* 5px gap between top, content and bottom */
 }
 
-.pe-center-top {
+.pe-center-top,
+.pe-center-content,
+.pe-center-bottom {
   width: 100%;
+  border: 1px solid #000000;
+  border-radius: 4px;
+}
+
+.pe-center-top {
   flex: 0 0 5%;
   height: 5%;
   display: flex;
@@ -230,24 +208,11 @@ body {
 }
 
 .pe-center-content {
-  width: 100%;
   flex: 0 0 80%;   /* explicitly 80% of center height */
   height: 80%;
 }
 
-/* ცენტრალური ნაწილის კონტენტ-ბლოკს (შუა ელემენტი) აქვს 1px ბორდერი */
-.pe-layout .pe-center-content {
-  border: 1px solid #000000 !important;
-}
-
-/* ცენტრალური ნაწილის ზედა და ქვედა ელემენტებსაც აქვს 1px ბორდერი */
-.pe-layout .pe-center-top,
-.pe-layout .pe-center-bottom {
-  border: 1px solid #000000 !important;
-}
-
 .pe-center-bottom {
-  width: 100%;
   flex: 0 1 15%;          /* იდეურად 15%, მაგრამ შეიძლება შემცირდეს, რომ დაეტიოს მშობელში */
   height: auto;           /* სიმაღლე იგება დარჩენილი სივრციდან */
   display: flex;
@@ -303,8 +268,8 @@ body {
 .btn[disabled] {
   opacity: .5;
   cursor: not-allowed;
-  transform: none !important;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+  transform: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 
