@@ -115,7 +115,10 @@ def get_projects(
     payloads = []
     for project in projects:
         answers = sorted(project.answers, key=lambda a: (a.order_index, a.id))
-        correct_answer_id = next((str(a.id) for a in answers if a.is_correct), None)
+        # Collect all correct answers; legacy clients still see the first one
+        # via correctAnswerId for backwards compatibility.
+        correct_answer_ids = [str(a.id) for a in answers if a.is_correct]
+        first_correct_id = correct_answer_ids[0] if correct_answer_ids else None
         
         payloads.append(
             MultiApartmentProjectPayload(
@@ -127,7 +130,8 @@ def get_projects(
                     MultiApartmentAnswerPayload(id=str(a.id), text=a.text)
                     for a in answers
                 ],
-                correctAnswerId=correct_answer_id,
+                correctAnswerId=first_correct_id,
+                correctAnswerIds=correct_answer_ids or None,
             )
         )
     
@@ -200,7 +204,17 @@ async def update_projects(
         # Update answers
         answers_list = project_payload.answers or []
         # Allow projects without answers - user can add answers later
-        
+
+        # Determine which answers should be marked correct.
+        # New multi-select API: correctAnswerIds (array of IDs).
+        # Backwards-compatible: if only correctAnswerId is provided, treat it
+        # as a single-element list.
+        correct_ids: set[str] = set()
+        if getattr(project_payload, "correctAnswerIds", None):
+            correct_ids = {str(cid) for cid in project_payload.correctAnswerIds or []}
+        elif getattr(project_payload, "correctAnswerId", None):
+            correct_ids = {str(project_payload.correctAnswerId)}
+
         existing_answers = {str(a.id): a for a in project.answers}
         processed_answer_ids = set()
         
@@ -225,22 +239,20 @@ async def update_projects(
             answer_text = (answer_payload.text or "").strip()
             answer.text = answer_text
             answer.order_index = ans_idx
-            # Only mark as correct if correctAnswerId is explicitly provided and matches this answer's ID
-            # For existing answers, match by database ID
-            # For new answers, the frontend sends a temporary ID that won't match the database ID,
-            # so we need to match by checking if the correctAnswerId matches the frontend ID from the payload
-            if project_payload.correctAnswerId:
+            # Mark answer as correct if its ID appears in the set of correct IDs.
+            # We support both database IDs and the temporary frontend IDs sent
+            # by the admin UI for newly created answers.
+            is_correct = False
+            if correct_ids:
                 # First try to match by database ID (for existing answers)
-                is_correct = str(answer.id) == str(project_payload.correctAnswerId)
-                # If not matched and this is a new answer, try to match by the frontend ID from payload
-                if not is_correct:
-                    # Check if the correctAnswerId matches this answer's frontend ID from the payload
-                    answer_frontend_id = str(answer_payload.id)
-                    is_correct = str(project_payload.correctAnswerId) == answer_frontend_id
-                answer.is_correct = is_correct
-            else:
-                # If correctAnswerId is null or not provided, no answer should be marked as correct
-                answer.is_correct = False
+                if str(answer.id) in correct_ids:
+                    is_correct = True
+                else:
+                    # Fallback: match by the frontend ID from the payload
+                    frontend_id = str(answer_payload.id)
+                    if frontend_id in correct_ids:
+                        is_correct = True
+            answer.is_correct = is_correct
 
             db.flush()
             existing_answers[str(answer.id)] = answer

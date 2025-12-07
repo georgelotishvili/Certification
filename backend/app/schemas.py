@@ -463,6 +463,11 @@ class MultiApartmentProjectPayload(CamelModel):
     pdfFile: Optional[str] = None
     answers: List[MultiApartmentAnswerPayload]
     correctAnswerId: Optional[str] = None
+    # New: support multiple correct answers per project.
+    # Admin UI can now mark several answers as correct; this array contains
+    # the IDs of all correct answers. For backwards compatibility,
+    # correctAnswerId may still be used to hold the first correct ID.
+    correctAnswerIds: Optional[List[str]] = None
 
 
 class MultiApartmentProjectsResponse(CamelModel):

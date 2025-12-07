@@ -59,6 +59,16 @@
             text: String(answer.text || ''),
           };
         });
+        const correctIdsFromArray = Array.isArray(project.correctAnswerIds)
+          ? project.correctAnswerIds.map((id) => String(id))
+          : null;
+        const singleCorrectId = project.correctAnswerId != null ? String(project.correctAnswerId) : null;
+        const correctAnswerIds =
+          correctIdsFromArray && correctIdsFromArray.length
+            ? correctIdsFromArray
+            : singleCorrectId
+              ? [singleCorrectId]
+              : [];
         return {
           ...project,
           id: projectId,
@@ -66,7 +76,7 @@
           code: String(project.code || generateProjectCode()),
           pdfFile: project.pdfFile || null,
           answers: migratedAnswers,
-          correctAnswerId: project.correctAnswerId != null ? String(project.correctAnswerId) : null,
+          correctAnswerIds,
         };
       });
     }
@@ -171,7 +181,11 @@
                     <div class="a-actions">
                       <div class="a-actions-row">
                         <label class="a-correct-wrap" title="სწორი პასუხი">
-                          <input class="a-correct" type="radio" name="correct-${escapeHtml(project.id)}" ${project.correctAnswerId === answer.id ? 'checked' : ''} />
+                          <input 
+                            class="a-correct" 
+                            type="checkbox" 
+                            ${Array.isArray(project.correctAnswerIds) && project.correctAnswerIds.includes(answer.id) ? 'checked' : ''} 
+                          />
                           <span>სწორია</span>
                         </label>
                         <button class="a-delete" type="button" aria-label="პასუხის წაშლა" title="წაშლა">×</button>
@@ -209,7 +223,7 @@
         number: nextNumber(), 
         pdfFile: null, 
         answers: [], // Start with empty answers array - user will add answers manually
-        correctAnswerId: null, // Don't mark any answer as correct by default
+        correctAnswerIds: [], // Don't mark any answer as correct by default
         code: generateProjectCode() 
       };
       console.log('addProject: adding project', newProject);
@@ -281,8 +295,15 @@
               text: String(a.text || '').trim(),
             })),
           };
-          if (p.correctAnswerId != null) {
-            projectPayload.correctAnswerId = String(p.correctAnswerId);
+          const correctIds = Array.isArray(p.correctAnswerIds)
+            ? p.correctAnswerIds
+                .filter((id) => id != null && String(id).trim() !== '')
+                .map((id) => String(id))
+            : [];
+          if (correctIds.length > 0) {
+            projectPayload.correctAnswerIds = correctIds;
+            // For backwards compatibility with older backend fields
+            projectPayload.correctAnswerId = correctIds[0];
           }
           if (p.pdfFile != null) {
             projectPayload.pdfFile = String(p.pdfFile);
@@ -469,8 +490,8 @@
         if (target.classList.contains('a-delete')) {
           if (confirm('ნამდვილად გსურთ პასუხის წაშლა?')) {
             project.answers.splice(answerIndex, 1);
-            if (project.correctAnswerId === answerId) {
-              project.correctAnswerId = null;
+            if (Array.isArray(project.correctAnswerIds)) {
+              project.correctAnswerIds = project.correctAnswerIds.filter((id) => id !== answerId);
             }
             save();
             updateProjectCount(projectId);
@@ -504,7 +525,22 @@
         }
 
         if (target.classList.contains('a-correct') || target.closest?.('.a-correct')) {
-          project.correctAnswerId = answerId;
+          if (event.type !== 'change') return;
+          const input = target.classList.contains('a-correct')
+            ? target
+            : target.closest('.a-correct');
+          if (!input) return;
+          const isChecked = !!input.checked;
+          if (!Array.isArray(project.correctAnswerIds)) {
+            project.correctAnswerIds = [];
+          }
+          if (isChecked) {
+            if (!project.correctAnswerIds.includes(answerId)) {
+              project.correctAnswerIds.push(answerId);
+            }
+          } else {
+            project.correctAnswerIds = project.correctAnswerIds.filter((id) => id !== answerId);
+          }
           save();
           return;
         }
@@ -562,8 +598,8 @@
         if (target.classList.contains('a-delete')) {
           if (confirm('ნამდვილად გსურთ პასუხის წაშლა?')) {
             project.answers.splice(answerIndex, 1);
-            if (project.correctAnswerId === answerId) {
-              project.correctAnswerId = null;
+            if (Array.isArray(project.correctAnswerIds)) {
+              project.correctAnswerIds = project.correctAnswerIds.filter((id) => id !== answerId);
             }
             save();
             updateProjectCount(projectId);
@@ -597,7 +633,15 @@
         }
 
         if (target.classList.contains('a-correct') || target.closest?.('.a-correct')) {
-          project.correctAnswerId = answerId;
+          if (!Array.isArray(project.correctAnswerIds)) {
+            project.correctAnswerIds = [];
+          }
+          const alreadySelected = project.correctAnswerIds.includes(answerId);
+          if (alreadySelected) {
+            project.correctAnswerIds = project.correctAnswerIds.filter((id) => id !== answerId);
+          } else {
+            project.correctAnswerIds.push(answerId);
+          }
           save();
           return;
         }
