@@ -28,6 +28,7 @@ body {
   flex-direction: row;
   align-items: stretch;
   justify-content: flex-start;
+  background: #ffffff;              /* მთავარი მშობელი – თეთრი ფონი */
 }
 .pe-col.pe-left {
   width: 20%;
@@ -67,6 +68,13 @@ body {
 .pe-right-mid,
 .pe-right-bottom {
   width: 100%;
+}
+
+/* მარჯვენა ნაწილის სამივე კონტენტ-ბლოკს (ზედა, შუა, ქვედა) აქვს 1px ბორდერი */
+.pe-layout .pe-right-top,
+.pe-layout .pe-right-mid,
+.pe-layout .pe-right-bottom {
+  border: 1px solid #000000 !important;
 }
 
 /* მარჯვენა ქვედა ელემენტი ავსებს მხოლოდ თავის ქვედა ზონას და შიგნით სქროლდება, მშობელს აღარ სცდება */
@@ -120,11 +128,14 @@ body {
   font-size: 10px;                   /* 10px font as requested */
   line-height: 1.35;
   text-align: center;
-  color: #5c6882;
-  background: #ffffff;
-  border: 1px solid #c9d5ee;
-  border-radius: 4px;
+  color: #d32f2f;                    /* წითელი წარწერა */
   box-sizing: border-box;
+}
+
+/* მარცხენა ნაწილის შუა ელემენტის (camera-note) ბორდერი + მომრგვალება */
+.pe-layout .pe-left-mid .camera-note {
+  border: 1px solid #000000 !important;
+  border-radius: 4px !important;
 }
 
 .pe-left-bottom {
@@ -137,6 +148,11 @@ body {
 
 .pe-left-bottom > div {
   width: 100%;
+}
+
+/* მარცხენა ქვედა ელემენტის შიგნით 4 კონტენტ-ბლოკს აქვს 1px ბორდერი */
+.pe-layout .pe-left-bottom > div {
+  border: 1px solid #000000 !important;
 }
 
 .pe-lb-1 {
@@ -174,11 +190,17 @@ body {
   border: none !important;
 }
 
-/* Force 1px black border on all elements in this page */
+/* Remove borders on all elements in this page */
 .pe-layout,
 .pe-layout * {
-  border: 1px solid #000000 !important;
+  border: none !important;
   box-sizing: border-box;
+}
+
+/* Remove background colors on all inner elements (ტექსტი და ბორდერები უცვლელად რჩება) */
+.pe-layout * {
+  background: transparent !important;
+  border-radius: 4px;           /* ყველა ბორდერიან ელემენტს 4px მომრგვალებული კუთხე */
 }
 
 /* Center column internal sections */
@@ -211,6 +233,17 @@ body {
   width: 100%;
   flex: 0 0 80%;   /* explicitly 80% of center height */
   height: 80%;
+}
+
+/* ცენტრალური ნაწილის კონტენტ-ბლოკს (შუა ელემენტი) აქვს 1px ბორდერი */
+.pe-layout .pe-center-content {
+  border: 1px solid #000000 !important;
+}
+
+/* ცენტრალური ნაწილის ზედა და ქვედა ელემენტებსაც აქვს 1px ბორდერი */
+.pe-layout .pe-center-top,
+.pe-layout .pe-center-bottom {
+  border: 1px solid #000000 !important;
 }
 
 .pe-center-bottom {
