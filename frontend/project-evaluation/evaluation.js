@@ -38,7 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
     cameraDeviceId: null,
     cameraDeviceLabel: '',
     project: null,
+    // For backend compatibility we keep a single selectedAnswerId,
+    // but UI მხარეს ვინახავთ ყველა მონიშნულ პასუხს selectedAnswerIds-ში
     selectedAnswerId: null,
+    selectedAnswerIds: [],
     started: false,
     finished: false,
   };
@@ -425,6 +428,51 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Update only the visual state of answers (background + checkbox) without re-rendering PDF
+  function updateAnswerSelection() {
+    if (!DOM.rightBottom) return;
+
+    const selectedIds = Array.isArray(state.selectedAnswerIds) ? state.selectedAnswerIds : [];
+
+    DOM.rightBottom.querySelectorAll('.answer-option').forEach((el) => {
+      const answerId = el.dataset.answerId;
+      const isSelected = selectedIds.includes(String(answerId || ''));
+
+      // Highlight selected answer container
+      el.style.background = isSelected ? '#e3f2fd' : '#fff';
+
+      // Sync checkbox state
+      const checkbox = el.querySelector('input[type="checkbox"]');
+      if (checkbox) {
+        checkbox.checked = isSelected;
+      }
+    });
+  }
+
+  // Toggle one answer in the multi-select list and keep selectedAnswerId in sync
+  function toggleAnswer(answerId) {
+    const id = String(answerId || '');
+    if (!id) return;
+
+    if (!Array.isArray(state.selectedAnswerIds)) {
+      state.selectedAnswerIds = [];
+    }
+
+    const idx = state.selectedAnswerIds.indexOf(id);
+    if (idx === -1) {
+      state.selectedAnswerIds.push(id);
+    } else {
+      state.selectedAnswerIds.splice(idx, 1);
+    }
+
+    // Backend მაინც ერთ selectedAnswerId-ს იღებს — ავირჩიოთ ბოლო მონიშნული ან null
+    state.selectedAnswerId = state.selectedAnswerIds.length
+      ? state.selectedAnswerIds[state.selectedAnswerIds.length - 1]
+      : null;
+
+    updateAnswerSelection();
+  }
+
   function renderProject() {
     if (!state.project) {
       console.log('renderProject: No project in state');
@@ -460,18 +508,39 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM.rightBottom:', DOM.rightBottom);
     console.log('state.project.answers:', state.project.answers);
     if (DOM.rightBottom && Array.isArray(state.project.answers) && state.project.answers.length > 0) {
-      const answersHtml = state.project.answers.map((answer, index) => `
-        <div class="answer-option" data-answer-id="${answer.id}" style="
+      const selectedIds = Array.isArray(state.selectedAnswerIds) ? state.selectedAnswerIds : [];
+      const answersHtml = state.project.answers.map((answer, index) => {
+        const answerId = String(answer.id);
+        const isSelected = selectedIds.includes(answerId);
+        return `
+        <div class="answer-option" data-answer-id="${answerId}" style="
           padding: 10px;
           margin: 5px 0;
           border: 2px solid #ccc;
           border-radius: 4px;
           cursor: pointer;
-          background: ${state.selectedAnswerId === String(answer.id) ? '#e3f2fd' : '#fff'};
+          background: ${isSelected ? '#e3f2fd' : '#fff'};
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
         ">
-          <strong>${index + 1}.</strong> ${escapeHtml(answer.text)}
+          <input 
+            type="checkbox" 
+            data-answer-id="${answerId}"
+            ${isSelected ? 'checked' : ''}
+            style="
+              margin-top: 2px;
+              cursor: pointer;
+              flex-shrink: 0;
+            "
+            onclick="event.stopPropagation();"
+          />
+          <div style="flex: 1;">
+            <strong>${index + 1}.</strong> ${escapeHtml(answer.text)}
+          </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
       DOM.rightBottom.innerHTML = `
         <div style="padding: 10px;">
           <h3 style="margin-top: 0;">პასუხები:</h3>
@@ -479,13 +548,25 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
 
-      // Add click handlers
+      // Add click handlers for answer options
       DOM.rightBottom.querySelectorAll('.answer-option').forEach((el) => {
-        el.addEventListener('click', () => {
+        el.addEventListener('click', (e) => {
+          // Don't trigger if clicking directly on checkbox (it handles itself)
+          if (e.target.type === 'checkbox') return;
           const answerId = el.dataset.answerId;
           if (answerId) {
-            state.selectedAnswerId = answerId;
-            renderProject();
+            toggleAnswer(answerId);
+          }
+        });
+      });
+
+      // Add change handlers for checkboxes
+      DOM.rightBottom.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+        checkbox.addEventListener('change', (e) => {
+          const answerId = e.target.dataset.answerId;
+          if (answerId) {
+            // Checkbox-ს პირდაპირ ვამუშავებთ იგივე toggle ლოგიკით
+            toggleAnswer(answerId);
           }
         });
       });
