@@ -14,6 +14,7 @@ body {
   width: 100%;
   height: 100%;
   margin: 0;
+  font-family: 'DejaVu Sans', sans-serif;
 }
 
 .pe-layout {
@@ -239,6 +240,7 @@ body {
   color: #0f172a;
   cursor: pointer;
   padding: 0 16px;
+  font-family: 'DejaVu Sans', sans-serif;
   transition: background 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
 }
@@ -282,4 +284,123 @@ body {
     width: min(90vw, 320px);
     height: 50px;
   }
+}
+
+/* ძირითადი ღილაკების ფერები (დაწყება, დადასტურება) */
+.btn.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.btn.primary:hover,
+.btn.primary:focus-visible {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff;
+}
+
+/* საშიში (წითელი) ღილაკი – დიახ დასრულებაზე */
+.btn.danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #ffffff;
+}
+
+.btn.danger:hover,
+.btn.danger:focus-visible {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: #ffffff;
+}
+
+/* დარღვევა/შედეგების overlay-ები */
+.pe-confirm-overlay,
+.pe-final-overlay,
+.pe-results-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(6px);
+  z-index: 90;
+}
+
+/* დიალოგის საერთო სტილი (გაფრთხილებები + შედეგები) */
+.exam-dialog {
+  width: min(90%, 420px);
+  background: #f8fafc;
+  border: 1px solid #94a3b8;
+  border-radius: 4px;
+  padding: 24px 28px;
+  text-align: center;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+  z-index: 91;
+}
+
+.exam-dialog.results {
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.exam-text {
+  margin-bottom: 20px;
+  color: #475569;
+  font-size: 14px;
+}
+
+.exam-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* შედეგების ბლოკის სტილები */
+.results-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.result-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  padding: 10px 12px;
+  border: 2px solid #cbd5f5;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.1);
+}
+
+.result-row-total {
+  border-color: #94a3b8;
+  background: #f3f7ff;
+}
+
+.result-label {
+  color: #111827;
+  font-size: 13px;
+}
+
+.result-value {
+  text-align: right;
+  font-weight: 600;
+}
+
+/* ფერადი შედეგები – დადგენილების მიხედვით */
+.pct-red {
+  color: #b91c1c;
+}
+
+.pct-yellow {
+  color: #c9871c;
+}
+
+.pct-green {
+  color: #1f8a4d;
 }

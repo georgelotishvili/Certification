@@ -28,8 +28,8 @@
         <div class="pe-center-content"></div>
         <div class="pe-center-bottom">
           <div class="exam-bottom-actions in-center">
-            <button class="btn primary btn-wide" type="button">დაწყება</button>
-            <button class="btn finish btn-wide" type="button">დასრულება</button>
+            <button class="btn primary btn-wide" id="peStart" type="button">დაწყება</button>
+            <button class="btn finish btn-wide" id="peFinish" type="button">დასრულება</button>
           </div>
         </div>
       </main>
@@ -37,6 +37,36 @@
         <div class="pe-right-top" id="rightDateTime"></div>
         <div class="pe-right-bottom"></div>
       </aside>
+    </div>
+
+    <!-- დასრულების გაფრთხილება (ნაბიჯი 1) -->
+    <div class="pe-confirm-overlay" id="peConfirmOverlay" style="display:none;"></div>
+    <div class="exam-dialog" id="peConfirmDialog" hidden>
+      <p class="exam-text">ნამდვილად გსურთ შეფასების დასრულება?</p>
+      <div class="exam-actions">
+        <button class="btn danger" id="peConfirmYes" type="button">დიახ</button>
+        <button class="btn" id="peConfirmNo" type="button">არა</button>
+      </div>
+    </div>
+
+    <!-- დასრულების გაფრთხილება (ნაბიჯი 2) -->
+    <div class="pe-final-overlay" id="peFinalOverlay" style="display:none;"></div>
+    <div class="exam-dialog" id="peFinalDialog" hidden>
+      <p class="exam-text">თქვენი შეფასების პროცესი დასრულდება და მას ვეღარ აღადგენთ. შედეგები შეინახება ბაზაში.</p>
+      <div class="exam-actions">
+        <button class="btn primary" id="peFinalAgree" type="button">ვეთანხმები</button>
+        <button class="btn" id="peFinalBack" type="button">შეფასების გაგრძელება</button>
+      </div>
+    </div>
+
+    <!-- შედეგების ფანჯარა -->
+    <div class="pe-results-overlay" id="peResultsOverlay" style="display:none;"></div>
+    <div class="exam-dialog results" id="peResultsDialog" hidden>
+      <p class="exam-text">შეფასების შედეგები</p>
+      <div class="results-list" id="peResultsList"></div>
+      <div class="exam-actions">
+        <button class="btn primary" id="peResultsClose" type="button">დახურვა</button>
+      </div>
     </div>
   </body>
 </html>

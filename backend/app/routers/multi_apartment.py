@@ -50,6 +50,31 @@ def _gen_unique_code(db: Session) -> str:
             return candidate
 
 
+def _safe_public_pdf_url(project: MultiApartmentProject | None) -> str | None:
+    """
+    Return public PDF URL for a project only if the underlying file
+    really არსებობს და არის ფაილი. თუ რაიმე პრობლემა იქნება (არასწორი ბილიკი,
+    არ არსებობს ფაილი და ა.შ.) ვაბრუნებთ None-ს, რომ ფრონტმა აჩვენოს
+    'PDF ფაილი არ არის ხელმისაწვდომი' და არ დადოს iframe-ზე 500 შეცდომა.
+    """
+    if not project or not project.pdf_path:
+        return None
+    try:
+        pdf_path = resolve_storage_path(project.pdf_path)
+        try:
+            if not pdf_path.exists() or not pdf_path.is_file():
+                return None
+        except OSError:
+            return None
+    except ValueError:
+        # არასწორი relative ბილიკი
+        return None
+    except Exception:
+        # ნებისმიერი სხვა დაუდასტურებელი შეცდომა – სჯობს ჩავთვალოთ, რომ PDF არ არის
+        return None
+    return f"/public/multi-apartment/projects/{project.code}/pdf"
+
+
 def _get_or_create_settings(db: Session) -> MultiApartmentSettings:
     """Return existing multi-apartment settings or create with defaults."""
     settings = db.scalar(select(MultiApartmentSettings).limit(1))
@@ -392,19 +417,45 @@ def download_pdf(
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
     
-    if not pdf_path.exists():
+    if not pdf_path.exists() or not pdf_path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file missing")
-    
-    # Return PDF as inline so it can be displayed inside an <iframe>
-    response = FileResponse(
-        pdf_path,
-        media_type="application/pdf",
-        filename=project.pdf_filename or pdf_path.name,
-    )
-    response.headers["Content-Disposition"] = (
-        f'inline; filename="{project.pdf_filename or pdf_path.name}"'
-    )
-    return response
+
+    # PDF-ს დაბრუნება; ნებისმიერი გაუთვალისწინებელი შეცდომის შემთხვევაში 404-ს ვაბრუნებთ,
+    # რომ არ მივიღოთ 500 Internal Server Error.
+    try:
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="{project.pdf_filename or "project.pdf"}"',
+            },
+        )
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
+
+
+@router.delete("/admin/multi-apartment/projects/{project_id}/pdf", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project_pdf(
+    project_id: int = FPath(...),
+    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+):
+    """Delete project's PDF and clear its path/filename."""
+    _require_admin(db, x_actor_email)
+    project = db.get(MultiApartmentProject, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    if project.pdf_path:
+        try:
+            delete_storage_file(project.pdf_path)
+        except Exception:
+            # არაფერს ვუშვებთ – ფაილის წაშლა best-effort არის
+            pass
+        project.pdf_path = None
+        project.pdf_filename = None
+        db.add(project)
+        db.commit()
 
 
 # Public endpoints
@@ -428,14 +479,10 @@ def get_random_project(
     # fall back to any existing project so that at least the PDF/code are shown.
     projects_with_answers = [p for p in projects if p.answers]
     project = random.choice(projects_with_answers or projects)
-    
+
     answers = sorted(project.answers, key=lambda a: (a.order_index, a.id))
-    pdf_url = (
-        f"/public/multi-apartment/projects/{project.code}/pdf"
-        if project.pdf_path
-        else None
-    )
-    
+    pdf_url = _safe_public_pdf_url(project)
+
     return PublicMultiApartmentProjectResponse(
         id=project.id,
         number=project.number,
@@ -460,11 +507,7 @@ def get_public_project(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     
     answers = sorted(project.answers, key=lambda a: (a.order_index, a.id))
-    pdf_url = (
-        f"/public/multi-apartment/projects/{project.code}/pdf"
-        if project.pdf_path
-        else None
-    )
+    pdf_url = _safe_public_pdf_url(project)
     
     return PublicMultiApartmentProjectResponse(
         id=project.id,
@@ -488,23 +531,31 @@ def get_public_pdf(
     )
     if not project or not project.pdf_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
-    
+
     try:
         pdf_path = resolve_storage_path(project.pdf_path)
-    except ValueError:
+        # თუ ფაილი არ არსებობს ან არის დირექტორია – ჩავთვალოთ, რომ PDF არ არის
+        if not pdf_path.exists() or not pdf_path.is_file():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file missing")
+    except HTTPException:
+        raise
+    except Exception:
+        # ნებისმიერი სხვა გაუთვალისწინებელი შეცდომა – ვუბრუნებთ 404-ს, რომ არ იყოს 500
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
-    
-    if not pdf_path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file missing")
-    
-    # Return PDF as inline so it can be displayed inside an <iframe> without triggering download
-    return FileResponse(
-        pdf_path,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'inline; filename="{project.pdf_filename or pdf_path.name}"',
-        },
-    )
+
+    # PDF-ს აბრუნებს <iframe>-ში საჩვენებლად; ნებისმიერი გაუთვალისწინებელი შეცდომის
+    # შემთხვევაში ვაბრუნებთ 404-ს, რომ მომხმარებელმა დაინახოს „PDF არ არის ხელმისაწვდომი“
+    # და არ მიიღოს 500 Internal Server Error.
+    try:
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="{project.pdf_filename or "project.pdf"}"',
+            },
+        )
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
 
 
 @router.post("/public/multi-apartment/evaluations", status_code=status.HTTP_201_CREATED)

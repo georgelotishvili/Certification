@@ -162,6 +162,7 @@
               <button type="button" class="head-file-choose" data-project-id="${escapeHtml(project.id)}">Choose File</button>
               <input class="head-file-input" type="file" accept=".pdf" data-project-id="${escapeHtml(project.id)}" aria-label="PDF ფაილის ატვირთვა" />
               <span class="head-file-name">${escapeHtml(project.pdfFile || 'No file chosen')}</span>
+              <button type="button" class="head-file-clear" data-project-id="${escapeHtml(project.id)}" aria-label="PDF ფაილის წაშლა" title="PDF წაშლა">×</button>
             </div>
             <span class="q-code" aria-label="პროექტის კოდი">${escapeHtml(project.code || '')}</span>
             <button class="head-delete" type="button" aria-label="პროექტის წაშლა" title="წაშლა">×</button>
@@ -419,6 +420,18 @@
         if (fileInput) {
           fileInput.click();
         }
+        return;
+      }
+
+      if (target.classList.contains('head-file-clear')) {
+        if (!project.pdfFile) {
+          // არაფერია წასაშლელი
+          return;
+        }
+        if (!confirm('ნამდვილად გსურთ ატვირთული PDF ფაილის წაშლა?')) {
+          return;
+        }
+        void removePdf(project);
         return;
       }
 
@@ -739,6 +752,37 @@
       } catch (err) {
         console.error('Failed to upload PDF', err);
         showToast('PDF ატვირთვა ვერ მოხერხდა', 'error');
+      }
+    }
+
+    async function removePdf(project) {
+      const projectId = project.id;
+      try {
+        const projectIdInt = parseInt(projectId, 10);
+        if (Number.isNaN(projectIdInt)) {
+          // ლოკალური, ჯერ არ არის შენახული — უბრალოდ მოვაშოროთ სახელი UI-დან
+          project.pdfFile = null;
+          const fileNameSpan = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${projectId}"] .head-file-name`);
+          if (fileNameSpan) fileNameSpan.textContent = 'No file chosen';
+          showToast('PDF წაიშალა', 'success');
+          return;
+        }
+
+        const response = await fetch(`${API_BASE}/admin/multi-apartment/projects/${projectIdInt}/pdf`, {
+          method: 'DELETE',
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+        });
+        if (!response.ok) {
+          await handleAdminErrorResponse(response, 'PDF წაშლა ვერ მოხერხდა', showToast);
+          return;
+        }
+        project.pdfFile = null;
+        const fileNameSpan = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${projectId}"] .head-file-name`);
+        if (fileNameSpan) fileNameSpan.textContent = 'No file chosen';
+        showToast('PDF წაიშალა', 'success');
+      } catch (err) {
+        console.error('Failed to delete PDF', err);
+        showToast('PDF წაშლა ვერ მოხერხდა', 'error');
       }
     }
 

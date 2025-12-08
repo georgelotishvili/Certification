@@ -769,6 +769,7 @@ main {
   min-width: 0;
   flex: 1;
   max-width: 500px;
+  position: relative;
 }
 .head-file-choose {
   height: 32px;
@@ -815,6 +816,31 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.head-file-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  font-weight: 900;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: 14px;
+}
+
+.head-file-clear:hover {
+  background: none;
+  color: #a91c1c;
 }
 
 .head-name {

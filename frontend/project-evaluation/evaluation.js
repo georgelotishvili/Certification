@@ -27,8 +27,21 @@ document.addEventListener('DOMContentLoaded', () => {
     projectCode: qs('.pe-lb-3'),
     centerContent: qs('.pe-center-content'),
     rightBottom: qs('.pe-right-bottom'),
-    startBtn: qs('.btn.primary'),
-    finishBtn: qs('.btn.finish'),
+    startBtn: qs('#peStart') || qs('.btn.primary'),
+    finishBtn: qs('#peFinish') || qs('.btn.finish'),
+    // გაფრთხილებებისა და შედეგების დიალოგები
+    confirmOverlay: qs('#peConfirmOverlay'),
+    confirmDialog: qs('#peConfirmDialog'),
+    confirmYes: qs('#peConfirmYes'),
+    confirmNo: qs('#peConfirmNo'),
+    finalOverlay: qs('#peFinalOverlay'),
+    finalDialog: qs('#peFinalDialog'),
+    finalAgree: qs('#peFinalAgree'),
+    finalBack: qs('#peFinalBack'),
+    resultsOverlay: qs('#peResultsOverlay'),
+    resultsDialog: qs('#peResultsDialog'),
+    resultsList: qs('#peResultsList'),
+    resultsClose: qs('#peResultsClose'),
   };
 
   const state = {
@@ -45,6 +58,26 @@ document.addEventListener('DOMContentLoaded', () => {
     started: false,
     finished: false,
   };
+
+  function showOverlay(el) {
+    if (!el) return;
+    el.style.display = 'block';
+  }
+
+  function hideOverlay(el) {
+    if (!el) return;
+    el.style.display = 'none';
+  }
+
+  function showDialog(el) {
+    if (!el) return;
+    el.hidden = false;
+  }
+
+  function hideDialog(el) {
+    if (!el) return;
+    el.hidden = true;
+  }
 
   function showCameraMessage(message) {
     if (!DOM.cameraSlot) return;
@@ -587,35 +620,54 @@ document.addEventListener('DOMContentLoaded', () => {
     return div.innerHTML;
   }
 
+  function getPercentColorClass(percent) {
+    if (percent < 70) return 'pct-red';
+    if (percent < 75) return 'pct-yellow';
+    return 'pct-green';
+  }
+
+  function getWrongCountColorClass(count) {
+    if (count >= 3) return 'pct-red';
+    if (count === 2) return 'pct-yellow';
+    return 'pct-green';
+  }
+
   async function submitEvaluation() {
-    if (!state.project || !state.selectedAnswerId) {
-      alert('გთხოვთ აირჩიოთ პასუხი');
-      return;
+    const hasSelections = Array.isArray(state.selectedAnswerIds) && state.selectedAnswerIds.length > 0;
+
+    if (!state.project || !hasSelections) {
+      alert('გთხოვთ მონიშნოთ მინიმუმ ერთი პასუხი');
+      return false;
     }
 
     if (state.finished) {
-      alert('შეფასება უკვე გაგზავნილია');
-      return;
+      // უკვე გაგზავნილია – უბრალოდ შედეგები ვაჩვენოთ
+      return true;
     }
 
     try {
+      const payload = {
+        projectCode: state.project.code,
+      };
+
+      if (state.selectedAnswerId) {
+        payload.selectedAnswerId = parseInt(state.selectedAnswerId, 10);
+      }
+
       const response = await fetch(`${API_BASE}/public/multi-apartment/evaluations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getActorHeaders(),
         },
-        body: JSON.stringify({
-          projectCode: state.project.code,
-          selectedAnswerId: parseInt(state.selectedAnswerId, 10),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Evaluation submission failed', errorText);
         alert('შეფასების გაგზავნა ვერ მოხერხდა');
-        return;
+        return false;
       }
 
       state.finished = true;
@@ -623,10 +675,116 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.finishBtn.disabled = true;
         DOM.finishBtn.textContent = 'გაგზავნილია';
       }
-      alert('შეფასება წარმატებით გაიგზავნა');
+
+      return true;
     } catch (err) {
       console.error('Failed to submit evaluation', err);
       alert('შეფასების გაგზავნა ვერ მოხერხდა');
+      return false;
+    }
+  }
+
+  function showEvaluationResults() {
+    if (!DOM.resultsOverlay || !DOM.resultsDialog || !DOM.resultsList || !state.project) return;
+
+    const selectedIds = Array.isArray(state.selectedAnswerIds)
+      ? state.selectedAnswerIds.map((id) => String(id))
+      : [];
+
+    const correctIdsRaw = Array.isArray(state.project.correctAnswerIds)
+      ? state.project.correctAnswerIds
+      : [];
+    const correctIds = correctIdsRaw.map((id) => String(id));
+
+    const totalCorrect = correctIds.length;
+    let correctSelected = 0;
+
+    correctIds.forEach((id) => {
+      if (selectedIds.includes(id)) {
+        correctSelected += 1;
+      }
+    });
+
+    const wrongSelected = selectedIds.filter((id) => !correctIds.includes(id)).length;
+
+    DOM.resultsList.innerHTML = '';
+
+    // სწორი პასუხების პროცენტი (ადმინზე მონიშნული სწორი პასუხებიდან)
+    const safeTotal = Number(totalCorrect) || 0;
+    const percent = safeTotal > 0 ? Math.round((correctSelected / safeTotal) * 100) : 0;
+
+    const percentRow = document.createElement('div');
+    percentRow.className = 'result-row result-row-total';
+
+    const percentLabel = document.createElement('div');
+    percentLabel.className = 'result-label';
+    percentLabel.textContent = 'სწორი პასუხების პროცენტი';
+
+    const percentValue = document.createElement('div');
+    percentValue.className = `result-value ${getPercentColorClass(percent)}`;
+    percentValue.textContent = `${correctSelected}/${safeTotal} (${percent}%)`;
+
+    percentRow.append(percentLabel, percentValue);
+    DOM.resultsList.appendChild(percentRow);
+
+    // არასწორი პასუხების რაოდენობა
+    const wrongRow = document.createElement('div');
+    wrongRow.className = 'result-row';
+
+    const wrongLabel = document.createElement('div');
+    wrongLabel.className = 'result-label';
+    wrongLabel.textContent = 'არასწორი პასუხების რაოდენობა';
+
+    const wrongValue = document.createElement('div');
+    wrongValue.className = `result-value ${getWrongCountColorClass(wrongSelected)}`;
+    wrongValue.textContent = String(wrongSelected);
+
+    wrongRow.append(wrongLabel, wrongValue);
+    DOM.resultsList.appendChild(wrongRow);
+
+    showOverlay(DOM.resultsOverlay);
+    showDialog(DOM.resultsDialog);
+  }
+
+  function canFinishEvaluation() {
+    if (!state.started) {
+      alert('გთხოვთ ჯერ დაიწყოთ შეფასება (დააწკაპუნეთ ღილაკზე „დაწყება“).');
+      return false;
+    }
+
+    if (!state.project) {
+      alert('პროექტი ჯერ არ არის ჩატვირთული. გთხოვთ სცადოთ თავიდან.');
+      return false;
+    }
+
+    if (!Array.isArray(state.selectedAnswerIds) || state.selectedAnswerIds.length === 0) {
+      alert('გთხოვთ მონიშნოთ მინიმუმ ერთი პასუხი.');
+      return false;
+    }
+
+    return true;
+  }
+
+  function handleFinishClick() {
+    if (!canFinishEvaluation()) return;
+
+    if (state.finished) {
+      // უკვე დასრულებულია – პირდაპირ შედეგები
+      showEvaluationResults();
+      return;
+    }
+
+    if (DOM.confirmOverlay && DOM.confirmDialog) {
+      showOverlay(DOM.confirmOverlay);
+      showDialog(DOM.confirmDialog);
+    } else {
+      //fallback: თუ რაიმე მიზეზით დიალოგი არ არსებობს
+      void (async () => {
+        const ok = await submitEvaluation();
+        if (ok) {
+          showEvaluationResults();
+        }
+      })();
     }
   }
 
@@ -686,8 +844,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (DOM.finishBtn) {
       DOM.finishBtn.disabled = true;
-      DOM.finishBtn.addEventListener('click', () => {
-        void submitEvaluation();
+      DOM.finishBtn.addEventListener('click', handleFinishClick);
+    }
+
+    // გაფრთხილების დიალოგები
+    if (DOM.confirmYes) {
+      DOM.confirmYes.addEventListener('click', () => {
+        hideOverlay(DOM.confirmOverlay);
+        hideDialog(DOM.confirmDialog);
+        showOverlay(DOM.finalOverlay);
+        showDialog(DOM.finalDialog);
+      });
+    }
+
+    if (DOM.confirmNo) {
+      DOM.confirmNo.addEventListener('click', () => {
+        hideOverlay(DOM.confirmOverlay);
+        hideDialog(DOM.confirmDialog);
+      });
+    }
+
+    if (DOM.finalAgree) {
+      DOM.finalAgree.addEventListener('click', async () => {
+        hideOverlay(DOM.finalOverlay);
+        hideDialog(DOM.finalDialog);
+        const ok = await submitEvaluation();
+        if (ok) {
+          showEvaluationResults();
+        }
+      });
+    }
+
+    if (DOM.finalBack) {
+      DOM.finalBack.addEventListener('click', () => {
+        hideOverlay(DOM.finalOverlay);
+        hideDialog(DOM.finalDialog);
+      });
+    }
+
+    if (DOM.resultsClose) {
+      DOM.resultsClose.addEventListener('click', () => {
+        hideOverlay(DOM.resultsOverlay);
+        hideDialog(DOM.resultsDialog);
       });
     }
 
