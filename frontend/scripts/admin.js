@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
       exam: document.getElementById('exam-settings'),
       registrations: document.getElementById('registrations-section'),
       multiApartment: document.getElementById('multi-apartment-section'),
+      guide: document.getElementById('guide-section'),
     },
     durationInput: document.getElementById('examDuration'),
     saveDurationBtn: document.getElementById('saveExamDuration'),
@@ -122,6 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'რეგისტრირებული პირები': 'registrations',
     'მრავალბინიანი': 'multiApartment',
     'მრავალფუნქციური': null,
+    'გზამკვლევი': 'guide',
   };
 
   const on = (element, event, handler) => element && element.addEventListener(event, handler);
